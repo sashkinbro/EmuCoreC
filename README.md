@@ -119,6 +119,10 @@ The content picker accepts direct PS3 files and complete ZIP/RAR volume sets. Ar
 - `android/` — the EmuCoreC Android adaptation of the RPCS3 core (glue, input, build)
 - `rpcs3/`, `Utilities/`, `3rdparty/` — the RPCS3 emulator core (upstream fork content)
 
+## Notes
+
+- Releases marked as "parallel" are identical to the primary build but use an alternate package ID to allow side-by-side installation.
+
 ## Credits
 
 EmuCoreC is grateful to the upstream projects:
