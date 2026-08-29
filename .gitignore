@@ -157,3 +157,6 @@ app/build/
 app/release
 app/src/main/assets/catalog/*.db
 *.db
+
+# claude
+CLAUDE.md
