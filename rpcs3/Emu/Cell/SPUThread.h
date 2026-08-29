@@ -799,6 +799,12 @@ public:
 	u64 block_recover = 0;
 	u64 block_failure = 0;
 
+	// Diagnostics counters for SPU reservation (ported from ARMSX3 a7ec28f7a, originally from 55a35b5e1)
+	u64 putllc_calls = 0;
+	u64 putllc_fails = 0;
+	u64 putllc_notify = 0;
+	u64 putllc_suppressed = 0;
+
 	rpcs3::hypervisor_context_t hv_ctx; // NOTE: The offset within the class must be within the first 1MiB
 
 	u64 ftx = 0; // Failed transactions
