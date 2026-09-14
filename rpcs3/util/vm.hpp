@@ -43,6 +43,9 @@ namespace utils
 	*/
 	void memory_commit(void* pointer, usz size, protection prot = protection::rw);
 
+	// Like memory_commit but returns false instead of aborting on failure.
+	[[nodiscard]] bool try_memory_commit(void* pointer, usz size, protection prot = protection::rw);
+
 	// Decommit all memory committed via commit_page_memory.
 	void memory_decommit(void* pointer, usz size, bool can_be_jit = false);
 

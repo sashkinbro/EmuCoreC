@@ -332,7 +332,11 @@ struct MemoryManager1 : llvm::RTDyldMemoryManager
 		{
 			const u64 pagea = utils::align(oldp, page_quarter);
 			const u64 psize = utils::align(std::min(newp, c_page_size) - pagea, page_quarter);
-			utils::memory_commit(reinterpret_cast<u8*>(block) + (pagea % c_max_size), psize, prot);
+
+			if (!utils::try_memory_commit(reinterpret_cast<u8*>(block) + (pagea % c_max_size), psize, prot))
+			{
+				return nullptr;
+			}
 
 			// Advance
 			oldp = pagea + psize;
@@ -343,7 +347,11 @@ struct MemoryManager1 : llvm::RTDyldMemoryManager
 			// Allocate pages on demand
 			const u64 pagea = utils::align(oldp, c_page_size);
 			const u64 psize = utils::align(newp - pagea, c_page_size);
-			utils::memory_commit(reinterpret_cast<u8*>(block) + (pagea % c_max_size), psize, prot);
+
+			if (!utils::try_memory_commit(reinterpret_cast<u8*>(block) + (pagea % c_max_size), psize, prot))
+			{
+				return nullptr;
+			}
 		}
 
 		return reinterpret_cast<u8*>(block) + (olda % c_max_size);

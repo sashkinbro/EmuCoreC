@@ -335,6 +335,36 @@ namespace utils
 #endif
 	}
 
+	bool try_memory_commit(void* pointer, usz size, protection prot)
+	{
+		if (!size)
+		{
+			return true;
+		}
+
+#ifdef _WIN32
+		return ::VirtualAlloc(pointer, size, MEM_COMMIT, +prot) != nullptr;
+#else
+		const u64 ptr64 = reinterpret_cast<u64>(pointer);
+
+		if (::mprotect(reinterpret_cast<void*>(ptr64 & -get_page_size()), size + (ptr64 & (get_page_size() - 1)), +prot) == -1)
+		{
+			return false;
+		}
+
+		if constexpr (c_madv_dump != 0)
+		{
+			::madvise(reinterpret_cast<void*>(ptr64 & -get_page_size()), size + (ptr64 & (get_page_size() - 1)), c_madv_dump);
+		}
+		else
+		{
+			::madvise(reinterpret_cast<void*>(ptr64 & -get_page_size()), size + (ptr64 & (get_page_size() - 1)), MADV_WILLNEED);
+		}
+
+		return true;
+#endif
+	}
+
 	void memory_decommit(void* pointer, usz size, [[maybe_unused]] bool can_be_jit)
 	{
 		if (!size)

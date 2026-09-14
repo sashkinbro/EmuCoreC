@@ -6082,9 +6082,18 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 
 	if (is_first)
 	{
-		for (auto& jit : jits)
+		for (usz jit_idx = 0; jit_idx < jits.size(); jit_idx++)
 		{
-			jit->fin();
+			std::string fin_error;
+
+			if (!jits[jit_idx]->try_fin(fin_error))
+			{
+				ppu_log.error("LLVM: JIT instance #%u finalization failed (%s); its modules will be interpreted", jit_idx, fin_error);
+			}
+			else
+			{
+				ppu_log.notice("LLVM: JIT instance #%u finalized", jit_idx);
+			}
 		}
 	}
 
@@ -6107,8 +6116,21 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 				{
 					index++;
 
-					ensure(!sim);
-					sim = ensure(reinterpret_cast<void(*)(u8*, u64)>(jits[index]->get("__resolve_symbols")));
+					if (jits[index]->is_poisoned())
+					{
+						ppu_log.warning("LLVM: Skipping symbol resolver for poisoned JIT instance #%u", index);
+						continue;
+					}
+
+					const auto addr = jits[index]->get("__resolve_symbols");
+
+					if (!addr)
+					{
+						ppu_log.warning("LLVM: Symbol resolver not found in JIT instance #%u; its functions will be interpreted", index);
+						continue;
+					}
+
+					sim = reinterpret_cast<void(*)(u8*, u64)>(addr);
 
 					ppu_log.notice("Resolved symbol resolver function #%u", index);
 				}
@@ -6127,7 +6149,11 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 			{
 				index++;
 
-				ensure(sim);
+				if (!sim)
+				{
+					continue;
+				}
+
 				sim(vm::g_exec_addr, info.segs[0].addr);
 
 				ppu_log.notice("Executed symbol resolver #%u", index);
