@@ -20,6 +20,8 @@
 #include <sys/prctl.h>
 #endif
 
+thread_local char g_tls_last_rsx_op[256]{};
+
 #ifdef __cpp_lib_stacktrace
 #include "rpcs3_version.h"
 #include <stacktrace>
@@ -2591,6 +2593,12 @@ static const char* bus_error_kind(int code) noexcept
 
 static void signal_handler(int sig, siginfo_t* info, void* uct) noexcept
 {
+#ifdef __ANDROID__
+	if (g_tls_last_rsx_op[0])
+	{
+		__android_log_print(ANDROID_LOG_FATAL, "EmuCoreC", "LAST RSX OP: %s", g_tls_last_rsx_op);
+	}
+#endif
 #ifdef __ANDROID__
 	// Not our fault: hand it to whoever we displaced (see install_fault_handler_first).
 	if (!is_emulator_fault(info->si_addr))

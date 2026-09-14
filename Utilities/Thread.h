@@ -195,12 +195,14 @@ private:
 	void exec();
 };
 
+// Last RSX/Vulkan operation recorded on this thread, for crash diagnostics.
+extern thread_local char g_tls_last_rsx_op[256];
+
 // Collection of global function for current thread
 class thread_ctrl final
 {
 	// Current thread
 	static thread_local thread_base* g_tls_this_thread;
-
 	// Error handling details
 	static thread_local void(*g_tls_error_callback)();
 
