@@ -16,6 +16,8 @@
 
 #ifdef __ANDROID__
 #include <android/log.h>
+#include <dlfcn.h>
+#include <sys/prctl.h>
 #endif
 
 #ifdef __cpp_lib_stacktrace
@@ -2524,53 +2526,107 @@ const bool s_exception_handler_set = []() -> bool
 
 #else
 
-static void signal_handler(int sig, siginfo_t* info, void* uct) noexcept
-{
-	// Raw crash dump — works even if heap/allocator is corrupted.
 #ifdef __ANDROID__
-	const auto fault_addr = info ? info->si_addr : nullptr;
-	const auto si_code = info ? info->si_code : 0;
-	const auto cur_pid = static_cast<int>(getpid());
-	const auto cur_tid = static_cast<int>(gettid());
+// The handler that was installed before ours -- libsigchain's, which fronts ART and debuggerd.
+// Kept so that faults which are not the emulator's can be forwarded to it.
+static struct ::sigaction s_prev_fault_action[NSIG]{};
 
-	__android_log_print(ANDROID_LOG_FATAL, "EmuCoreC",
-		"CRASH: signal %d fault=%p code=%d pid=%d tid=%d",
-		sig, static_cast<const void*>(fault_addr), si_code, cur_pid, cur_tid);
+// True when this fault is one the emulator's own memory model is responsible for.
+static bool is_emulator_fault(void* addr)
+{
+	const u64 exec64 = (reinterpret_cast<u64>(addr) - reinterpret_cast<u64>(vm::g_exec_addr)) / 2;
+	const u64 seg_off = (reinterpret_cast<u64>(addr) - reinterpret_cast<u64>(vm::g_exec_addr)) - vm::g_exec_addr_seg_offset;
 
-#ifdef ARCH_ARM64
-	if (uct)
+	return vm::try_get_addr(addr).second || exec64 < 0x100000000ull || seg_off < 0x80000000ull;
+}
+
+// Bionic's own sigaction, reached past libsigchain's interposition: an ordinary call registers
+// INSIDE ART's chain, behind its FaultManager, which reads guest registers as ArtMethod* and dies.
+using native_sigaction_fn = int (*)(int, const struct ::sigaction*, struct ::sigaction*);
+
+static native_sigaction_fn real_sigaction()
+{
+	void* const libc = ::dlopen("libc.so", RTLD_NOLOAD | RTLD_LOCAL);
+
+	return libc ? reinterpret_cast<native_sigaction_fn>(::dlsym(libc, "sigaction")) : nullptr;
+}
+#endif
+
+static int install_fault_handler(int sig, const struct ::sigaction& sa)
+{
+#ifdef __ANDROID__
+	return ::sigaction(sig, &sa, sig > 0 && sig < NSIG ? &s_prev_fault_action[sig] : nullptr);
+#else
+	return ::sigaction(sig, &sa, nullptr);
+#endif
+}
+
+static bool install_fault_handler_first(int sig, const struct ::sigaction& sa)
+{
+#ifdef __ANDROID__
+	if (const native_sigaction_fn real_sa = real_sigaction())
 	{
-		ucontext_t* uc = static_cast<ucontext_t*>(uct);
-		__android_log_print(ANDROID_LOG_FATAL, "EmuCoreC",
-			"REGS: PC=%lx LR=%lx SP=%lx"
-			" x0=%lx x1=%lx x2=%lx x3=%lx"
-			" x4=%lx x5=%lx x6=%lx x7=%lx"
-			" x8=%lx x9=%lx x10=%lx x11=%lx"
-			" x12=%lx x13=%lx x14=%lx x15=%lx"
-			" x16=%lx x17=%lx x18=%lx x19=%lx"
-			" x20=%lx x21=%lx x22=%lx x23=%lx"
-			" x24=%lx x25=%lx x26=%lx x27=%lx"
-			" x28=%lx fp=%lx",
-			static_cast<unsigned long>(uc->uc_mcontext.pc),
-			static_cast<unsigned long>(uc->uc_mcontext.regs[30]),
-			static_cast<unsigned long>(uc->uc_mcontext.sp),
-			static_cast<unsigned long>(uc->uc_mcontext.regs[0]), static_cast<unsigned long>(uc->uc_mcontext.regs[1]),
-			static_cast<unsigned long>(uc->uc_mcontext.regs[2]), static_cast<unsigned long>(uc->uc_mcontext.regs[3]),
-			static_cast<unsigned long>(uc->uc_mcontext.regs[4]), static_cast<unsigned long>(uc->uc_mcontext.regs[5]),
-			static_cast<unsigned long>(uc->uc_mcontext.regs[6]), static_cast<unsigned long>(uc->uc_mcontext.regs[7]),
-			static_cast<unsigned long>(uc->uc_mcontext.regs[8]), static_cast<unsigned long>(uc->uc_mcontext.regs[9]),
-			static_cast<unsigned long>(uc->uc_mcontext.regs[10]), static_cast<unsigned long>(uc->uc_mcontext.regs[11]),
-			static_cast<unsigned long>(uc->uc_mcontext.regs[12]), static_cast<unsigned long>(uc->uc_mcontext.regs[13]),
-			static_cast<unsigned long>(uc->uc_mcontext.regs[14]), static_cast<unsigned long>(uc->uc_mcontext.regs[15]),
-			static_cast<unsigned long>(uc->uc_mcontext.regs[16]), static_cast<unsigned long>(uc->uc_mcontext.regs[17]),
-			static_cast<unsigned long>(uc->uc_mcontext.regs[18]), static_cast<unsigned long>(uc->uc_mcontext.regs[19]),
-			static_cast<unsigned long>(uc->uc_mcontext.regs[20]), static_cast<unsigned long>(uc->uc_mcontext.regs[21]),
-			static_cast<unsigned long>(uc->uc_mcontext.regs[22]), static_cast<unsigned long>(uc->uc_mcontext.regs[23]),
-			static_cast<unsigned long>(uc->uc_mcontext.regs[24]), static_cast<unsigned long>(uc->uc_mcontext.regs[25]),
-			static_cast<unsigned long>(uc->uc_mcontext.regs[26]), static_cast<unsigned long>(uc->uc_mcontext.regs[27]),
-			static_cast<unsigned long>(uc->uc_mcontext.regs[28]), static_cast<unsigned long>(uc->uc_mcontext.regs[29]));
+		if (real_sa(sig, nullptr, &s_prev_fault_action[sig]) != -1 && real_sa(sig, &sa, nullptr) != -1)
+		{
+			return true;
+		}
 	}
 #endif
+
+	return install_fault_handler(sig, sa) != -1;
+}
+
+#ifdef __ANDROID__
+static const char* bus_error_kind(int code) noexcept
+{
+	switch (code)
+	{
+	case BUS_ADRALN: return "misaligned operand";
+	case BUS_ADRERR: return "mapped page has no backing";
+	case BUS_OBJERR: return "hardware error on the mapped object";
+	default: return "unrecognised si_code";
+	}
+}
+#endif
+
+static void signal_handler(int sig, siginfo_t* info, void* uct) noexcept
+{
+#ifdef __ANDROID__
+	// Not our fault: hand it to whoever we displaced (see install_fault_handler_first).
+	if (!is_emulator_fault(info->si_addr))
+	{
+		static thread_local bool s_forwarding = false;
+
+		if (s_forwarding)
+		{
+			struct ::sigaction dfl{};
+			dfl.sa_handler = SIG_DFL;
+			sigemptyset(&dfl.sa_mask);
+			::sigaction(sig, &dfl, nullptr);
+			return;
+		}
+
+		const struct ::sigaction& prev = s_prev_fault_action[sig];
+		s_forwarding = true;
+
+		if ((prev.sa_flags & SA_SIGINFO) && prev.sa_sigaction)
+		{
+			prev.sa_sigaction(sig, info, uct);
+			s_forwarding = false;
+			return;
+		}
+
+		if (prev.sa_handler && prev.sa_handler != SIG_DFL && prev.sa_handler != SIG_IGN)
+		{
+			prev.sa_handler(sig);
+			s_forwarding = false;
+			return;
+		}
+
+		s_forwarding = false;
+	}
+
+	const bool is_bus_error = sig == SIGBUS;
 #endif
 
 	ucontext_t* context = static_cast<ucontext_t*>(uct);
@@ -2632,7 +2688,15 @@ static void signal_handler(int sig, siginfo_t* info, void* uct) noexcept
 	const u64 seg_off = (reinterpret_cast<u64>(info->si_addr) - reinterpret_cast<u64>(vm::g_exec_addr)) - vm::g_exec_addr_seg_offset;
 	const auto cause = is_executing ? "executing" : is_writing ? "writing" : "reading";
 
-	if (auto [addr, ok] = vm::try_get_addr(info->si_addr); ok && !is_executing)
+#ifdef __ANDROID__
+	// SIGBUS never takes the recovery path: a write to an mprotect'd page raises SIGSEGV,
+	// and a bus error means the page behind a valid address cannot be produced at all.
+	const bool try_recovery = !is_executing && !is_bus_error;
+#else
+	const bool try_recovery = !is_executing;
+#endif
+
+	if (auto [addr, ok] = vm::try_get_addr(info->si_addr); ok && try_recovery)
 	{
 		// Try to process access violation
 		if (thread_ctrl::get_current() && handle_access_violation(addr, is_writing, false, context))
@@ -2641,14 +2705,14 @@ static void signal_handler(int sig, siginfo_t* info, void* uct) noexcept
 		}
 	}
 
-	if (exec64 < 0x100000000ull && !is_executing)
+	if (exec64 < 0x100000000ull && try_recovery)
 	{
 		if (thread_ctrl::get_current() && handle_access_violation(static_cast<u32>(exec64), is_writing, true, context))
 		{
 			return;
 		}
 	}
-	else if (seg_off < 0x80000000ull && !is_executing)
+	else if (seg_off < 0x80000000ull && try_recovery)
 	{
 		if (thread_ctrl::get_current() && handle_access_violation(static_cast<u32>(seg_off * 2), is_writing, true, context))
 		{
@@ -2656,7 +2720,88 @@ static void signal_handler(int sig, siginfo_t* info, void* uct) noexcept
 		}
 	}
 
+#ifdef __ANDROID__
+	// Raw state, before anything that can fault. Only reached for faults that are actually
+	// fatal: every recovery path above has already declined.
+	{
+		const auto fault_addr = info ? info->si_addr : nullptr;
+		const auto si_code = info ? info->si_code : 0;
+		const auto cur_tid = static_cast<int>(gettid());
+
+		__android_log_print(ANDROID_LOG_FATAL, "EmuCoreC",
+			"CRASH: signal %d fault=%p code=%d tid=%d",
+			sig, static_cast<const void*>(fault_addr), si_code, cur_tid);
+
+#ifdef ARCH_ARM64
+		ucontext_t* uc = context;
+		__android_log_print(ANDROID_LOG_FATAL, "EmuCoreC",
+			"REGS: PC=%lx LR=%lx SP=%lx"
+			" x0=%lx x1=%lx x2=%lx x3=%lx"
+			" x4=%lx x5=%lx x6=%lx x7=%lx"
+			" x8=%lx x9=%lx x10=%lx x11=%lx"
+			" x12=%lx x13=%lx x14=%lx x15=%lx"
+			" x16=%lx x17=%lx x18=%lx x19=%lx"
+			" x20=%lx x21=%lx x22=%lx x23=%lx"
+			" x24=%lx x25=%lx x26=%lx x27=%lx"
+			" x28=%lx fp=%lx",
+			static_cast<unsigned long>(uc->uc_mcontext.pc),
+			static_cast<unsigned long>(uc->uc_mcontext.regs[30]),
+			static_cast<unsigned long>(uc->uc_mcontext.sp),
+			static_cast<unsigned long>(uc->uc_mcontext.regs[0]), static_cast<unsigned long>(uc->uc_mcontext.regs[1]),
+			static_cast<unsigned long>(uc->uc_mcontext.regs[2]), static_cast<unsigned long>(uc->uc_mcontext.regs[3]),
+			static_cast<unsigned long>(uc->uc_mcontext.regs[4]), static_cast<unsigned long>(uc->uc_mcontext.regs[5]),
+			static_cast<unsigned long>(uc->uc_mcontext.regs[6]), static_cast<unsigned long>(uc->uc_mcontext.regs[7]),
+			static_cast<unsigned long>(uc->uc_mcontext.regs[8]), static_cast<unsigned long>(uc->uc_mcontext.regs[9]),
+			static_cast<unsigned long>(uc->uc_mcontext.regs[10]), static_cast<unsigned long>(uc->uc_mcontext.regs[11]),
+			static_cast<unsigned long>(uc->uc_mcontext.regs[12]), static_cast<unsigned long>(uc->uc_mcontext.regs[13]),
+			static_cast<unsigned long>(uc->uc_mcontext.regs[14]), static_cast<unsigned long>(uc->uc_mcontext.regs[15]),
+			static_cast<unsigned long>(uc->uc_mcontext.regs[16]), static_cast<unsigned long>(uc->uc_mcontext.regs[17]),
+			static_cast<unsigned long>(uc->uc_mcontext.regs[18]), static_cast<unsigned long>(uc->uc_mcontext.regs[19]),
+			static_cast<unsigned long>(uc->uc_mcontext.regs[20]), static_cast<unsigned long>(uc->uc_mcontext.regs[21]),
+			static_cast<unsigned long>(uc->uc_mcontext.regs[22]), static_cast<unsigned long>(uc->uc_mcontext.regs[23]),
+			static_cast<unsigned long>(uc->uc_mcontext.regs[24]), static_cast<unsigned long>(uc->uc_mcontext.regs[25]),
+			static_cast<unsigned long>(uc->uc_mcontext.regs[26]), static_cast<unsigned long>(uc->uc_mcontext.regs[27]),
+			static_cast<unsigned long>(uc->uc_mcontext.regs[28]), static_cast<unsigned long>(uc->uc_mcontext.regs[29]));
+
+		char tname[32] = {};
+		prctl(PR_GET_NAME, tname);
+		u32 insn = 0;
+
+		if (!is_executing)
+		{
+			insn = *reinterpret_cast<const volatile u32*>(uc->uc_mcontext.pc);
+		}
+
+		const u64 guest_off = reinterpret_cast<uptr>(fault_addr) - reinterpret_cast<uptr>(vm::g_base_addr);
+		const u64 exec_off = static_cast<u64>(uc->uc_mcontext.pc) - reinterpret_cast<uptr>(vm::g_exec_addr);
+		__android_log_print(ANDROID_LOG_FATAL, "EmuCoreC",
+			"CTX: comm=%s insn=%08x base=%p exec=%p sudo=%p pc_exec_off=%llx fault_guest_off=%llx",
+			tname, insn,
+			static_cast<const void*>(vm::g_base_addr),
+			static_cast<const void*>(vm::g_exec_addr),
+			static_cast<const void*>(vm::g_sudo_addr),
+			static_cast<unsigned long long>(exec_off),
+			static_cast<unsigned long long>(guest_off));
+#endif
+	}
+
+	// A fault outside guest memory is handed back to the platform's crash handler: restoring
+	// the previous action and returning re-executes the instruction, so debuggerd sees the
+	// original pc, address and registers instead of this handler's frame.
+	if (!vm::try_get_addr(info->si_addr).second && s_prev_fault_action[sig].sa_sigaction)
+	{
+		::sigaction(sig, &s_prev_fault_action[sig], nullptr);
+		return;
+	}
+#endif
+
+#ifdef __ANDROID__
+	std::string msg = sig == SIGBUS
+		? fmt::format("Bus error (%s) %s location %p at %p.\n", bus_error_kind(info->si_code), cause, info->si_addr, RIP(context))
+		: fmt::format("Segfault %s location %p at %p.\n", cause, info->si_addr, RIP(context));
+#else
 	std::string msg = fmt::format("Segfault %s location %p at %p.\n", cause, info->si_addr, RIP(context));
+#endif
 
 	if (vm::try_get_addr(info->si_addr).second)
 	{
@@ -2697,6 +2842,12 @@ static void signal_handler(int sig, siginfo_t* info, void* uct) noexcept
 #endif
 
 	sys_log.fatal("\n%s", msg);
+
+	// Flushed before the dump: dump_useful_thread_info() walks thread state and guest memory,
+	// so it is the most likely thing in this handler to fault again, and a fault there would
+	// lose the fatal message with it.
+	logs::listener::sync_all();
+
 	sys_log.notice("\n%s", dump_useful_thread_info());
 	logs::listener::sync_all();
 
@@ -2737,18 +2888,24 @@ void sigpipe_signaling_handler(int)
 const bool s_exception_handler_set = []() -> bool
 {
 	struct ::sigaction sa;
+#ifdef __ANDROID__
+	// Run the handler on the alternate stack installed per thread in thread_base::initialize,
+	// so a stack overflow still has somewhere to report itself from.
+	sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
+#else
 	sa.sa_flags = SA_SIGINFO;
+#endif
 	sigemptyset(&sa.sa_mask);
 	sa.sa_sigaction = signal_handler;
 
-	if (::sigaction(SIGSEGV, &sa, NULL) == -1)
+	if (!install_fault_handler_first(SIGSEGV, sa))
 	{
 		std::fprintf(stderr, "sigaction(SIGSEGV) failed (%d).\n", errno);
 		std::abort();
 	}
 
-#ifdef __APPLE__
-	if (::sigaction(SIGBUS, &sa, NULL) == -1)
+#if defined(__APPLE__) || defined(__ANDROID__)
+	if (!install_fault_handler_first(SIGBUS, sa))
 	{
 		std::fprintf(stderr, "sigaction(SIGBUS) failed (%d).\n", errno);
 		std::abort();
@@ -2756,14 +2913,14 @@ const bool s_exception_handler_set = []() -> bool
 #endif
 
 	sa.sa_sigaction = sigill_handler;
-	if (::sigaction(SIGILL, &sa, NULL) == -1)
+	if (install_fault_handler(SIGILL, sa) == -1)
 	{
 		std::fprintf(stderr, "sigaction(SIGILL) failed (%d).\n", errno);
 		std::abort();
 	}
 
 	sa.sa_handler = sigpipe_signaling_handler;
-	if (::sigaction(SIGPIPE, &sa, NULL) == -1)
+	if (install_fault_handler(SIGPIPE, sa) == -1)
 	{
 		std::fprintf(stderr, "sigaction(SIGPIPE) failed (%d).\n", errno);
 		std::abort();
@@ -2841,6 +2998,23 @@ void thread_base::start()
 
 void thread_base::initialize(void (*error_cb)())
 {
+#ifdef __ANDROID__
+	// Somewhere for the SIGSEGV handler to run, per thread. See SA_ONSTACK in the handler's
+	// registration. Thread-local rather than shared: two threads can fault at once and a
+	// shared stack would corrupt whichever report lost the race.
+	static thread_local std::array<u8, 128 * 1024> s_signal_stack;
+
+	stack_t alt{};
+	alt.ss_sp = s_signal_stack.data();
+	alt.ss_size = s_signal_stack.size();
+	alt.ss_flags = 0;
+
+	if (::sigaltstack(&alt, nullptr) == -1)
+	{
+		sig_log.error("sigaltstack failed (%d); stack overflows will not be reported", errno);
+	}
+#endif
+
 #ifndef _WIN32
 #ifdef __APPLE__
 	while (!m_thread)
