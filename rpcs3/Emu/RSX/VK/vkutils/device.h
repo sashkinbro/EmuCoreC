@@ -239,6 +239,9 @@ namespace vk
 	};
 
 	memory_type_mapping get_memory_mapping(const physical_device& dev);
+	// Usable device memory for cache budgeting: on Android the GPU shares system RAM, so this
+	// is what is actually free rather than the device-local heap size.
+	u64 get_budgetable_device_memory(u64 device_local_total);
 	gpu_formats_support get_optimal_tiling_supported_formats(const physical_device& dev);
 
 	extern const render_device* g_render_device;
