@@ -592,6 +592,7 @@ void VKGSRender::flip(const rsx::display_flip_info_t& info)
 	ensure(m_current_frame->swap_command_buffer == nullptr);
 
 	u64 timeout = m_swapchain->get_swap_image_count() <= 2? 0ull: 100000000ull;
+	u32 acquire_spin_count = 0;
 	while (VkResult status = m_swapchain->acquire_next_swapchain_image(m_current_frame->acquire_signal_semaphore, timeout, &m_current_frame->present_image))
 	{
 		switch (status)
@@ -609,6 +610,13 @@ void VKGSRender::flip(const rsx::display_flip_info_t& info)
 			// Whatever returned from status, this is now a spin
 			timeout = 0ull;
 			check_present_status();
+
+			if ((++acquire_spin_count % 20000) == 0)
+			{
+				rsx_log.error("Swapchain acquire spin: status=%d, queued_frames=%u, swap_images=%u",
+					static_cast<int>(status), ::size32(m_queued_frames), m_swapchain->get_swap_image_count());
+			}
+
 			continue;
 		}
 		case VK_SUBOPTIMAL_KHR:

@@ -177,8 +177,21 @@ namespace vk
 
 	void fence::wait_flush()
 	{
+		if (flushed)
+		{
+			return;
+		}
+
+		u64 spin_start = get_system_time();
+
 		while (!flushed)
 		{
+			if (get_system_time() - spin_start > 2'000'000)
+			{
+				rsx_log.error("[vulkan] fence::wait_flush spinning: fence=%p has not been flushed for %llu ms", handle, (get_system_time() - spin_start) / 1000);
+				spin_start = get_system_time();
+			}
+
 			utils::pause();
 		}
 	}
@@ -569,11 +582,19 @@ namespace vk
 		}
 		else
 		{
+			u64 spin_start = get_system_time();
+
 			while (auto status = vkGetFenceStatus(*g_render_device, pFence->handle))
 			{
 				switch (status)
 				{
 				case VK_NOT_READY:
+					if (get_system_time() - spin_start > 2'000'000)
+					{
+						rsx_log.error("[vulkan] wait_for_fence spinning: fence=%p still not signaled after %llu ms", pFence->handle, (get_system_time() - spin_start) / 1000);
+						spin_start = get_system_time();
+					}
+
 					utils::pause();
 					continue;
 				default:
@@ -597,6 +618,7 @@ namespace vk
 		}
 
 		u64 start = 0;
+		u64 watchdog = get_system_time();
 
 		while (true)
 		{
@@ -609,6 +631,12 @@ namespace vk
 			default:
 				die_with_error(status);
 				return status;
+			}
+
+			if (get_system_time() - watchdog > 2'000'000)
+			{
+				rsx_log.error("[vulkan] wait_for_event spinning: event=%p not set after %llu ms", static_cast<const void*>(pEvent), (get_system_time() - watchdog) / 1000);
+				watchdog = get_system_time();
 			}
 
 			if (timeout)

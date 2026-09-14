@@ -173,8 +173,16 @@ namespace vk
 		{
 			poke_query(query_info, index, result_flags);
 
+			u64 spin_start = get_system_time();
+
 			while (!query_info.ready)
 			{
+				if (get_system_time() - spin_start > 2'000'000)
+				{
+					rsx_log.error("[vulkan] occlusion query %u still not ready after %llu ms", index, (get_system_time() - spin_start) / 1000);
+					spin_start = get_system_time();
+				}
+
 				utils::pause();
 				poke_query(query_info, index, result_flags);
 			}
