@@ -38,6 +38,19 @@ namespace vk
 	void change_image_layout(const vk::command_buffer& cmd, VkImage image, VkImageLayout current_layout, VkImageLayout new_layout, const VkImageSubresourceRange& range,
 		u32 src_queue_family, u32 dst_queue_family, u32 src_access_mask_bits, u32 dst_access_mask_bits)
 	{
+#ifdef __ANDROID__
+		// The Adreno driver dereferences a null resource when handed a barrier whose image handle
+		// is null or whose subresource range is degenerate, and crashes inside vkCmdPipelineBarrier.
+		// Refuse to make that call and record what came in instead.
+		if (!image || !range.aspectMask || !range.levelCount || !range.layerCount)
+		{
+			rsx_log.error("change_image_layout: refusing invalid barrier (image=%p, aspect=0x%x, levelCount=%u, layerCount=%u, layouts %d -> %d)",
+				reinterpret_cast<void*>(image), range.aspectMask, range.levelCount, range.layerCount,
+				static_cast<int>(current_layout), static_cast<int>(new_layout));
+			return;
+		}
+#endif
+
 		if (vk::is_renderpass_open(cmd))
 		{
 			vk::end_renderpass(cmd);

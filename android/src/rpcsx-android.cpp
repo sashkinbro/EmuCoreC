@@ -2463,9 +2463,9 @@ static void setupCallbacks() {
           },
       .get_font_dirs = [](auto...) { return std::vector<std::string>(); },
       .on_install_pkgs =
-          [](const std::vector<std::string> &pkgs) {
+          [](const std::vector<std::string> &pkgs, bool from_optical_drive) {
             for (const std::string &pkg : pkgs) {
-              if (!rpcs3::utils::install_pkg(pkg)) {
+              if (!rpcs3::utils::install_pkg(pkg, from_optical_drive)) {
                 rpcsx_android.error("cd install pkgs: failed to install %s",
                                     pkg);
                 return false;
@@ -4106,7 +4106,7 @@ static bool installPkg(JNIEnv *env, std::vector<fs::file> &&files,
 
   package_install_result result = {};
   named_thread worker("PKG Installer", [&readers, &result, &bootable_paths] {
-    result = package_reader::extract_data(readers, bootable_paths);
+    result = package_reader::extract_data(readers, bootable_paths, false);
     return result.error == package_install_result::error_type::no_error;
   });
 
