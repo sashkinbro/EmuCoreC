@@ -5,6 +5,7 @@
 #include "Emu/RSX/Core/RSXReservationLock.hpp"
 #include "Emu/RSX/Common/tiled_dma_copy.hpp"
 #include "Emu/RSX/Host/MM.h"
+#include "Emu/RSX/Utils/image_utils.hpp"
 #ifdef __ANDROID__
 #include "Emu/RSX/RSXOffload.h"
 #endif
@@ -220,7 +221,7 @@ namespace rsx
 				if (const auto result = RSX(ctx)->read_barrier(src_address, data_length, false);
 					result == rsx::result_zcull_intr)
 				{
-					if (RSX(ctx)->copy_zcull_stats(src_address, data_length, dst_address) == data_length)
+					if (RSX(ctx)->copy_zcull_stats(src_address, data_length, dst_address) >= data_length)
 					{
 						// All writes deferred
 						return { false, src_info, dst_info };

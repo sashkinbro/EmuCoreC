@@ -131,6 +131,7 @@ public:
 		const QString enable_performance_report    = tr("Measure certain events and print a chart after the emulator is stopped. Don't enable if not asked to.");
 		const QString num_ppu_threads              = tr("Affects maximum amount of PPU threads running concurrently, the value of 1 has very low compatibility with games.\n2 is the default, if unsure do not modify this setting.");
 		const QString disable_hw_texel_remapping   = tr("Disables use of hardware-native color-space remapping formats such as _sRGB and _SNORM suffixes.\nDisabling this option increases accuracy compared to PS3 but can also introduce some noise due to how the software emulation works.");
+		const QString disable_hw_blending          = tr("Force use of programmable blending for backends that support the feature.\nPurely a debugging option, you don't stand to gain anything by enabling this.");
 
 		// emulator
 
@@ -217,7 +218,7 @@ public:
 
 		const QString texture_lod_bias = tr("Changes Texture sampling accuracy. (Small changes have a big effect.)\nAvoid using values outside the range of -12 to +12 if you're unsure.\n-3 to +3 is plenty for most usecases");
 
-		const QString blit_engine_scaling = tr("Allow upscaling to affect the RSX image scaling and rotation engine (NV3089) output images.\nThis can allow upscaling to work on some games where it normally doesn't work, but can also cause visual artifacts in other titles.");
+		const QString blit_engine_scaling = tr("Disable upscaling on the RSX image scaling and rotation engine (NV3089) output images.\nThis may fix some bugs that are present when upscaling is being used, but some games will appear as if they're running at 100% resolution regardless of the real setting.");
 
 		// gui
 

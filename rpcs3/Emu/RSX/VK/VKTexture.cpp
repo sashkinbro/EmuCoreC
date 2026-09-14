@@ -11,8 +11,10 @@
 #include "VKGSRender.h"
 
 #include "../GCM.h"
+#include "../Utils/rsx_utils.h"
+#ifdef __ANDROID__
 #include "../RSXOffload.h"
-#include "../rsx_utils.h"
+#endif
 #include "Utilities/deferred_op.hpp"
 
 #include "util/asm.hpp"

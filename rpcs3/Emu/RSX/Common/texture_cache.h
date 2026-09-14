@@ -6,6 +6,7 @@
 #include "Emu/RSX/RSXOffload.h"
 #endif
 #include "Emu/RSX/RSXThread.h"
+#include "Emu/RSX/Utils/algorithm.hpp"
 
 #include "texture_cache_utils.h"
 #include "texture_cache_predictor.h"
@@ -1791,7 +1792,7 @@ namespace rsx
 					};
 
 					surface_scaling_config_t scaling_config{};
-					if (g_cfg.video.allow_blit_engine_upscaling)
+					if (!g_cfg.video.disable_blit_engine_upscaling)
 					{
 						scaling_config =
 						{
@@ -3764,6 +3765,13 @@ namespace rsx
 					{
 						dest_section->reprotect(utils::protection::no);
 					}
+				}
+
+				// MM flush before commit below. For performance reasons, only flush when writing to CELL memory.
+				if (rsx::classify_location(dst.rsx_address) == CELL_GCM_LOCATION_MAIN)
+				{
+					const auto mm_flush_range = utils::address_range64::start_length(reinterpret_cast<u64>(dst.pixels), dst_payload_length);
+					rsx::mm_flush({ mm_flush_range });
 				}
 
 				// Commit any pending writes before we do the transfer. Writes will be done on super_ptr so locking beforehand is ok.
