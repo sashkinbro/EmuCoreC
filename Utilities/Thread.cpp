@@ -14,6 +14,10 @@
 #include "Emu/CPU/Backends/AArch64/AArch64Signal.h"
 #endif
 
+#ifdef __ANDROID__
+#include <android/log.h>
+#endif
+
 #ifdef __cpp_lib_stacktrace
 #include "rpcs3_version.h"
 #include <stacktrace>
@@ -2520,8 +2524,55 @@ const bool s_exception_handler_set = []() -> bool
 
 #else
 
-static void signal_handler(int /*sig*/, siginfo_t* info, void* uct) noexcept
+static void signal_handler(int sig, siginfo_t* info, void* uct) noexcept
 {
+	// Raw crash dump — works even if heap/allocator is corrupted.
+#ifdef __ANDROID__
+	const auto fault_addr = info ? info->si_addr : nullptr;
+	const auto si_code = info ? info->si_code : 0;
+	const auto cur_pid = static_cast<int>(getpid());
+	const auto cur_tid = static_cast<int>(gettid());
+
+	__android_log_print(ANDROID_LOG_FATAL, "EmuCoreC",
+		"CRASH: signal %d fault=%p code=%d pid=%d tid=%d",
+		sig, static_cast<const void*>(fault_addr), si_code, cur_pid, cur_tid);
+
+#ifdef ARCH_ARM64
+	if (uct)
+	{
+		ucontext_t* uc = static_cast<ucontext_t*>(uct);
+		__android_log_print(ANDROID_LOG_FATAL, "EmuCoreC",
+			"REGS: PC=%lx LR=%lx SP=%lx"
+			" x0=%lx x1=%lx x2=%lx x3=%lx"
+			" x4=%lx x5=%lx x6=%lx x7=%lx"
+			" x8=%lx x9=%lx x10=%lx x11=%lx"
+			" x12=%lx x13=%lx x14=%lx x15=%lx"
+			" x16=%lx x17=%lx x18=%lx x19=%lx"
+			" x20=%lx x21=%lx x22=%lx x23=%lx"
+			" x24=%lx x25=%lx x26=%lx x27=%lx"
+			" x28=%lx fp=%lx",
+			static_cast<unsigned long>(uc->uc_mcontext.pc),
+			static_cast<unsigned long>(uc->uc_mcontext.regs[30]),
+			static_cast<unsigned long>(uc->uc_mcontext.sp),
+			static_cast<unsigned long>(uc->uc_mcontext.regs[0]), static_cast<unsigned long>(uc->uc_mcontext.regs[1]),
+			static_cast<unsigned long>(uc->uc_mcontext.regs[2]), static_cast<unsigned long>(uc->uc_mcontext.regs[3]),
+			static_cast<unsigned long>(uc->uc_mcontext.regs[4]), static_cast<unsigned long>(uc->uc_mcontext.regs[5]),
+			static_cast<unsigned long>(uc->uc_mcontext.regs[6]), static_cast<unsigned long>(uc->uc_mcontext.regs[7]),
+			static_cast<unsigned long>(uc->uc_mcontext.regs[8]), static_cast<unsigned long>(uc->uc_mcontext.regs[9]),
+			static_cast<unsigned long>(uc->uc_mcontext.regs[10]), static_cast<unsigned long>(uc->uc_mcontext.regs[11]),
+			static_cast<unsigned long>(uc->uc_mcontext.regs[12]), static_cast<unsigned long>(uc->uc_mcontext.regs[13]),
+			static_cast<unsigned long>(uc->uc_mcontext.regs[14]), static_cast<unsigned long>(uc->uc_mcontext.regs[15]),
+			static_cast<unsigned long>(uc->uc_mcontext.regs[16]), static_cast<unsigned long>(uc->uc_mcontext.regs[17]),
+			static_cast<unsigned long>(uc->uc_mcontext.regs[18]), static_cast<unsigned long>(uc->uc_mcontext.regs[19]),
+			static_cast<unsigned long>(uc->uc_mcontext.regs[20]), static_cast<unsigned long>(uc->uc_mcontext.regs[21]),
+			static_cast<unsigned long>(uc->uc_mcontext.regs[22]), static_cast<unsigned long>(uc->uc_mcontext.regs[23]),
+			static_cast<unsigned long>(uc->uc_mcontext.regs[24]), static_cast<unsigned long>(uc->uc_mcontext.regs[25]),
+			static_cast<unsigned long>(uc->uc_mcontext.regs[26]), static_cast<unsigned long>(uc->uc_mcontext.regs[27]),
+			static_cast<unsigned long>(uc->uc_mcontext.regs[28]), static_cast<unsigned long>(uc->uc_mcontext.regs[29]));
+	}
+#endif
+#endif
+
 	ucontext_t* context = static_cast<ucontext_t*>(uct);
 
 #if defined(ARCH_X64)
