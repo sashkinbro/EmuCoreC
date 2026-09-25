@@ -146,6 +146,8 @@ app/src/main/jniLibs/arm64-v8a/
 
 # Firebase
 .firebaserc
+google-services.json
+**/google-services.json
 /emucorec-tools/
 
 # EmuCoreC build intermediates
