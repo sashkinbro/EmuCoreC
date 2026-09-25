@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -26,6 +27,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -76,6 +78,7 @@ import com.sbro.emucorec.data.SaveDataImportResult
 import com.sbro.emucorec.data.Ps3SaveDataEntry
 import com.sbro.emucorec.ui.common.LocalImage
 import com.sbro.emucorec.ui.common.ScreenTopBar
+import com.sbro.emucorec.ui.common.UrlImage
 import com.sbro.emucorec.ui.common.EmuCoreLoadingAnimation
 import com.sbro.emucorec.ui.common.rememberDebouncedClick
 import com.sbro.emucorec.ui.theme.CardContentPadding
@@ -449,18 +452,31 @@ private fun SaveDataCard(
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
                 verticalAlignment = Alignment.Top
             ) {
-                Surface(
-                    modifier = Modifier.size(64.dp),
-                    shape = neonShape(16.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh
-                ) {
-                    LocalImage(
-                        path = save.iconPath,
-                        contentDescription = save.title,
-                        fallbackLabel = save.title,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
+                        Surface(
+                            modifier = Modifier.width(64.dp),
+                            shape = neonShape(16.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh
+                        ) {
+                            val artworkModifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(3f / 4f)
+                            if (!save.coverUrl.isNullOrBlank()) {
+                                UrlImage(
+                                    imageUrl = save.coverUrl,
+                                    contentDescription = save.title,
+                                    fallbackLabel = save.title,
+                                    fallbackPath = save.iconPath,
+                                    modifier = artworkModifier
+                                )
+                            } else {
+                                LocalImage(
+                                    path = save.iconPath,
+                                    contentDescription = save.title,
+                                    fallbackLabel = save.title,
+                                    modifier = artworkModifier
+                                )
+                            }
+                        }
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
                         text = save.title,

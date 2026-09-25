@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -78,6 +79,7 @@ import com.sbro.emucorec.data.Ps3TrophyGroup
 import com.sbro.emucorec.data.Ps3TrophySet
 import com.sbro.emucorec.ui.common.LocalImage
 import com.sbro.emucorec.ui.common.ScreenTopBar
+import com.sbro.emucorec.ui.common.UrlImage
 import com.sbro.emucorec.ui.common.EmuCoreLoadingAnimation
 import com.sbro.emucorec.ui.theme.ScreenContentBottomPadding
 import com.sbro.emucorec.ui.theme.ScreenHorizontalPadding
@@ -278,16 +280,29 @@ private fun TrophySetHeader(
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Surface(
-                modifier = Modifier.size(64.dp),
+                modifier = Modifier.width(64.dp),
                 shape = neonShape(16.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh
             ) {
-                LocalImage(
-                    path = set.gameIconPath,
-                    contentDescription = set.gameTitle,
-                    fallbackLabel = set.gameTitle,
-                    modifier = Modifier.fillMaxSize()
-                )
+                val artworkModifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(3f / 4f)
+                if (!set.coverUrl.isNullOrBlank()) {
+                    UrlImage(
+                        imageUrl = set.coverUrl,
+                        contentDescription = set.gameTitle,
+                        fallbackLabel = set.gameTitle,
+                        fallbackPath = set.gameIconPath,
+                        modifier = artworkModifier
+                    )
+                } else {
+                    LocalImage(
+                        path = set.gameIconPath,
+                        contentDescription = set.gameTitle,
+                        fallbackLabel = set.gameTitle,
+                        modifier = artworkModifier
+                    )
+                }
             }
             Column(
                 modifier = Modifier.weight(1f),

@@ -20,6 +20,7 @@ data class PlayTimeGameStats(
     val titleId: String,
     val title: String,
     val iconPath: String?,
+    val coverUrl: String?,
     val totalMs: Long,
     val sessionCount: Int,
     val lastPlayedAt: Long?
@@ -124,6 +125,7 @@ class PlayTimeViewModel(application: Application) : AndroidViewModel(application
                 titleId = installed?.titleId ?: titleId,
                 title = installed?.title ?: gameSessions.firstOrNull()?.title ?: titleId,
                 iconPath = installed?.iconPath,
+                coverUrl = installed?.catalogCoverUrl,
                 totalMs = gameSessions.sumOf { it.effectiveDurationMs() },
                 sessionCount = gameSessions.size,
                 lastPlayedAt = gameSessions.maxOfOrNull { it.endedAt ?: it.startedAt }

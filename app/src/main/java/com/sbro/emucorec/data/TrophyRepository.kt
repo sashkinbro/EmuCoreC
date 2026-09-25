@@ -42,6 +42,7 @@ data class Ps3TrophySet(
     val titleId: String?,
     val gameTitle: String,
     val gameIconPath: String?,
+    val coverUrl: String? = null,
     val setName: String,
     val setDetail: String,
     val groups: List<Ps3TrophyGroup>
@@ -180,6 +181,7 @@ class TrophyRepository {
             titleId = game?.titleId,
             gameTitle = fallbackName,
             gameIconPath = fallbackIcon,
+            coverUrl = game?.catalogCoverUrl,
             setName = details.setName.takeIf(String::isNotBlank) ?: fallbackName,
             setDetail = details.setDetail,
             groups = groups

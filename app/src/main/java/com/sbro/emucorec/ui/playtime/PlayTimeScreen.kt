@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -59,6 +61,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.sbro.emucorec.R
 import com.sbro.emucorec.core.PlayTimeSession
 import com.sbro.emucorec.ui.common.LocalImage
+import com.sbro.emucorec.ui.common.UrlImage
 import com.sbro.emucorec.ui.common.ScreenTopBar
 import com.sbro.emucorec.ui.common.EmuCoreLoadingAnimation
 import com.sbro.emucorec.ui.theme.CardContentPadding
@@ -295,16 +298,29 @@ private fun GameSelectorCard(
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Surface(
-                modifier = Modifier.size(46.dp),
+                modifier = Modifier.width(46.dp),
                 shape = neonShape(12.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh
             ) {
-                LocalImage(
-                    path = game.iconPath,
-                    contentDescription = game.title,
-                    fallbackLabel = game.title,
-                    modifier = Modifier.fillMaxSize()
-                )
+                val artworkModifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(3f / 4f)
+                if (!game.coverUrl.isNullOrBlank()) {
+                    UrlImage(
+                        imageUrl = game.coverUrl,
+                        contentDescription = game.title,
+                        fallbackLabel = game.title,
+                        fallbackPath = game.iconPath,
+                        modifier = artworkModifier
+                    )
+                } else {
+                    LocalImage(
+                        path = game.iconPath,
+                        contentDescription = game.title,
+                        fallbackLabel = game.title,
+                        modifier = artworkModifier
+                    )
+                }
             }
             Column(modifier = Modifier.widthIn(min = 120.dp, max = 160.dp)) {
                 Text(
