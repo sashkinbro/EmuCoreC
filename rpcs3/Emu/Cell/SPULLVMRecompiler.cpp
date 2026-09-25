@@ -1783,7 +1783,17 @@ public:
 			sha1_finish(&ctx, output);
 
 			m_hash.clear();
-			fmt::append(m_hash, "__spu-0x%05x-%s", func.entry_point, fmt::base57(output));
+			// The 'a' is a codegen generation tag, not decoration.
+			//
+			// This name keys the on-disk object cache and is built purely from the GUEST
+			// function's bytes, so it is identical before and after any change to how we compile
+			// that function. Reverting a codegen bug therefore changes nothing for anyone who
+			// already has the bad object cached -- the fix silently does not apply, and the
+			// obvious conclusion is that it did not work.
+			//
+			// The PPU side already learned this and versions its objects (v8-kusa -> v9-kusa
+			// after the XER fix). Bump this letter whenever ARM64 SPU codegen changes semantics.
+			fmt::append(m_hash, "__spu-a-0x%05x-%s", func.entry_point, fmt::base57(output));
 
 			be_t<u64> hash_start;
 			std::memcpy(&hash_start, output, sizeof(hash_start));
@@ -7705,9 +7715,6 @@ public:
 		const auto known_idx = get_known_bits(c);
 		const bool perm_only = known_idx.Zero[7];
 		const bool perm_or_zero_only = known_idx.Zero[6];
-		const bool consts_only = known_idx.One[7];
-		const bool consts_never_msb = known_idx.Zero[5];
-		const bool consts_never_allones = known_idx.One[5];
 		const bool idx_selects_single = known_idx.extractBits(1, 4).isConstant();
 
 		const auto a = get_vr<u8[16]>(op.ra);
@@ -7770,11 +7777,7 @@ public:
 		// NOTE: LLVM doesn't emit BCAX	(llvm-project/issues/200699)
 		//		 Verify if `(x ^ 0x0F) & 0x?F` is reassociated when upstreamed
 
-		if (consts_only)
-		{
-			// NOP to avoid doing any shuffles
-		}
-		else if (single_src)
+		if (single_src)
 		{
 			const auto only_src = single_src.value();
 
@@ -7786,7 +7789,8 @@ public:
 
 			if (only_src_is_splat)
 			{
-				set_vr(op.rt4, tbl(splat_lut, (c >> 4)));
+				const auto lut = build<u8[16]>(0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x80, 0x80, 0x80, 0x80);
+				set_vr(op.rt4, tbx(only_src, lut, (c >> 3) ^ 0x10));
 				return;
 			}
 
@@ -7796,8 +7800,15 @@ public:
 				set_vr(op.rt4, tbl(only_src, cm));
 				return;
 			}
+
+			const auto x = tbl(build<u8[16]>(0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0x80, 0x80), (c >> 4));
+			const auto xv = perm_or_zero_only ? eval(splat<u8[16]>(0)) : x;
+			const auto cm = eval(cv & 0x8f);
+			set_vr(op.rt4, tbx(xv, only_src, cm));
+			return;
 		}
-		else if (a_is_splat && b_is_splat)
+
+		if (a_is_splat && b_is_splat)
 		{
 			if (perm_only)
 			{
@@ -7816,39 +7827,10 @@ public:
 			return;
 		}
 
-		// Calculate special index constants
-
-		value_t<u8[16]> idx_consts;
-		if (perm_or_zero_only)
-		{
-			idx_consts = eval(splat<u8[16]>(0));
-		}
-		else if (consts_never_msb)
-		{
-			idx_consts = eval(noncast<u8[16]>(sext<s8[16]>(c >= 0xc0)));
-		}
-		else
-		{
-			idx_consts = tbl(build<u8[16]>(0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0x80, 0x80), (c >> 4));
-		}
-
-		if (consts_only)
-		{
-			set_vr(op.rt4, idx_consts);
-			return;
-		}
-
-		// Combine shuffle and special index constants
-
-		if (single_src)
-		{
-			const auto cm = eval(cv & 0x8f);
-			set_vr(op.rt4, tbx(idx_consts, single_src.value(), cm));
-			return;
-		}
-
+		const auto x = tbl(build<u8[16]>(0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0x80, 0x80), (c >> 4));
+		const auto xv = perm_or_zero_only ? eval(splat<u8[16]>(0)) : x;
 		const auto cm = eval(cv & 0x9f);
-		set_vr(op.rt4, tbx2(idx_consts, av, bv, cm));
+		set_vr(op.rt4, tbx2(xv, av, bv, cm));
 		return;
 #else
 
@@ -7857,12 +7839,7 @@ public:
 		bool or_combine_safe = false;
 
 		value_t<u8[16]> ab_shuf;
-		if (consts_only)
-		{
-			// NOP to avoid doing any shuffles
-			ab_shuf = value_t<u8[16]>();
-		}
-		else if (single_src)
+		if (single_src)
 		{
 			if (only_src_is_splat)
 			{
@@ -7917,19 +7894,7 @@ public:
 		{
 			idx_consts = eval(splat<u8[16]>(0));
 		}
-		else if (consts_never_msb)
-		{
-			// Saves on a constant + prevents pessimation where kmask implementation has worse latency than GFNI
-			if (or_combine_safe)
-				idx_consts = eval(bitcast<u8[16]>(sext<s8[16]>(c >= 0xc0)));
-			else
-				idx_consts = eval(bitcast<u8[16]>(noncast<s8[16]>(c + c) >> 7));
-		}
-		else if (consts_never_allones)
-		{
-			idx_consts = eval(sub_sat(c, splat<u8[16]>(0x60)) & 0x80);
-		}
-		else if (m_use_gfni && !(or_combine_safe && !m_use_avx512))
+		else if (m_use_gfni)
 		{
 			// Keep OR combine due to slow blend on later Intel (AVX512 uses faster kmask method)
 			const auto gfni = gf2p8affineqb(c, build<u8[16]>(0x40, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x40, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20), 0x7f);
@@ -7942,12 +7907,6 @@ public:
 		{
 			const auto pshufb_lut = build<u8[16]>(0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0x80, 0x80);
 			idx_consts = eval(pshufb(pshufb_lut, (c >> 4)));
-		}
-
-		if (consts_only)
-		{
-			set_vr(op.rt4, idx_consts);
-			return;
 		}
 
 		// Combine shuffle and special index constants
