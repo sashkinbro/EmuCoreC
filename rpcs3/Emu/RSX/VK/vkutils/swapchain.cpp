@@ -297,7 +297,53 @@ namespace vk
 
 		swap_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 		swap_info.preTransform = pre_transform;
-		swap_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+
+		// compositeAlpha must be a bit the surface actually reports in supportedCompositeAlpha
+		// (VUID-VkSwapchainCreateInfoKHR-compositeAlpha-01280). Some Android surfaces do not
+		// include OPAQUE, so pick the first mode the surface offers, opaque preferred. INHERIT
+		// comes second: it means the platform SurfaceView decides the composition, which is the
+		// normal Android arrangement. The mask is printed so a device can be measured instead of
+		// guessed at.
+		{
+			constexpr VkCompositeAlphaFlagBitsKHR composite_alpha_preference[] =
+			{
+				VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+				VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR,
+				VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR,
+				VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR
+			};
+
+			VkCompositeAlphaFlagBitsKHR composite_alpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+			bool composite_alpha_found = false;
+
+			for (VkCompositeAlphaFlagBitsKHR candidate : composite_alpha_preference)
+			{
+				if (surface_descriptors.supportedCompositeAlpha & candidate)
+				{
+					composite_alpha = candidate;
+					composite_alpha_found = true;
+					break;
+				}
+			}
+
+			if (!composite_alpha_found)
+			{
+				// Nothing usable reported. Keep the historical value rather than refuse to build
+				// a swapchain that used to build; a zero mask means the capabilities query
+				// returned a zeroed struct, which is a separate problem.
+				rsx_log.warning("Swapchain: surface reports no supported composite alpha modes (mask 0x%x); requesting OPAQUE.",
+					static_cast<u32>(surface_descriptors.supportedCompositeAlpha));
+			}
+			else if (composite_alpha != VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR)
+			{
+				rsx_log.notice("Swapchain: composite alpha OPAQUE unsupported (mask 0x%x); using 0x%x.",
+					static_cast<u32>(surface_descriptors.supportedCompositeAlpha),
+					static_cast<u32>(composite_alpha));
+			}
+
+			swap_info.compositeAlpha = composite_alpha;
+		}
+
 		swap_info.imageArrayLayers = 1;
 		swap_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 		swap_info.presentMode = swapchain_present_mode;
