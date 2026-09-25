@@ -1553,7 +1553,8 @@ spu_runtime::spu_runtime()
 	// illegal instruction). Bump SPU_OBJ_CACHE_VERSION whenever SPU codegen itself changes,
 	// including compile-time switches such as the SPU ARM64 byte-gather path.
 	{
-		constexpr u32 SPU_OBJ_CACHE_VERSION = 1;
+		// v2 retires objects written before the ARM64 i8mm byte-gather path was disabled.
+		constexpr u32 SPU_OBJ_CACHE_VERSION = 2;
 		constexpr usz SPU_OBJ_CACHE_MAX_FILES = 12000;
 
 		sha1_context ctx;

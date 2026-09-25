@@ -21,6 +21,13 @@
 #include "util/simd.hpp"
 #include "util/sysinfo.hpp"
 
+// ARM64-only i8mm (smmla/ummla) byte gather used by GBB/GBH. Disabled: it is the one live
+// ARM64-only SPU codegen path that the scalar fallback below does not share, and it matches
+// the register-file corruption / STOP 0x0 signature seen when several titles fail to boot.
+// The suspicion is not proven, so the path stays available behind this switch; the cost of
+// leaving it off is negligible because GBB/GBH are rare bit-gather operations.
+#define SPU_ARM64_BYTE_GATHER 0
+
 const extern spu_decoder<spu_itype> g_spu_itype;
 const extern spu_decoder<spu_iname> g_spu_iname;
 const extern spu_decoder<spu_iflag> g_spu_iflag;
@@ -6113,6 +6120,7 @@ public:
 		const auto a = get_vr<s16[8]>(op.ra);
 
 #ifdef ARCH_ARM64
+#if SPU_ARM64_BYTE_GATHER
 		if (m_use_i8mm)
 		{
 			if (match_vr<s16[8], s32[4], s64[2]>(op.ra, [&](auto c, auto MP)
@@ -6150,6 +6158,7 @@ public:
 			)));
 			return;
 		}
+#endif
 
 		// Use dot product instructions with special values to shift then sum results into the preferred slot
 		if (m_use_dotprod)
@@ -6206,6 +6215,7 @@ public:
 		const auto a = get_vr<u8[16]>(op.ra);
 
 #ifdef ARCH_ARM64
+#if SPU_ARM64_BYTE_GATHER
 		if (m_use_i8mm)
 		{
 			if (match_vr<s8[16], s16[8], s32[4], s64[2]>(op.ra, [&](auto c, auto MP)
@@ -6247,6 +6257,7 @@ public:
 			set_vr(op.rt, bitcast<u32[4]>(es));
 			return;
 		}
+#endif
 
 		// Use dot product instructions with special values to shift then sum results into the preferred slot
 		if (m_use_dotprod)
