@@ -63,6 +63,21 @@ object Ps3InstallBridge {
                 Ps3Runtime.installLicense(context, licensePath, "", progressId)
             }
         }
+        if (!success && file.extension.equals("rap", true)) {
+            // A RAP is only usable under its content-id name; when it cannot be matched, say so
+            // and name the file instead of a bare "Installation failed".
+            val games = runCatching {
+                com.sbro.emucorec.data.InstalledGameRepository().loadInstalledGames(context)
+            }.getOrDefault(emptyList())
+            val suggested = RapLicenseContentIdResolver.suggestedFileName(file, games)
+            val detail = if (suggested != null) {
+                "RAP could not be matched to an installed game. Rename it to $suggested"
+            } else {
+                "RAP could not be matched to an installed game. Rename it to <content-id>.rap"
+            }
+            emit("license", 0f, detail)
+            return@runExclusive false
+        }
         emit("license", if (success) 1f else 0f, if (success) "Installed" else "Installation failed")
         success
     }
