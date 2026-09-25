@@ -32,7 +32,7 @@ internal object RapLicenseContentIdResolver {
         val matchingGames = installedGames.filter { game -> matches(rapLabel, game) }
         if (matchingGames.isEmpty()) return null
 
-        val resolved = matchingGames.flatMap(::contentIdsFor).distinct()
+        val resolved = matchingGames.flatMap { game -> contentIdsFor(game, rapFile) }.distinct()
         return resolved.singleOrNull()?.let(::ResolvedLicense)
     }
 
@@ -49,14 +49,29 @@ internal object RapLicenseContentIdResolver {
         return titleId.isNotBlank() && rapLabel.contains(titleId)
     }
 
-    private fun contentIdsFor(game: InstalledPs3Game): List<String> {
-        val found = (listOfNotNull(canonicalContentId(game.contentId)) +
+    private fun contentIdsFor(game: InstalledPs3Game, rapFile: File): List<String> {
+        val direct = (listOfNotNull(canonicalContentId(game.contentId)) +
             findEboot(game.installPath)?.let(::readContentIds).orEmpty()).distinct()
-        val titleId = game.titleId.trim().uppercase()
-        val matching = if (titleId.isNotBlank()) found.filter { it.contains(titleId) } else emptyList()
-        // Disc-based and PS2-classic packages carry a title id that does not appear in their
-        // content id, so fall back to whatever the metadata and eboot actually name.
-        return matching.ifEmpty { found }
+
+        // The installed directory is named after the package's title id (NPUD21269 for a PS2
+        // classic whose SFO carries the disc serial SLUS21269 instead), so it identifies the
+        // content id where the SFO does not.
+        val keys = listOf(File(game.installPath).name, game.titleId)
+            .map { it.trim().uppercase() }
+            .filter { it.isNotBlank() }
+
+        val directMatches = direct.filter { id -> keys.any(id::contains) }
+        if (directMatches.isNotEmpty()) return directMatches
+
+        // Neither the metadata nor the eboot names a content id: read it from the package the
+        // license came with, which sits in the same folder.
+        val packaged = rapFile.parentFile
+            ?.listFiles { file -> file.isFile && file.name.endsWith(".pkg", true) }
+            .orEmpty()
+            .flatMap(::readContentIds)
+        val packagedMatches = packaged.filter { id -> keys.any(id::contains) }
+
+        return (packagedMatches.ifEmpty { packaged } + direct).distinct()
     }
 
     internal fun canonicalContentId(value: String?): String? {
