@@ -19,6 +19,7 @@
 #include "PPUInterpreter.h"
 #include "PPUAnalyser.h"
 #include "PPUModule.h"
+#include "Emu/RSX/Overlays/overlay_message.h"
 #include "PPUDisAsm.h"
 #include "SPURecompiler.h"
 #include "timers.hpp"
