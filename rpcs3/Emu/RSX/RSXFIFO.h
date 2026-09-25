@@ -133,6 +133,8 @@ namespace rsx
 			RsxDmaControl* m_ctrl = nullptr;
 			const rsx::rsx_iomap_table* m_iotable;
 			u32 m_internal_get = 0;
+			mutable u32 m_get_sync_counter = 0;
+			mutable u32 m_published_get = ~0u;
 
 			u32 m_memwatch_addr = 0;
 			u32 m_memwatch_cmp = 0;
@@ -159,6 +161,7 @@ namespace rsx
 			u32 get_pos() const { return m_internal_get; }
 			u32 last_cmd() const { return m_cmd; }
 			void sync_get() const;
+			void sync_get_force() const;
 			std::span<const u32> get_current_arg_ptr(u32 length_in_words) const;
 			u32 get_remaining_args_count() const { return m_remaining_commands; }
 			void restore_state(u32 cmd, u32 count);

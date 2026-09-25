@@ -36,7 +36,30 @@ namespace rsx
 
 		void FIFO_control::sync_get() const
 		{
-			m_ctrl->get.release(m_internal_get);
+			// Publish every eighth packet. The guest reads GET to see how much ring space is
+			// free and it is far ahead of us, so this bounded lag costs nothing; paths that
+			// can idle or block publish immediately through sync_get_force instead.
+			if (++m_get_sync_counter & 7)
+			{
+				return;
+			}
+
+			m_ctrl->get.release(m_published_get = m_internal_get);
+		}
+
+		void FIFO_control::sync_get_force() const
+		{
+			m_get_sync_counter = 0;
+
+			// Publish only real progress: the drain paths enter this every run-loop iteration
+			// while the ring stays empty, and releasing an unchanged GET just makes the guest's
+			// producer contend for the cache line for nothing.
+			if (m_published_get == m_internal_get)
+			{
+				return;
+			}
+
+			m_ctrl->get.release(m_published_get = m_internal_get);
 		}
 
 		void FIFO_control::restore_state(u32 cmd, u32 count)
@@ -218,7 +241,7 @@ namespace rsx
 			}
 
 			// Update ctrl registers
-			m_ctrl->get.release(m_internal_get = get);
+			m_ctrl->get.release(m_published_get = m_internal_get = get);
 			m_remaining_commands = 0;
 		}
 
@@ -421,7 +444,7 @@ namespace rsx
 
 			if (!count)
 			{
-				m_ctrl->get.release(m_internal_get += 4);
+				m_ctrl->get.release(m_published_get = (m_internal_get += 4));
 				data.reg = FIFO_NOP;
 				return;
 			}
@@ -641,7 +664,7 @@ namespace rsx
 
 	void thread::run_FIFO()
 	{
-		FIFO::register_pair command;
+		FIFO::register_pair command{FIFO::FIFO_EMPTY, 0};
 		fifo_ctrl->read(command);
 		const auto cmd = command.reg;
 
@@ -658,25 +681,57 @@ namespace rsx
 					performance_counters.state = FIFO::state::nop;
 				}
 
+				// Going idle: publish GET now instead of carrying the bounded lag into a
+				// period where the producer may be waiting on ring space.
+				fifo_ctrl->sync_get_force();
 				return;
 			}
 			case FIFO::FIFO_EMPTY:
 			{
+				fifo_ctrl->sync_get_force();
+
+				// Short hot window before parking, reset for every fresh idle period.
+				static thread_local u32 s_fifo_idle_spins = 0;
+
 				if (performance_counters.state == FIFO::state::running)
 				{
 					performance_counters.FIFO_idle_timestamp = get_system_time();
 					performance_counters.state = FIFO::state::empty;
+					s_fifo_idle_spins = 0;
 				}
 				else
 				{
+					// Spin briefly so a PUT landing within microseconds is seen with no wake
+					// latency; park many microseconds otherwise. Yielding burns a core the SPU
+					// threads want, and sleeping delays noticing work the RSX is on the critical
+					// path for, so the spin comes first and only sustained idle parks.
+#if defined(ARCH_ARM64)
+					if (s_fifo_idle_spins < 8)
+					{
+						s_fifo_idle_spins++;
+						utils::pause();
+					}
+					else if (utils::has_wfe_event_stream())
+					{
+						utils::wait_for_event();
+					}
+					else
+					{
+						// A monitor-less WFE has no bounded wake on this kernel, so a park
+						// could sleep through the guest's next PUT. Yield instead.
+						std::this_thread::yield();
+					}
+#else
 					std::this_thread::yield();
+#endif
 				}
 
 				return;
 			}
 			case FIFO::FIFO_BUSY:
 			{
-				// Do something else
+				// Do something else. GET goes out here as well: this leaves the consume loop.
+				fifo_ctrl->sync_get_force();
 				return;
 			}
 			case FIFO::FIFO_ERROR:
