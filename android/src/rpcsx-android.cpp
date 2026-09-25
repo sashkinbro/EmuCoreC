@@ -7,6 +7,7 @@
 #include "Emu/Cell/PPUAnalyser.h"
 #include "Emu/Cell/SPURecompiler.h"
 #include "Emu/Cell/SPUThread.h"
+#include "Emu/emu_callbacks.h"
 #include "Emu/IdManager.h"
 #include "Emu/Io/KeyboardHandler.h"
 #include "Emu/Io/Null/NullKeyboardHandler.h"
@@ -1339,14 +1340,14 @@ static void sendGameInfo(JNIEnv *env, jlong progressId,
   objects.reserve(infos.size());
 
   for (const auto &info : infos) {
-    auto path = Emu.GetCallbacks().resolve_path(info.path);
+    auto path = g_emu_callbacks.resolve_path(info.path);
     if (path.ends_with('/')) {
       path.resize(path.size() - 1);
     }
 
     objects.push_back(env->NewObject(
         gameClass, gameConstructor, wrap(env, path), wrap(env, info.name),
-        wrap(env, Emu.GetCallbacks().resolve_path(info.iconPath)),
+        wrap(env, g_emu_callbacks.resolve_path(info.iconPath)),
         jint(info.flags)));
   }
 
@@ -2275,7 +2276,7 @@ static struct main_thread_dispatcher {
 } g_mainThreadDispatcher;
 
 static void setupCallbacks() {
-  Emu.SetCallbacks({
+  g_emu_callbacks = {
       .call_from_main_thread =
           [](std::function<void()> cb, atomic_t<u32> *wake_up) {
             if (wake_up) {
@@ -2506,7 +2507,7 @@ static void setupCallbacks() {
             rpcsx_android.notice("using database config for %s", title_id);
             return config.to_string();
           },
-  });
+  };
 }
 
 static bool initVirtualPad(const std::shared_ptr<Pad> &pad) {
