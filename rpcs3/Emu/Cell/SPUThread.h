@@ -816,12 +816,6 @@ public:
 	// Diagnostics counters for SPU reservation (ported from ARMSX3 a7ec28f7a, originally from 55a35b5e1)
 	u64 putllc_calls = 0;
 	u64 putllc_fails = 0;
-
-	// Consecutive failed conditional stores, for the fairness backoff in do_putllc.
-	u32 putllc_streak = 0;
-
-	// How many runs of 64 losses in a row, for the escalating wait. Reset on success.
-	u32 putllc_backoff = 0;
 	u64 putllc_notify = 0;
 	u64 putllc_suppressed = 0;
 
