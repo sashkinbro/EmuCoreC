@@ -36,6 +36,11 @@
 -keep class com.sbro.emucorec.EmuCoreCApp { *; }
 -keep class androidx.core.content.FileProvider { *; }
 
+# The Discord bridge resolves JNI symbols by class name, and the SDK is used
+# reflectively from the isolated :discord process.
+-keep,includedescriptorclasses class com.sbro.emucorec.discord.DiscordNative { *; }
+-keep class com.discord.socialsdk.** { *; }
+
 # SDL.java loads ReLinker through reflection, so those names must stay stable
 # once release shrinking/obfuscation is enabled.
 -keep class com.getkeepsafe.relinker.** { *; }
