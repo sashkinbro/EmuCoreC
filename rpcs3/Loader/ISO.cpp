@@ -719,7 +719,7 @@ u64 iso_file_encrypted::read_at(u64 offset, void* buffer, u64 size)
 		return 0;
 	}
 
-	m_dec->decrypt(first_sec.address_aligned, &reinterpret_cast<u8*>(aligned_buf)[first_sec.offset_aligned], first_sec.size_aligned, m_meta.name);
+	m_dec->decrypt(first_sec.address_aligned, {&reinterpret_cast<u8*>(aligned_buf)[first_sec.offset_aligned], first_sec.size_aligned}, m_meta.name);
 	std::memcpy(buffer, &reinterpret_cast<u8*>(aligned_buf)[first_sec.offset], first_sec.size);
 
 	const u64 sector_count = (last_sec.lba_address - first_sec.lba_address) / ISO_SECTOR_SIZE + 1;
