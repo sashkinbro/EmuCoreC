@@ -5667,6 +5667,13 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 				accurate_nj_mode,
 				contains_symbol_resolver,
 				daz_and_ftz,
+				arm64_codegen_v2,
+				arm64_codegen_v3,
+				arm64_codegen_v4,
+				arm64_codegen_v5,
+				arm64_codegen_v6,
+				arm64_codegen_v7,
+				arm64_codegen_v8,
 
 				__bitset_enum_max
 			};
@@ -5676,6 +5683,18 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 			settings += ppu_settings::_reserved_for_backwards_compatibility;
 #if !defined(_WIN32) && !defined(__APPLE__)
 			settings += ppu_settings::platform_bit;
+#endif
+#if defined(ARCH_ARM64)
+			// Cache identity for ARM64 PPU codegen. The cache key is otherwise only the
+			// executable's SHA-1 plus these settings, with nothing naming the build, so a codegen
+			// change silently reuses objects compiled by the previous version. That is not
+			// hypothetical: the FCTIW/FCTID saturation fix appeared to do nothing because the game
+			// reloaded its old objects and never recompiled.
+			//
+			// Add a new value (arm64_codegen_v3, ...) and set that instead whenever ARM64 PPU
+			// codegen changes. Never re-toggle an old one -- that would collide with hashes already
+			// on disk from an earlier build.
+			settings += ppu_settings::arm64_codegen_v8;
 #endif
 			if (g_cfg.core.use_accurate_dfma)
 				settings += ppu_settings::accurate_dfma;
