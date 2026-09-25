@@ -99,8 +99,43 @@ namespace vk
 	bool data_heap::grow(usz size)
 	{
 		// Create new heap. All sizes are aligned up by 64M, upto 1GiB
-		const usz size_limit = (m_flags & heap_pool_fixed_size) ? initial_size : 1024 * 0x100000;
+		usz size_limit = (m_flags & heap_pool_fixed_size) ? initial_size : 1024 * 0x100000;
+
+#ifdef __ANDROID__
+		// Hard ceiling on Android: the 1GiB figure is a desktop number. A heap that has already
+		// grown to 512MB asks the driver for 576MB, the allocation fails, and that failure is
+		// fatal to the RSX thread -- rendering stops and the game hangs with audio still playing.
+		// The swap-out branch below is the correct answer, so let the ceiling be reached while
+		// that branch can still run. 256MB is far above the peak traffic these rings serve.
+		if (!(m_flags & heap_pool_fixed_size))
+		{
+			size_limit = std::min<usz>(size_limit, 256 * 0x100000);
+		}
+#endif
+
 		usz aligned_new_size = utils::align(m_size + size, 64 * 0x100000);
+
+		// At the ceiling, reclaim before swapping or failing.
+		//
+		// Ring memory is only returned when a frame retires (frame_context_cleanup, reached via
+		// check_present_status), and frames only queue around presents -- so a game that draws
+		// without presenting can never give space back, and a long load grows the ring until an
+		// allocation fails. Ask for that memory back first; grow only if it is genuinely still
+		// in flight.
+		//
+		// Strictly greater, so a step that exactly lands on the ceiling is allowed to take it
+		// rather than hard-syncing while its own budget goes unused.
+		if (aligned_new_size > size_limit && vk::reclaim_ring_memory())
+		{
+			// grow() cannot see the alignment its caller will apply, so claim success only with
+			// a 4K margin. Being wrong would hand out memory still in flight.
+			if (can_alloc_impl(utils::align(m_put_pos, 4096), size + 4096))
+			{
+				rsx_log.notice("[%s] Reclaimed at the ceiling instead of swapping (heap %uM, requested %uK).",
+					m_name, static_cast<u32>(m_size / 0x100000), static_cast<u32>(size / 1024));
+				return true;
+			}
+		}
 
 		if (aligned_new_size >= size_limit)
 		{

@@ -128,6 +128,12 @@ namespace vk
 	void leave_uninterruptible();
 	bool is_uninterruptible();
 
+	// Ask the renderer to retire finished work so the data heaps can reclaim ring memory.
+	// Ring memory comes back through frame retirement (check_present_status inside
+	// flush_command_queue), and a heap that is full has no other way to ask for it. Declines
+	// while uninterruptible.
+	bool reclaim_ring_memory();
+
 	bool is_last_ditch_eviction();
 	void set_last_ditch_eviction(bool state);
 

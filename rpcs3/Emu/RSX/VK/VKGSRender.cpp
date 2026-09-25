@@ -1537,6 +1537,14 @@ void VKGSRender::clear_surface(u32 mask)
 	}
 }
 
+void VKGSRender::retire_completed_work()
+{
+	// Hard sync: the point is that frames actually RETIRE. check_present_status() inside
+	// flush_command_queue is what returns each retired frame's ring memory, and a heap that has
+	// run out has no other way to ask for it.
+	flush_command_queue(true);
+}
+
 void VKGSRender::flush_command_queue(bool hard_sync, bool do_not_switch)
 {
 	close_and_submit_command_buffer();
