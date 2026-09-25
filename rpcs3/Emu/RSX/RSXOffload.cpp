@@ -161,7 +161,7 @@ namespace rsx
 	// General transport
 	void dma_manager::copy(void *dst, std::vector<u8>& src, u32 length) const
 	{
-		if (length <= max_immediate_transfer_size || !can_offload())
+		if (length <= max_immediate_transfer_size || !(g_cfg.video.multithreaded_rsx && is_offloader_running()))
 		{
 			std::memcpy(dst, src.data(), length);
 		}
@@ -174,7 +174,7 @@ namespace rsx
 
 	void dma_manager::copy(void *dst, void *src, u32 length) const
 	{
-		if (length <= max_immediate_transfer_size || !can_offload())
+		if (length <= max_immediate_transfer_size || !(g_cfg.video.multithreaded_rsx && is_offloader_running()))
 		{
 			const u32 vm_addr = vm::try_get_addr(src).first;
 #ifdef __ANDROID__
@@ -193,7 +193,7 @@ namespace rsx
 	// Vertex utilities
 	void dma_manager::emulate_as_indexed(void *dst, rsx::primitive_type primitive, u32 count)
 	{
-		if (!can_offload())
+		if (!(g_cfg.video.multithreaded_rsx && is_offloader_running()))
 		{
 			write_index_array_for_non_indexed_non_native_primitive_to_buffer(
 				static_cast<char*>(dst), primitive, count);
