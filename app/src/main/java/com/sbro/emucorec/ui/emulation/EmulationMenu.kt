@@ -326,6 +326,7 @@ private fun MenuScrollableContent(
     showSheetHandle: Boolean = false,
     onSelected: (EmulationMenuTab) -> Unit = {}
 ) {
+    val palette = emulationMenuPalette()
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -342,15 +343,19 @@ private fun MenuScrollableContent(
         MenuHeader(gameTitle = gameTitle, gameId = gameId, paused = paused)
         MenuTopActions(paused = paused, callbacks = callbacks)
         if (showHorizontalTabs) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalBleed(horizontalPadding)
+            // Tabs live in their own card so the strip reads as a separate block instead of
+            // blending into the panel and the content below it.
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                color = palette.row,
+                border = BorderStroke(1.dp, palette.border)
             ) {
                 MenuTabs(
                     selectedTab = selectedTab,
                     onSelected = onSelected,
-                    horizontalContentPadding = horizontalPadding
+                    horizontalContentPadding = horizontalPadding + 8.dp,
+                    modifier = Modifier.padding(vertical = 6.dp)
                 )
             }
         }
@@ -1128,12 +1133,13 @@ private fun MenuTopAction(
 private fun MenuTabs(
     selectedTab: EmulationMenuTab,
     onSelected: (EmulationMenuTab) -> Unit,
-    horizontalContentPadding: Dp = 0.dp
+    horizontalContentPadding: Dp = 0.dp,
+    modifier: Modifier = Modifier
 ) {
     val palette = emulationMenuPalette()
     val tabs = emulationMenuTabs()
     LazyRow(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         contentPadding = PaddingValues(horizontal = horizontalContentPadding),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically

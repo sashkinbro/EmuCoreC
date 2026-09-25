@@ -1,5 +1,6 @@
 package com.sbro.emucorec.ui.settings
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
@@ -36,9 +37,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sbro.emucorec.R
@@ -223,21 +227,66 @@ fun Ps3CoreSettingsSection(
             )
         }
         userFacingSettings.groupBy(Ps3CoreSetting::section).forEach { (section, sectionSettings) ->
-            SectionCard(
-                title = localizedCoreLabel(section),
-                contentPadding = PaddingValues(14.dp),
-            ) {
-                sectionSettings.forEach { setting ->
-                    Ps3CoreSettingRow(
-                        setting = setting,
-                        onWrite = { write(setting, it) },
-                        onReset = {
-                            if (scope == Ps3CoreSettingsScope.Game) resetGameSetting(setting)
-                            else write(setting, setting.default)
-                        },
-                    )
+            if (surface == Ps3CoreSettingsSurface.InGame) {
+                InGameSettingsCard(title = localizedCoreLabel(section)) {
+                    sectionSettings.forEach { setting ->
+                        Ps3CoreSettingRow(
+                            setting = setting,
+                            onWrite = { write(setting, it) },
+                            onReset = {
+                                if (scope == Ps3CoreSettingsScope.Game) resetGameSetting(setting)
+                                else write(setting, setting.default)
+                            },
+                        )
+                    }
+                }
+            } else {
+                SectionCard(
+                    title = localizedCoreLabel(section),
+                    contentPadding = PaddingValues(14.dp),
+                ) {
+                    sectionSettings.forEach { setting ->
+                        Ps3CoreSettingRow(
+                            setting = setting,
+                            onWrite = { write(setting, it) },
+                            onReset = {
+                                if (scope == Ps3CoreSettingsScope.Game) resetGameSetting(setting)
+                                else write(setting, setting.default)
+                            },
+                        )
+                    }
                 }
             }
+        }
+    }
+}
+
+/**
+ * In-game settings card matching the emulation menu's look: the section title lives inside the
+ * card, so each group is one clear block instead of a floating heading over a merged panel.
+ */
+@Composable
+private fun InGameSettingsCard(title: String, content: @Composable () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val dark = scheme.background.luminance() < 0.5f
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = if (dark) Color(0xF01A1F2A) else Color(0xFFFFFFFF),
+        border = BorderStroke(1.dp, if (dark) Color.White.copy(alpha = 0.12f) else Color(0xFFD6DDE8)),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(9.dp),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = if (dark) Color.White else scheme.onSurface,
+            )
+            content()
         }
     }
 }
