@@ -48,7 +48,7 @@ object Ps3CoreSettingOverrides {
         // The GPU has no VRAM of its own on Android: upstream's default of 65536 MB means "no
         // limit", so the texture cache never evicts and grows until an allocation fails, which
         // is fatal. Cap it so the caches evict instead of killing the renderer.
-        "Video@@VRAM allocation limit (MB)" to "2048",
+        "Video@@Vulkan@@VRAM allocation limit (MB)" to "2048",
         // EmuCoreC overlay look: mobile-friendly bold text on the right side.
         // The font is the standard PS3 bold system font from the installed
         // firmware (Rodin Bold); applied on every boot so config files saved
