@@ -89,7 +89,7 @@ internal fun buildDiscordPresencePayload(
 }
 
 private const val DISCORD_IDLE_ICON_URL =
-    "https://raw.githubusercontent.com/sashkinbro/EmuCoreC/main/app/src/main/res/drawable-nodpi/ic_drawer_app.png"
+    "https://raw.githubusercontent.com/sashkinbro/EmuCoreC/master/app/src/main/res/drawable-nodpi/ic_drawer_app.png"
 
 internal fun discordIdleImageUrl(): String = DISCORD_IDLE_ICON_URL
 
