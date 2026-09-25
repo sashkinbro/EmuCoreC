@@ -27,6 +27,7 @@ import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 import com.sbro.emucorec.R
+import com.sbro.emucorec.core.BackupSessionGate
 import com.sbro.emucorec.core.EmulatorStorage
 import com.sbro.emucorec.core.PlayTimeRepository
 import com.sbro.emucorec.core.Ps3CoreConfig
@@ -37,6 +38,9 @@ import com.sbro.emucorec.core.input.InputDeviceClassifier
 import com.sbro.emucorec.core.ps3.overlay.InputOverlay
 import com.sbro.emucorec.data.AppPreferences
 import com.sbro.emucorec.data.InstalledGameRepository
+import com.sbro.emucorec.data.ProfilePlayTimeSyncer
+import com.sbro.emucorec.data.TrophyCloudRepository
+import com.sbro.emucorec.data.drive.DriveBackupWork
 import com.sbro.emucorec.discord.DiscordIntegration
 import com.sbro.emucorec.ui.common.ImmersiveMode
 import com.sbro.emucorec.ui.emulation.EmulationOverlayHost
@@ -137,7 +141,7 @@ class Emulator : AppCompatActivity(), InputManager.InputDeviceListener {
     }
 
     override fun onDestroy() {
-        finishPlayTimeSessionIfNeeded()
+        finishPlayTimeSessionIfNeeded(scheduleBackup = true)
         DiscordIntegration.clearGame()
         inputManager?.unregisterInputDeviceListener(this)
         inputManager = null
@@ -422,18 +426,34 @@ class Emulator : AppCompatActivity(), InputManager.InputDeviceListener {
         playTimeSessionId = session.id
         playTimeSessionTitleId = gameId
         playTimeSessionStartedAt = session.startedAt
+        BackupSessionGate.gameStarted()
         DiscordIntegration.setPlaying(title, gameId)
     }
 
-    private fun finishPlayTimeSessionIfNeeded(accumulate: Boolean = false) {
+    private fun finishPlayTimeSessionIfNeeded(accumulate: Boolean = false, scheduleBackup: Boolean = false) {
         val endedAt = System.currentTimeMillis()
-        playTimeSessionId?.let { PlayTimeRepository(this).finishSession(it, endedAt) }
+        val sessionId = playTimeSessionId
+        if (sessionId != null) {
+            PlayTimeRepository(this).finishSession(sessionId, endedAt)
+            val durationMs = (endedAt - playTimeSessionStartedAt).coerceAtLeast(0L)
+            val titleId = playTimeSessionTitleId
+            if (titleId.isNotBlank() && durationMs > 0L) {
+                val title = InstalledGameRepository().findByTitleId(this, titleId)?.title
+                    ?.takeIf { it.isNotBlank() } ?: titleId
+                ProfilePlayTimeSyncer.recordAndSync(applicationContext, titleId, title, durationMs)
+            }
+        }
         if (accumulate && playTimeSessionStartedAt > 0L) {
             playTimeAccumulatedMs += (endedAt - playTimeSessionStartedAt).coerceAtLeast(0L)
         }
         playTimeSessionId = null
         playTimeSessionTitleId = ""
         playTimeSessionStartedAt = 0L
+        if (scheduleBackup) {
+            BackupSessionGate.stopped()
+            DriveBackupWork.afterGame(applicationContext)
+            TrophyCloudRepository.syncAsync(applicationContext)
+        }
     }
 
     private fun hideSystemBars() = ImmersiveMode.apply(window)

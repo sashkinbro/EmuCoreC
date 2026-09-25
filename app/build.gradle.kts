@@ -7,6 +7,13 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.google.services) apply false
+}
+
+// Firebase is enabled by dropping google-services.json into the app module.
+// The build stays green without it so profile auth can be added in place.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
 }
 
 // ---------------------------------------------------------------------------
@@ -292,6 +299,13 @@ dependencies {
     implementation(libs.google.play.review.ktx)
     implementation(libs.zip4j)
     implementation(libs.junrar)
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.auth)
+    implementation(libs.firebase.firestore)
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services)
+    implementation(libs.google.identity)
+    implementation(libs.google.auth)
     discordSdkDirectory?.let { sdkDir ->
         implementation(files(sdkDir.resolve("discord_partner_sdk.aar")))
     }

@@ -67,9 +67,25 @@ class Ps3GameSettingsRepository(context: Context) {
         if (titleId.isNotBlank()) preferences.edit(commit = true) { remove(key(titleId)) }
     }
 
+    /** Portable snapshot of every per-title override, keyed by their storage key. */
+    fun exportAll(): Map<String, String> = preferences.all.entries
+        .filter { (name, value) -> name.startsWith(GAME_KEY_PREFIX) && value is String }
+        .associate { (name, value) -> name to (value as String) }
+
+    fun importAll(entries: Map<String, String>) {
+        if (entries.isEmpty()) return
+        preferences.edit(commit = true) {
+            entries.forEach { (name, value) ->
+                if (name.matches(GAME_KEY_PATTERN)) putString(name, value)
+            }
+        }
+    }
+
     private fun key(titleId: String): String = "game_${titleId.trim().uppercase()}"
 
     private companion object {
         const val PREFS_NAME = "emucorec_game_ui_config"
+        const val GAME_KEY_PREFIX = "game_"
+        val GAME_KEY_PATTERN = Regex("game_[A-Za-z0-9_\\-]{1,40}")
     }
 }

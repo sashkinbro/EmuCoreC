@@ -51,6 +51,7 @@ import com.sbro.emucorec.ui.library.LibraryScreen
 import com.sbro.emucorec.ui.onboarding.OnboardingScreen
 import com.sbro.emucorec.ui.patches.PatchesScreen
 import com.sbro.emucorec.ui.playtime.PlayTimeScreen
+import com.sbro.emucorec.ui.profile.MyListsScreen
 import com.sbro.emucorec.ui.profile.ProfileScreen
 import com.sbro.emucorec.ui.saves.SaveDataScreen
 import com.sbro.emucorec.ui.settings.AppLanguageScreen
@@ -82,6 +83,7 @@ private const val ROUTE_SAVE_MANAGER = "save-manager"
 private const val ROUTE_SAVE_MANAGER_WITH_TITLE = "save-manager/{titleId}"
 private const val ROUTE_SETTINGS = "settings"
 private const val ROUTE_PROFILE = "profile"
+private const val ROUTE_MY_LISTS = "my-lists"
 private const val ROUTE_DISCORD = "discord"
 private const val ROUTE_FEEDBACK = "feedback"
 private const val ROUTE_SETTINGS_WITH_TAB = "settings/{tab}"
@@ -677,10 +679,61 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     onLaunchSystemMenu = launchSystemMenu,
                     onInstallContent = openInstallChoiceDialog
                 ) { openDrawer ->
+                    val navigateMyLists = {
+                        navController.navigate(ROUTE_MY_LISTS) { launchSingleTop = true }
+                    }
                     ProfileScreen(
                         onBackClick = navigateHome,
                         onMenuClick = openDrawer,
-                        onGameClick = { igdbId -> navController.navigate("$ROUTE_CATALOG_DETAIL_PREFIX/$igdbId") }
+                        onOpenGameDetails = { igdbId ->
+                            navController.navigate("$ROUTE_CATALOG_DETAIL_PREFIX/$igdbId") { launchSingleTop = true }
+                        },
+                        onOpenMyLists = navigateMyLists,
+                        onOpenTrophies = { titleId -> navigateAchievements(titleId) }
+                    )
+                }
+            }
+            composable(ROUTE_MY_LISTS) {
+                val navigateHome = {
+                    navController.navigate(ROUTE_LIBRARY) {
+                        launchSingleTop = true
+                        popUpTo(ROUTE_LIBRARY) { inclusive = false }
+                    }
+                }
+                AdaptiveShell(
+                    selected = PrimaryDestination.Profile,
+                    onNavigateSetup = {
+                        navController.navigate(ROUTE_SETUP) { launchSingleTop = true }
+                    },
+                    onNavigateLibrary = {
+                        navController.navigate(ROUTE_LIBRARY) { launchSingleTop = true }
+                    },
+                    onNavigateGameManager = { navigateGameManager(null) },
+                    onNavigatePatches = { navigatePatches(null) },
+                    onNavigatePlayTime = { navigatePlayTime(null) },
+                    onNavigateAchievements = navigateAchievementsRoot,
+                    onNavigateSaveData = {
+                        navController.navigate(saveManagerRoute()) { launchSingleTop = true }
+                    },
+                    onNavigateSearch = {
+                        navController.navigate(ROUTE_CATALOG) { launchSingleTop = true }
+                    },
+                    onNavigateSettings = {
+                        navController.navigate(settingsRoute()) { launchSingleTop = true }
+                    },
+                    onNavigateProfile = navigateProfile,
+                    onNavigateDiscord = navigateDiscord,
+                    onNavigateFeedback = navigateFeedback,
+                    onBackClick = navigateHome,
+                    onLaunchSystemMenu = launchSystemMenu,
+                    onInstallContent = openInstallChoiceDialog
+                ) { openDrawer ->
+                    MyListsScreen(
+                        onBackClick = navigateHome,
+                        onMenuClick = openDrawer,
+                        onGameClick = { igdbId ->
+                            navController.navigate("$ROUTE_CATALOG_DETAIL_PREFIX/$igdbId") { launchSingleTop = true }
+                        }
                     )
                 }
             }

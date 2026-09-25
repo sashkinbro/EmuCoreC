@@ -14,7 +14,6 @@ class AppSurfaceAuditContractTest {
             "ui/playtime/PlayTimeScreen.kt",
             "ui/achievements/AchievementsScreen.kt",
             "ui/saves/SaveDataScreen.kt",
-            "ui/profile/ProfileScreen.kt",
         )
 
         refreshableScreens.forEach { path ->
@@ -22,6 +21,12 @@ class AppSurfaceAuditContractTest {
             assertTrue("$path must observe lifecycle resume", "Lifecycle.Event.ON_RESUME" in screen)
             assertTrue("$path must refresh its data", "viewModel.refresh" in screen)
         }
+
+        // The ported profile screen refreshes through ViewModel state flows and reloads tab data
+        // on selection instead of polling on lifecycle resume.
+        val profile = source("ui/profile/ProfileScreen.kt")
+        assertTrue("Profile must collect its ViewModel state", "viewModel.uiState.collectAsState()" in profile)
+        assertTrue("Profile must refresh tab data", "viewModel.onProfileTabSelected" in profile)
     }
 
     @Test

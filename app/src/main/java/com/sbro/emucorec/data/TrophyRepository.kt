@@ -189,7 +189,7 @@ class TrophyRepository {
     }
 
     /** RPCS3 stores each trophy set under dev_hdd0/home/<user>/trophy/<NPWR...>. */
-    private fun trophyRoots(context: Context): List<File> {
+    internal fun trophyRoots(context: Context): List<File> {
         val roots = mutableListOf<File>()
         val baseDirs = mutableListOf<File>()
         baseDirs.add(File(EmulatorStorage.ps3Root(context), "config/dev_hdd0/home"))
