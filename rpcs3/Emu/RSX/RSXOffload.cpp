@@ -214,11 +214,6 @@ namespace rsx
 		m_thread->m_work_queue.push(request_code, args);
 	}
 
-	bool dma_manager::can_offload() const
-	{
-		return g_cfg.video.multithreaded_rsx && is_offloader_running();
-	}
-
 	bool dma_manager::is_offloader_running() const
 	{
 		return m_thread && m_thread->current_thread_ != nullptr;
