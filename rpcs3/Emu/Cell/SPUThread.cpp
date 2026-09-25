@@ -5628,7 +5628,7 @@ void spu_thread::set_interrupt_status(bool enable)
 		// Detect enabling interrupts with events masked
 		if (auto mask = ch_events.load().mask; mask & SPU_EVENT_INTR_BUSY_CHECK)
 		{
-			// ARMSX3: upstream refuses these on the recompilers ("SPU Interrupts not implemented",
+			// Upstream refuses these on the recompilers ("SPU Interrupts not implemented",
 			// RPCS3 #18996: NBA 08, NBA 09, FIFA Street 3, NBA Street Homecourt). Compiled code
 			// now takes them at its state checks, see exec_check_state in SPULLVMRecompiler.cpp.
 			spu_log.trace("SPU Interrupts (mask=0x%x) are using CPU busy checking mode", mask);

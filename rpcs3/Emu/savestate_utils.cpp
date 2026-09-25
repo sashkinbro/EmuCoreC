@@ -613,7 +613,7 @@ void clean_orphaned_savestate_temps()
 		return;
 	}
 
-	// savestates/<TITLE>/ holds the core's rolling states and savestates/<TITLE>/armsx3_slots/ the
+	// savestates/<TITLE>/ holds the core's rolling states and savestates/<TITLE>/emucorec_slots/ the
 	// numbered ones; a temp can strand in either, since the slot copy is written the same way.
 	for (const auto& entry : root_view)
 	{
@@ -624,7 +624,7 @@ void clean_orphaned_savestate_temps()
 
 		const std::string title_dir = root + entry.name + "/";
 		sweep(title_dir);
-		sweep(title_dir + "armsx3_slots/");
+		sweep(title_dir + "emucorec_slots/");
 	}
 }
 

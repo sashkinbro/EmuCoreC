@@ -504,7 +504,7 @@ struct spu_imm_table_t
 
 extern const spu_imm_table_t g_spu_imm;
 
-// True while ARMSX3_WATCH_LS names a local-store window to watch (see SPUThread.cpp). The
+// True while the local-store watch has a window to watch (see SPUThread.cpp). The
 // recompiler asks because its inlined DMA copies would otherwise never reach do_dma_transfer,
 // which is where the watch sits.
 bool spu_ls_watch_enabled();
@@ -759,8 +759,8 @@ public:
 	std::pair<u32, u32> read_dec() const; // Read decrementer
 	u64 dec_intr_armed = umax; // Underflow time last handed to the decrementer interrupt timer
 
-	// ARMSX3_SHUFB_CHECK: operands of a SHUFB that took the insert fold, left here for the
-	// checking helper, which recomputes the real shuffle and logs any disagreement.
+	// Operands of a SHUFB that took the insert fold, kept for the checking helper, which
+	// recomputes the real shuffle and logs any disagreement.
 	v128 shufb_dbg_a{};
 	v128 shufb_dbg_b{};
 	v128 shufb_dbg_c{};
@@ -813,7 +813,7 @@ public:
 	u64 block_recover = 0;
 	u64 block_failure = 0;
 
-	// Diagnostics counters for SPU reservation (ported from ARMSX3 a7ec28f7a, originally from 55a35b5e1)
+	// Diagnostics counters for SPU reservation contention.
 	u64 putllc_calls = 0;
 	u64 putllc_fails = 0;
 	u64 putllc_notify = 0;
