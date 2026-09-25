@@ -25,7 +25,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import com.sbro.emucorec.ui.settings.animateScrollToCenterItem
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.RestartAlt
@@ -78,6 +77,9 @@ import com.sbro.emucorec.ui.theme.CardContentPadding
 import com.sbro.emucorec.ui.theme.ScreenContentBottomPadding
 import com.sbro.emucorec.ui.theme.ScreenHorizontalPadding
 import kotlin.math.roundToInt
+import com.sbro.emucorec.ui.theme.neon.neonShape
+import com.sbro.emucorec.ui.theme.neon.neonChipShape
+import com.sbro.emucorec.ui.theme.neon.neonButtonShape
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -240,7 +242,7 @@ private fun GameManagerTabs(
         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = ScreenHorizontalPadding)
     ) {
         items(tabs, key = { it.name }) { tab ->
-            FilterChip(
+            FilterChip(shape = neonChipShape(), 
                 selected = selectedTab == tab,
                 onClick = { onSelected(tab) },
                 colors = FilterChipDefaults.filterChipColors(
@@ -357,7 +359,7 @@ private fun GamePicker(
                 val selected = game.titleId == selectedTitleId
                 Surface(
                     onClick = { onSelect(game.titleId) },
-                    shape = RoundedCornerShape(18.dp),
+                    shape = neonShape(18.dp),
                     color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
                     border = BorderStroke(
                         1.dp,
@@ -371,7 +373,7 @@ private fun GamePicker(
                     ) {
                         Surface(
                             modifier = Modifier.size(48.dp),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = neonShape(12.dp),
                             color = MaterialTheme.colorScheme.surfaceContainerHighest,
                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
                         ) {
@@ -469,7 +471,7 @@ private fun GpuDriverChoiceRow(
             else -> customDriverOverride
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(
+            FilterChip(shape = neonChipShape(), 
                 selected = true,
                 onClick = onOpenGpuDriverManager,
                 colors = FilterChipDefaults.filterChipColors(
@@ -492,7 +494,7 @@ private fun GpuDriverChoiceRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        OutlinedButton(
+        OutlinedButton(shape = neonButtonShape(), 
             onClick = onOpenGpuDriverManager,
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -683,7 +685,7 @@ private fun ChoiceRow(
     SettingContainer(title = title, description = description, onReset = onReset) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             options.forEach { (value, label) ->
-                FilterChip(
+                FilterChip(shape = neonChipShape(), 
                     selected = selected == value,
                     onClick = { onSelected(value) },
                     colors = FilterChipDefaults.filterChipColors(
@@ -719,7 +721,7 @@ private fun IntChoiceRow(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             options.forEach { (value, label) ->
-                FilterChip(
+                FilterChip(shape = neonChipShape(), 
                     selected = selected == value,
                     enabled = enabled,
                     onClick = { onSelected(value) },
@@ -739,7 +741,7 @@ private fun TouchControlsEditRow(onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
+        shape = neonShape(18.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         tonalElevation = 1.dp,
         shadowElevation = 2.dp,
@@ -834,7 +836,7 @@ private fun SettingContainer(
                 onClick = {},
                 onLongClick = { onReset?.invoke() }
             ),
-        shape = RoundedCornerShape(18.dp),
+        shape = neonShape(18.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         tonalElevation = 1.dp,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))

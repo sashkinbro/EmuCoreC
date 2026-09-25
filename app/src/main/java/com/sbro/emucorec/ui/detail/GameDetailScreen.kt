@@ -45,7 +45,6 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CalendarToday
@@ -131,6 +130,9 @@ import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
+import com.sbro.emucorec.ui.theme.neon.neonShape
+import com.sbro.emucorec.ui.theme.neon.neonPillShape
+import com.sbro.emucorec.ui.theme.neon.neonButtonShape
 
 @OptIn(ExperimentalLayoutApi::class)
 @SuppressLint("SetJavaScriptEnabled", "ConfigurationScreenWidthHeight")
@@ -292,7 +294,7 @@ fun GameDetailScreen(
                                     .padding(top = 10.dp, bottom = 10.dp, start = 8.dp)
                                     .width(heroMaxWidth)
                                     .aspectRatio(3f / 4f)
-                                    .clip(RoundedCornerShape(28.dp))
+                                    .clip(neonShape(28.dp))
                                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
                             ) {
                                 if (heroImage == game?.iconPath) {
@@ -342,7 +344,7 @@ fun GameDetailScreen(
                                     DetailSourceCard(text = stringResource(R.string.detail_igdb_source_note))
                                 }
                                 if (launchGameClick != null) {
-                                    Button(
+                                    Button(shape = neonButtonShape(), 
                                         onClick = launchGameClick,
                                         modifier = Modifier.widthIn(min = 240.dp, max = 320.dp)
                                     ) {
@@ -367,7 +369,7 @@ fun GameDetailScreen(
                                     .fillMaxWidth()
                                     .widthIn(max = heroMaxWidth)
                                     .aspectRatio(3f / 4f)
-                                    .clip(RoundedCornerShape(28.dp))
+                                    .clip(neonShape(28.dp))
                                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
                             ) {
                                 if (heroImage == game?.iconPath) {
@@ -457,7 +459,7 @@ fun GameDetailScreen(
                                     .widthIn(max = contentMaxWidth)
                                     .padding(horizontal = horizontalInset)
                             ) {
-                                Button(
+                                Button(shape = neonButtonShape(), 
                                     onClick = launchGameClick,
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
@@ -683,14 +685,14 @@ private fun DetailSkeleton(horizontalInset: Dp) {
                 .fillMaxWidth()
                 .padding(horizontal = horizontalInset)
                 .aspectRatio(2f / 3f)
-                .clip(RoundedCornerShape(28.dp))
+                .clip(neonShape(28.dp))
         )
         SkeletonBlock(
             modifier = Modifier
                 .padding(horizontal = horizontalInset)
                 .fillMaxWidth(0.72f)
                 .height(34.dp)
-                .clip(RoundedCornerShape(14.dp))
+                .clip(neonShape(14.dp))
         )
         Row(
             modifier = Modifier.padding(horizontal = horizontalInset),
@@ -701,7 +703,7 @@ private fun DetailSkeleton(horizontalInset: Dp) {
                     modifier = Modifier
                         .height(36.dp)
                         .width(if (it == 2) 132.dp else 72.dp)
-                        .clip(RoundedCornerShape(999.dp))
+                        .clip(neonPillShape())
                 )
             }
         }
@@ -710,21 +712,21 @@ private fun DetailSkeleton(horizontalInset: Dp) {
                 .fillMaxWidth()
                 .padding(horizontal = horizontalInset)
                 .height(56.dp)
-                .clip(RoundedCornerShape(16.dp))
+                .clip(neonShape(16.dp))
         )
         SkeletonBlock(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = horizontalInset)
                 .height(144.dp)
-                .clip(RoundedCornerShape(16.dp))
+                .clip(neonShape(16.dp))
         )
         SkeletonBlock(
             modifier = Modifier
                 .padding(horizontal = horizontalInset)
                 .width(156.dp)
                 .height(24.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .clip(neonShape(10.dp))
         )
         LazyRow(
             contentPadding = PaddingValues(horizontal = horizontalInset),
@@ -735,7 +737,7 @@ private fun DetailSkeleton(horizontalInset: Dp) {
                     modifier = Modifier
                         .width(220.dp)
                         .height(130.dp)
-                        .clip(RoundedCornerShape(18.dp))
+                        .clip(neonShape(18.dp))
                 )
             }
         }
@@ -756,7 +758,7 @@ private fun EmptyDetailState(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
+        shape = neonShape(22.dp),
         color = MaterialTheme.colorScheme.surface
     ) {
         Column(
@@ -805,7 +807,7 @@ private fun MetaChip(
     text: String
 ) {
     Surface(
-        shape = RoundedCornerShape(999.dp),
+        shape = neonPillShape(),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
     ) {
         Row(
@@ -831,7 +833,7 @@ private fun MetaChip(
 @Composable
 private fun GenreChip(text: String) {
     Surface(
-        shape = RoundedCornerShape(999.dp),
+        shape = neonPillShape(),
         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
     ) {
         Text(
@@ -846,7 +848,7 @@ private fun GenreChip(text: String) {
 @Composable
 private fun CompatibilityMetaChip(compatibility: Ps3CompatibilitySummary) {
     Surface(
-        shape = RoundedCornerShape(999.dp),
+        shape = neonPillShape(),
         color = compatibilityContainerColor(compatibility.state)
     ) {
         Text(
@@ -882,7 +884,7 @@ private fun ExpandableInfoSection(
                     stiffness = Spring.StiffnessLow
                 )
             ),
-        shape = RoundedCornerShape(16.dp),
+        shape = neonShape(16.dp),
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 1.dp
     ) {
@@ -923,7 +925,7 @@ private fun DetailSourceCard(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = neonShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
     ) {
         Text(
@@ -966,7 +968,7 @@ private fun ScreenshotCard(
 ) {
     Surface(
         modifier = Modifier.width(220.dp),
-        shape = RoundedCornerShape(18.dp),
+        shape = neonShape(18.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
         onClick = onClick
     ) {
@@ -974,7 +976,7 @@ private fun ScreenshotCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(130.dp)
-                .clip(RoundedCornerShape(18.dp))
+                .clip(neonShape(18.dp))
         ) {
             UrlImage(
                 imageUrl = imageUrl,
@@ -994,7 +996,7 @@ private fun VideoCard(
 ) {
     Surface(
         modifier = Modifier.width(232.dp),
-        shape = RoundedCornerShape(18.dp),
+        shape = neonShape(18.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
         onClick = onClick
     ) {
@@ -1002,7 +1004,7 @@ private fun VideoCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(18.dp))
+                .clip(neonShape(18.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
         ) {
             UrlImage(
@@ -1042,7 +1044,7 @@ private fun VideoCard(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .padding(10.dp),
-                shape = RoundedCornerShape(999.dp),
+                shape = neonPillShape(),
                 color = Color.Black.copy(alpha = 0.48f)
             ) {
                 Text(
@@ -1524,7 +1526,7 @@ private fun LandscapeVideoTopBar(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Surface(
-            shape = RoundedCornerShape(999.dp),
+            shape = neonPillShape(),
             color = Color.Black.copy(alpha = 0.42f)
         ) {
             Text(
@@ -1571,7 +1573,7 @@ private fun LandscapeViewerTopBar(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Surface(
-            shape = RoundedCornerShape(999.dp),
+            shape = neonPillShape(),
             color = Color.Black.copy(alpha = 0.42f)
         ) {
             Row(

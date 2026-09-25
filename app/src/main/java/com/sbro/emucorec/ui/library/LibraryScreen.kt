@@ -1,4 +1,4 @@
-﻿package com.sbro.emucorec.ui.library
+package com.sbro.emucorec.ui.library
 
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -31,7 +31,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ViewList
 import androidx.compose.material.icons.rounded.Close
@@ -96,6 +95,8 @@ import com.sbro.emucorec.ui.theme.ScreenHorizontalPadding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.sbro.emucorec.ui.theme.neon.neonShape
+import com.sbro.emucorec.ui.theme.neon.neonButtonShape
 
 private enum class LibraryLayoutMode {
     LIST,
@@ -272,7 +273,7 @@ fun LibraryScreen(
                     modifier = Modifier.fillMaxWidth(),
                     placeholder = { Text(stringResource(R.string.library_search_hint)) },
                     singleLine = true,
-                    shape = RoundedCornerShape(20.dp),
+                    shape = neonShape(20.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
                         unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.55f),
@@ -318,7 +319,7 @@ fun LibraryScreen(
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.82f),
                             textAlign = TextAlign.Center
                         )
-                        Button(onClick = refreshClick) {
+                        Button(shape = neonButtonShape(), onClick = refreshClick) {
                             Icon(Icons.Rounded.Refresh, contentDescription = null)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(stringResource(R.string.library_refresh))
@@ -329,7 +330,7 @@ fun LibraryScreen(
         } else if (layoutMode == LibraryLayoutMode.LIST) {
             items(uiState.items, key = { it.titleId }) { game ->
                 val selectGameClick = rememberDebouncedClick { onLaunchGame(game.titleId) }
-                val shape = RoundedCornerShape(24.dp)
+                val shape = neonShape(24.dp)
                 var menuExpanded by remember(game.titleId) { mutableStateOf(false) }
                 Box {
                     Surface(
@@ -505,7 +506,7 @@ fun LibraryScreen(
                 ) {
                     rowItems.forEach { game ->
                         val selectGameClick = rememberDebouncedClick { onLaunchGame(game.titleId) }
-                        val shape = RoundedCornerShape(24.dp)
+                        val shape = neonShape(24.dp)
                         var menuExpanded by remember(game.titleId) { mutableStateOf(false) }
                         Box(modifier = Modifier.weight(1f)) {
                             Surface(
@@ -715,7 +716,7 @@ private fun LibraryGameArtwork(
 ) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(18.dp),
+        shape = neonShape(18.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
     ) {

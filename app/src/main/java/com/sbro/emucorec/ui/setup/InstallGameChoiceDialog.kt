@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material.icons.rounded.VpnKey
@@ -25,6 +24,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.sbro.emucorec.R
+import com.sbro.emucorec.ui.theme.neon.neonShape
+import com.sbro.emucorec.ui.theme.neon.neonButtonShape
 
 @Composable
 fun InstallGameChoiceDialog(
@@ -35,7 +36,7 @@ fun InstallGameChoiceDialog(
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp).widthIn(max = 560.dp),
-            shape = RoundedCornerShape(28.dp),
+            shape = neonShape(28.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp,
             shadowElevation = 10.dp,
@@ -50,11 +51,11 @@ fun InstallGameChoiceDialog(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Button(onClick = onInstallPkg, modifier = Modifier.fillMaxWidth()) {
+                Button(shape = neonButtonShape(), onClick = onInstallPkg, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Rounded.Inventory2, null)
                     Text(stringResource(R.string.setup_pkg_button), modifier = Modifier.padding(start = 8.dp))
                 }
-                FilledTonalButton(onClick = onInstallLicense, modifier = Modifier.fillMaxWidth()) {
+                FilledTonalButton(shape = neonButtonShape(), onClick = onInstallLicense, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Rounded.VpnKey, null)
                     Text(stringResource(R.string.setup_pkg_license_button), modifier = Modifier.padding(start = 8.dp))
                 }

@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Inventory2
@@ -39,6 +38,8 @@ import com.sbro.emucorec.ui.common.ScreenTopBar
 import com.sbro.emucorec.ui.common.SectionCard
 import com.sbro.emucorec.ui.theme.ScreenContentBottomPadding
 import com.sbro.emucorec.ui.theme.ScreenHorizontalPadding
+import com.sbro.emucorec.ui.theme.neon.neonShape
+import com.sbro.emucorec.ui.theme.neon.neonButtonShape
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -70,7 +71,7 @@ fun SetupScreen(
         SectionCard(title = stringResource(R.string.setup_pkg_title)) {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 SetupInfoRow(Icons.Rounded.Inventory2, stringResource(R.string.setup_pkg_body))
-                Button(onClick = onInstallPkg, modifier = Modifier.fillMaxWidth()) {
+                Button(shape = neonButtonShape(), onClick = onInstallPkg, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.setup_pkg_button))
                 }
                 Text(
@@ -83,7 +84,7 @@ fun SetupScreen(
         SectionCard(title = stringResource(R.string.setup_pkg_license_step_title)) {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 SetupInfoRow(Icons.Rounded.VpnKey, stringResource(R.string.setup_pkg_license_step_body))
-                FilledTonalButton(onClick = onInstallLicense, modifier = Modifier.fillMaxWidth()) {
+                FilledTonalButton(shape = neonButtonShape(), onClick = onInstallLicense, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.setup_pkg_license_button))
                 }
             }
@@ -94,7 +95,7 @@ fun SetupScreen(
 @Composable
 private fun SetupInfoRow(icon: ImageVector, text: String) {
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
-        Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)) {
+        Surface(shape = neonShape(16.dp), color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)) {
             Box(modifier = Modifier.padding(12.dp), contentAlignment = Alignment.Center) {
                 Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
             }

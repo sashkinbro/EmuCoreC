@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.Search
@@ -57,6 +56,8 @@ import net.rpcsx.RPCSX
 import org.json.JSONObject
 import java.util.Locale
 import kotlin.math.roundToLong
+import com.sbro.emucorec.ui.theme.neon.neonShape
+import com.sbro.emucorec.ui.theme.neon.neonChipShape
 
 enum class Ps3CoreSettingsScope { Global, Game }
 
@@ -271,7 +272,7 @@ private fun InGameSettingsCard(title: String, content: @Composable () -> Unit) {
     val dark = scheme.background.luminance() < 0.5f
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = neonShape(16.dp),
         color = if (dark) Color(0xF01A1F2A) else Color(0xFFFFFFFF),
         border = BorderStroke(1.dp, if (dark) Color.White.copy(alpha = 0.12f) else Color(0xFFD6DDE8)),
     ) {
@@ -464,7 +465,7 @@ private fun CoreEnumRow(
         visibleVariants.forEach { value ->
             val label = localizedCoreLabel(value)
             val isSelected = setting.value == value
-            FilterChip(
+            FilterChip(shape = neonChipShape(), 
                 selected = isSelected,
                 onClick = { onWrite(value) },
                 colors = coreFilterChipColors(),
@@ -504,7 +505,7 @@ private fun CoreTextRow(
         description = description,
         onResetDefault = onReset,
     ) {
-        FilterChip(
+        FilterChip(shape = neonChipShape(), 
             selected = true,
             onClick = { dialogVisible = true },
             colors = coreFilterChipColors(),
@@ -530,7 +531,7 @@ private fun CoreTextRow(
                         Text(stringResource(R.string.core_setting_default_value, setting.default))
                     },
                     singleLine = true,
-                    shape = RoundedCornerShape(18.dp),
+                    shape = neonShape(18.dp),
                     modifier = Modifier.fillMaxWidth(),
                 )
             },
@@ -544,7 +545,7 @@ private fun CoreTextRow(
                     Text(stringResource(R.string.core_setting_cancel))
                 }
             },
-            shape = RoundedCornerShape(28.dp),
+            shape = neonShape(28.dp),
         )
     }
 }

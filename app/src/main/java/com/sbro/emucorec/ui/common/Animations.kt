@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.sbro.emucorec.ui.theme.neon.neonShape
 
 @Composable
 fun EmuCoreLoadingAnimation(
@@ -100,14 +100,14 @@ fun EmuCoreLoadingAnimation(
                 modifier = Modifier
                     .size(size * 0.90f)
                     .graphicsLayer { rotationZ = rotation }
-                    .border(5.dp, color.copy(alpha = 0.90f), RoundedCornerShape(22.dp))
+                    .border(5.dp, color.copy(alpha = 0.90f), neonShape(22.dp))
             )
 
             Box(
                 modifier = Modifier
                     .size(size * 0.68f)
                     .graphicsLayer { rotationZ = -rotation * 1.7f }
-                    .border(3.5.dp, color.copy(alpha = 0.65f), RoundedCornerShape(16.dp))
+                    .border(3.5.dp, color.copy(alpha = 0.65f), neonShape(16.dp))
             )
 
             Text(

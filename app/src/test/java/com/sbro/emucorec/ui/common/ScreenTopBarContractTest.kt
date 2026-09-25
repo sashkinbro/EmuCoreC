@@ -12,14 +12,18 @@ class ScreenTopBarContractTest {
     fun sharedTopBarMatchesTheEmuCoreCContainerContract() {
         val source = sourceRoot().resolve("ui/common/ScreenTopBar.kt").readText()
 
-        assertTrue("Top bar must use the compact 24 dp shape", "RoundedCornerShape(24.dp)" in source)
+        assertTrue("Top bar must use the theme-aware 24 dp shape", "neonShape(24.dp)" in source)
         assertTrue("Top bar must remain translucent", "surface.copy(alpha = 0.78f)" in source)
         assertTrue("Top bar must use subtle tonal elevation", "tonalElevation = 1.dp" in source)
         assertTrue("Top bar must not cast a floating shadow", "shadowElevation = 0.dp" in source)
         assertTrue("Top bar border must remain subtle", "copy(alpha = 0.62f)" in source)
+        assertTrue("Neon top bar must use the tricolor divider", "NeonTricolorDivider" in source)
+        assertTrue("Neon top bar must use the yellow accent border", "NeonYellow.copy(alpha = 0.35f)" in source)
         assertTrue(
             "Top bar must keep the compact internal padding",
-            ".padding(horizontal = 10.dp, vertical = 8.dp)" in source
+            "start = 10.dp + if (LocalNeonTheme.current && !neonDecorated) 8.dp else 0.dp" in source &&
+                "top = 8.dp" in source &&
+                "bottom = 8.dp" in source
         )
     }
 
@@ -53,7 +57,7 @@ class ScreenTopBarContractTest {
         listOf("NavigationBackButton.kt", "NavigationMenuButton.kt").forEach { fileName ->
             val source = sourceRoot.resolve("ui/common/$fileName").readText()
             assertTrue("$fileName must be 44 dp", ".size(44.dp)" in source)
-            assertTrue("$fileName must use the compact 14 dp shape", "RoundedCornerShape(14.dp)" in source)
+            assertTrue("$fileName must use the theme-aware 14 dp shape", "neonShape(14.dp)" in source)
             assertTrue("$fileName must not float", "shadowElevation: Dp = 0.dp" in source)
             assertTrue("$fileName must use the subtle border", "copy(alpha = 0.50f)" in source)
         }

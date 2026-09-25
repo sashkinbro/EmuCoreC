@@ -316,7 +316,6 @@ fun EmulationGameMenu(
 
     Surface(
         modifier = modifier
-            .padding(vertical = 4.dp)
             .then(
                 if (expandHorizontally) {
                     when (effectiveStyle) {
@@ -333,7 +332,7 @@ fun EmulationGameMenu(
                             .widthIn(min = 330.dp, max = 390.dp)
                         GameMenuLayoutStyle.SIDEBAR -> Modifier
                             .fillMaxHeight()
-                            .widthIn(min = 470.dp, max = 560.dp)
+                            .widthIn(min = 470.dp, max = 506.dp)
                     }
                 } else {
                     Modifier

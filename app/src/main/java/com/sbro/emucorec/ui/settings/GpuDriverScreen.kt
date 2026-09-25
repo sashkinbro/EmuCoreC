@@ -36,7 +36,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.Close
@@ -92,6 +91,9 @@ import com.sbro.emucorec.ui.theme.ScreenHorizontalPadding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.sbro.emucorec.ui.theme.neon.neonShape
+import com.sbro.emucorec.ui.theme.neon.neonChipShape
+import com.sbro.emucorec.ui.theme.neon.neonButtonShape
 
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
@@ -305,7 +307,7 @@ fun GpuDriverScreen(
                     text = stringResource(R.string.settings_gpu_driver_catalog),
                     modifier = Modifier.weight(1f)
                 )
-                OutlinedButton(
+                OutlinedButton(shape = neonButtonShape(), 
                     onClick = viewModel::refreshGpuDriverCatalog,
                     enabled = !uiState.gpuDriverCatalogLoading
                 ) {
@@ -402,7 +404,7 @@ private fun DriverSearchField(
             }
         },
         placeholder = { Text(stringResource(R.string.settings_gpu_driver_search)) },
-        shape = RoundedCornerShape(28.dp)
+        shape = neonShape(28.dp)
     )
 }
 
@@ -417,7 +419,7 @@ private fun DriverFilterPanel(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
+        shape = neonShape(18.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.58f))
     ) {
@@ -456,7 +458,7 @@ private fun FilterChipRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items(filters) { filter ->
-            FilterChip(
+            FilterChip(shape = neonChipShape(), 
                 selected = selected == filter,
                 onClick = { onSelected(filter) },
                 label = { Text(if (filter == GPU_DRIVER_FILTER_ALL) stringResource(R.string.settings_gpu_driver_filter_all) else filter, maxLines = 1, softWrap = false) }
@@ -476,6 +478,7 @@ private fun GpuDriverHeader(
 ) {
     ScreenTopBar(
         title = title,
+        showNeonDivider = true,
         onBackClick = onBackClick,
         actions = {
             HeaderIconButton(
@@ -510,7 +513,7 @@ private fun HeaderIconButton(
 ) {
     Surface(
         modifier = Modifier.size(40.dp),
-        shape = RoundedCornerShape(14.dp),
+        shape = neonShape(14.dp),
         color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
         contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
         tonalElevation = 3.dp,
@@ -541,7 +544,7 @@ private fun ActiveDriverCard(
     val canRemove = !isGameScoped || !gameDriverOverride.isNullOrBlank()
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
+        shape = neonShape(18.dp),
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 3.dp,
         shadowElevation = 8.dp,
@@ -561,20 +564,20 @@ private fun ActiveDriverCard(
             )
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (isGameScoped) {
-                    FilterChip(
+                    FilterChip(shape = neonChipShape(), 
                         selected = gameDriverOverride == null,
                         onClick = onUseGlobal,
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text(stringResource(R.string.settings_gpu_driver_global)) }
                     )
                 }
-                FilterChip(
+                FilterChip(shape = neonChipShape(), 
                     selected = if (isGameScoped) gameDriverOverride != null && gameDriverOverride.isBlank() else selectedDriver == null,
                     onClick = onUseSystem,
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text(stringResource(R.string.settings_gpu_driver_system)) }
                 )
-                Button(
+                Button(shape = neonButtonShape(), 
                     onClick = onInstallFromFile,
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -586,7 +589,7 @@ private fun ActiveDriverCard(
                 }
             }
             if (selectedDriver != null && canRemove) {
-                OutlinedButton(
+                OutlinedButton(shape = neonButtonShape(), 
                     onClick = onRemove,
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -645,7 +648,7 @@ private fun InstalledDriverRow(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
+        shape = neonShape(18.dp),
         color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.58f)),
         onClick = onSelect
@@ -669,7 +672,7 @@ private fun InstalledDriverRow(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            OutlinedButton(onClick = onRemove) {
+            OutlinedButton(shape = neonButtonShape(), onClick = onRemove) {
                 Icon(Icons.Rounded.Delete, contentDescription = null)
             }
         }
@@ -692,7 +695,7 @@ private fun RemoteDriverRow(
 ) {
     val uriHandler = LocalUriHandler.current
     val interactionSource = remember { MutableInteractionSource() }
-    val shape = RoundedCornerShape(18.dp)
+    val shape = neonShape(18.dp)
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -734,7 +737,7 @@ private fun RemoteDriverRow(
             }
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (installedDriver == null) {
-                    Button(
+                    Button(shape = neonButtonShape(), 
                         onClick = onDownload,
                         enabled = !downloading,
                         modifier = Modifier.fillMaxWidth()
@@ -829,7 +832,7 @@ private fun RemoteDriverRow(
 private fun DeviceCompatibilityCard(profile: SnapdragonGpuProfile) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
+        shape = neonShape(18.dp),
         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
     ) {
         Column(
@@ -866,7 +869,7 @@ private fun CompactOutlinedActionButton(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier.height(40.dp),
-        shape = RoundedCornerShape(14.dp),
+        shape = neonShape(14.dp),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)),
         colors = ButtonDefaults.outlinedButtonColors(
@@ -952,7 +955,7 @@ private fun RemoteGpuDriver.snapdragonSummary(): String {
 @Composable
 private fun DriverBadge(text: String, color: androidx.compose.ui.graphics.Color) {
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = neonShape(12.dp),
         color = color.copy(alpha = 0.12f)
     ) {
         Text(
@@ -985,7 +988,7 @@ private fun SectionLabel(text: String, modifier: Modifier = Modifier) {
 private fun LoadingCard(text: String) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
+        shape = neonShape(18.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -999,7 +1002,7 @@ private fun LoadingCard(text: String) {
 private fun ErrorCard(title: String, message: String) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
+        shape = neonShape(18.dp),
         color = MaterialTheme.colorScheme.errorContainer
     ) {
         Column(modifier = Modifier.padding(16.dp)) {

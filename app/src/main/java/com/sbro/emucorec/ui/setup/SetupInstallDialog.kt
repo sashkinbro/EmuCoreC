@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
@@ -47,6 +46,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.sbro.emucorec.R
 import kotlin.math.roundToInt
+import com.sbro.emucorec.ui.theme.neon.neonShape
+import com.sbro.emucorec.ui.theme.neon.neonButtonShape
 
 @Composable
 fun SetupInstallDialog(
@@ -111,7 +112,7 @@ fun SetupInstallDialog(
                     .fillMaxWidth()
                     .widthIn(max = 560.dp)
                     .heightIn(max = maxHeight),
-                shape = RoundedCornerShape(30.dp),
+                shape = neonShape(30.dp),
                 color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 8.dp,
                 shadowElevation = 16.dp,
@@ -151,7 +152,7 @@ fun SetupInstallDialog(
                             },
                             detail = uiState.detail
                         )
-                        Button(
+                        Button(shape = neonButtonShape(), 
                             onClick = onDismiss,
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -204,7 +205,7 @@ private fun InstallProgressContent(
     ) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(22.dp),
+            shape = neonShape(22.dp),
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f))
         ) {
@@ -266,7 +267,7 @@ private fun InstallResultContent(
     val isError = status == InstallStatus.Error
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
+        shape = neonShape(22.dp),
         color = if (isError) {
             MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.58f)
         } else {
@@ -318,7 +319,7 @@ private fun InstallResultContent(
 private fun InstallInfoRow(text: String) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = neonShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.32f))
     ) {
@@ -341,7 +342,7 @@ private fun StatusIconChip(
     Box(
         modifier = Modifier
             .size(54.dp)
-            .clip(RoundedCornerShape(18.dp))
+            .clip(neonShape(18.dp))
             .background(iconColor.copy(alpha = 0.13f)),
         contentAlignment = Alignment.Center
     ) {

@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.CheckCircle
@@ -60,6 +59,9 @@ import com.sbro.emucorec.ui.common.SectionCard
 import com.sbro.emucorec.ui.theme.ThemeMode
 import com.sbro.emucorec.ui.library.LibraryGridSizing
 import java.io.File
+import com.sbro.emucorec.ui.theme.neon.neonShape
+import com.sbro.emucorec.ui.theme.neon.neonPillShape
+import com.sbro.emucorec.ui.theme.neon.neonChipShape
 
 @Composable
 fun CustomizationTab(
@@ -285,7 +287,7 @@ private fun ThemeChip(
     enabled: Boolean = true,
     onClick: () -> Unit
 ) {
-    FilterChip(
+    FilterChip(shape = neonChipShape(), 
         selected = selected,
         onClick = onClick,
         enabled = enabled,
@@ -313,7 +315,7 @@ private fun CustomizationPreview(settings: CustomizationSettings) {
             modifier = Modifier
                 .fillMaxWidth()
                 .height(210.dp),
-            shape = RoundedCornerShape(26.dp),
+            shape = neonShape(26.dp),
             color = MaterialTheme.colorScheme.background,
             border = BorderStroke(
                 1.dp,
@@ -336,7 +338,7 @@ private fun CustomizationPreview(settings: CustomizationSettings) {
                         modifier = Modifier.weight(1f)
                     )
                     Surface(
-                        shape = RoundedCornerShape(50),
+                        shape = neonPillShape(),
                         color = MaterialTheme.colorScheme.primaryContainer
                     ) {
                         Text(
@@ -378,7 +380,7 @@ private fun CustomizationPreview(settings: CustomizationSettings) {
                             modifier = Modifier
                                 .width(52.dp * coverScale)
                                 .aspectRatio(0.72f),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = neonShape(12.dp),
                             color = colors[index % colors.size]
                         ) {}
                     }
@@ -430,7 +432,7 @@ private fun FontChip(
     label: String,
     onClick: () -> Unit
 ) {
-    FilterChip(
+    FilterChip(shape = neonChipShape(), 
         selected = selected,
         onClick = onClick,
         label = { Text(label) }
@@ -449,7 +451,7 @@ private fun CustomizationActionRow(
     Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
+        shape = neonShape(22.dp),
         color = if (selected) {
             accent.copy(alpha = 0.12f)
         } else {
@@ -467,7 +469,7 @@ private fun CustomizationActionRow(
         ) {
             Surface(
                 modifier = Modifier.size(48.dp),
-                shape = RoundedCornerShape(16.dp),
+                shape = neonShape(16.dp),
                 color = accent.copy(alpha = 0.14f)
             ) {
                 Box(contentAlignment = Alignment.Center) {

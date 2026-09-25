@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
@@ -56,6 +55,8 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import com.sbro.emucorec.ui.theme.neon.neonShape
+import com.sbro.emucorec.ui.theme.neon.neonButtonShape
 
 @Composable
 fun AppUpdateTab(
@@ -73,7 +74,7 @@ fun AppUpdateTab(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = ScreenHorizontalPadding),
-        shape = RoundedCornerShape(24.dp),
+        shape = neonShape(24.dp),
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 3.dp,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
@@ -105,7 +106,7 @@ fun AppUpdateTab(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                OutlinedButton(
+                OutlinedButton(shape = neonButtonShape(), 
                     onClick = { onLoadReleaseHistory(true) },
                     enabled = !state.historyLoading
                 ) {
@@ -136,7 +137,7 @@ fun AppUpdateTab(
                 else -> state.releaseHistory.forEach { release ->
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(18.dp),
+                        shape = neonShape(18.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
                         onClick = { selectedRelease = release }
                     ) {
@@ -186,7 +187,7 @@ private fun ReleaseDetailsDialog(release: AppUpdateRelease, onDismiss: () -> Uni
                     .fillMaxWidth()
                     .widthIn(max = 620.dp)
                     .heightIn(max = maxHeight),
-                shape = RoundedCornerShape(28.dp),
+                shape = neonShape(28.dp),
                 color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 6.dp,
                 shadowElevation = 12.dp,
@@ -208,7 +209,7 @@ private fun ReleaseDetailsDialog(release: AppUpdateRelease, onDismiss: () -> Uni
                                 .size(48.dp)
                                 .background(
                                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                                    shape = RoundedCornerShape(16.dp)
+                                    shape = neonShape(16.dp)
                                 ),
                             contentAlignment = Alignment.Center
                         ) {
@@ -281,7 +282,7 @@ private fun ReleaseDetailsDialog(release: AppUpdateRelease, onDismiss: () -> Uni
                                 stringResource(R.string.settings_updates_parallel_body)
                             }
                         )
-                        Button(
+                        Button(shape = neonButtonShape(), 
                             onClick = {
                                 release.parallelApkDownloadUrl
                                     ?.takeIf(String::isNotBlank)
@@ -302,7 +303,7 @@ private fun ReleaseDetailsDialog(release: AppUpdateRelease, onDismiss: () -> Uni
                         }
                     }
 
-                    Button(
+                    Button(shape = neonButtonShape(), 
                         onClick = {
                             release.htmlUrl.takeIf(String::isNotBlank)?.let(uriHandler::openUri)
                             onDismiss()
@@ -336,7 +337,7 @@ private fun ReleaseDetailsDialog(release: AppUpdateRelease, onDismiss: () -> Uni
 private fun UpdateMetric(label: String, value: String, modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(18.dp),
+        shape = neonShape(18.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.62f))
     ) {
@@ -394,7 +395,7 @@ private fun UpdateDialogSection(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = neonShape(20.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.62f))
     ) {

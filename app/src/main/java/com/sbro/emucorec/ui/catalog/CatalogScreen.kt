@@ -36,7 +36,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -101,6 +100,9 @@ import com.sbro.emucorec.ui.theme.ScreenHorizontalPadding
 import com.sbro.emucorec.ui.theme.useMultiColumnLayout
 import kotlinx.coroutines.launch
 import java.util.Locale
+import com.sbro.emucorec.ui.theme.neon.neonShape
+import com.sbro.emucorec.ui.theme.neon.neonPillShape
+import com.sbro.emucorec.ui.theme.neon.neonButtonShape
 
 @OptIn(ExperimentalLayoutApi::class)
 @SuppressLint("DefaultLocale", "FrequentlyChangingValue", "ConfigurationScreenWidthHeight")
@@ -312,7 +314,7 @@ private fun CatalogTopBarAction(
     Surface(
         onClick = onClick,
         modifier = Modifier.size(48.dp),
-        shape = RoundedCornerShape(16.dp),
+        shape = neonShape(16.dp),
         color = if (selected) {
             MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
         } else {
@@ -353,7 +355,7 @@ private fun CatalogSearchPanel(
             if (query.isNotBlank()) {
                 val clearClick = rememberDebouncedClick { onQueryChange("") }
                 Surface(
-                    shape = RoundedCornerShape(999.dp),
+                    shape = neonPillShape(),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                     onClick = clearClick
                 ) {
@@ -372,7 +374,7 @@ private fun CatalogSearchPanel(
             }
         },
         singleLine = true,
-        shape = RoundedCornerShape(20.dp),
+        shape = neonShape(20.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
             unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
@@ -403,7 +405,7 @@ private fun CatalogFiltersPanel(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
+        shape = neonShape(22.dp),
         color = MaterialTheme.colorScheme.surface
     ) {
         Column(
@@ -513,7 +515,7 @@ private fun FilterMenuChip(
     Box {
         Surface(
             modifier = modifier,
-            shape = RoundedCornerShape(999.dp),
+            shape = neonPillShape(),
             color = MaterialTheme.colorScheme.surface,
             onClick = { onExpandedChange(true) }
         ) {
@@ -553,7 +555,7 @@ private fun CatalogGameCard(
     var showProfileMenu by remember { mutableStateOf(false) }
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(18.dp),
+        shape = neonShape(18.dp),
         color = MaterialTheme.colorScheme.surface,
         onClick = openClick
     ) {
@@ -584,7 +586,7 @@ private fun CatalogGameCard(
                         modifier = Modifier
                             .align(Alignment.BottomStart)
                             .padding(10.dp),
-                        shape = RoundedCornerShape(999.dp),
+                        shape = neonPillShape(),
                         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.92f)
                     ) {
                         Text(
@@ -602,7 +604,7 @@ private fun CatalogGameCard(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .padding(10.dp),
-                        shape = RoundedCornerShape(999.dp),
+                        shape = neonPillShape(),
                         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.92f)
                     ) {
                         Icon(
@@ -720,7 +722,7 @@ private fun CatalogProfileDialog(
                     .fillMaxWidth()
                     .widthIn(max = 620.dp)
                     .heightIn(max = maxHeight),
-                shape = RoundedCornerShape(28.dp),
+                shape = neonShape(28.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 tonalElevation = 10.dp,
                 shadowElevation = 18.dp,
@@ -739,7 +741,7 @@ private fun CatalogProfileDialog(
                     ) {
                         Surface(
                             modifier = Modifier.size(52.dp),
-                            shape = RoundedCornerShape(16.dp),
+                            shape = neonShape(16.dp),
                             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
                         ) {
                             UrlImage(
@@ -775,7 +777,7 @@ private fun CatalogProfileDialog(
 
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(18.dp),
+                        shape = neonShape(18.dp),
                         color = if (isFavorite) {
                             MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
                         } else {
@@ -820,7 +822,7 @@ private fun CatalogProfileDialog(
                     ProfileGameStatus.entries.forEach { status ->
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(18.dp),
+                            shape = neonShape(18.dp),
                             color = if (profileStatus == status) {
                                 MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
                             } else {
@@ -851,7 +853,7 @@ private fun CatalogProfileDialog(
                     }
 
                     if (profileStatus != null) {
-                        OutlinedButton(
+                        OutlinedButton(shape = neonButtonShape(), 
                             onClick = onClearStatus,
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -872,7 +874,7 @@ private fun CatalogMessageCard(
 ) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(22.dp),
+        shape = neonShape(22.dp),
         color = MaterialTheme.colorScheme.surface
     ) {
         Column(
@@ -907,7 +909,7 @@ private fun ScrollToTopButton(
         modifier = modifier
     ) {
         Surface(
-            shape = RoundedCornerShape(18.dp),
+            shape = neonShape(18.dp),
             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
             onClick = guardedClick
         ) {
@@ -956,7 +958,7 @@ private fun CompatibilityBadge(
     val content = compatibilityContentColor(compatibility.state)
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(999.dp),
+        shape = neonPillShape(),
         color = background,
         shadowElevation = 6.dp
     ) {

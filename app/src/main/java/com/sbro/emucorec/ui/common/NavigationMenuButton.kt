@@ -3,7 +3,6 @@ package com.sbro.emucorec.ui.common
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material3.Icon
@@ -17,6 +16,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.sbro.emucorec.R
+import com.sbro.emucorec.ui.theme.neon.neonShape
 
 @Composable
 fun NavigationMenuButton(
@@ -29,7 +29,7 @@ fun NavigationMenuButton(
 ) {
     Surface(
         modifier = modifier.size(44.dp),
-        shape = RoundedCornerShape(14.dp),
+        shape = neonShape(14.dp),
         color = containerColor,
         tonalElevation = tonalElevation,
         shadowElevation = shadowElevation,

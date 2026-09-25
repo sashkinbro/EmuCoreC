@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
@@ -44,6 +43,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.sbro.emucorec.R
+import com.sbro.emucorec.ui.theme.neon.neonShape
+import com.sbro.emucorec.ui.theme.neon.neonButtonShape
 
 @Composable
 fun SettingHelpButton(
@@ -90,7 +91,7 @@ fun SettingHelpButton(
                         .fillMaxWidth()
                         .widthIn(max = 720.dp)
                         .heightIn(max = maxHeight),
-                    shape = RoundedCornerShape(28.dp),
+                    shape = neonShape(28.dp),
                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
                     tonalElevation = 10.dp,
                     shadowElevation = 18.dp,
@@ -113,7 +114,7 @@ fun SettingHelpButton(
                             Box(
                                 modifier = Modifier
                                     .size(48.dp)
-                                    .clip(RoundedCornerShape(16.dp))
+                                    .clip(neonShape(16.dp))
                                     .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -152,7 +153,7 @@ fun SettingHelpButton(
 
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(18.dp),
+                            shape = neonShape(18.dp),
                             color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.38f),
                             border = BorderStroke(
                                 1.dp,
@@ -178,7 +179,7 @@ fun SettingHelpButton(
                             }
                         }
 
-                        Button(
+                        Button(shape = neonButtonShape(), 
                             onClick = { showDialog = false },
                             modifier = Modifier.fillMaxWidth()
                         ) {

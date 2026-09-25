@@ -25,7 +25,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Build
 import androidx.compose.material.icons.rounded.CheckCircle
@@ -67,6 +66,7 @@ import com.sbro.emucorec.ui.settings.animateScrollToCenterItem
 import com.sbro.emucorec.ui.theme.CardContentPadding
 import com.sbro.emucorec.ui.theme.ScreenContentBottomPadding
 import com.sbro.emucorec.ui.theme.ScreenHorizontalPadding
+import com.sbro.emucorec.ui.theme.neon.neonShape
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -208,7 +208,7 @@ private fun EmptyPatchesState() {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = ScreenHorizontalPadding),
-        shape = RoundedCornerShape(18.dp),
+        shape = neonShape(18.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         tonalElevation = 1.dp,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
@@ -251,7 +251,7 @@ private fun NoPatchesHint(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = ScreenHorizontalPadding),
-        shape = RoundedCornerShape(18.dp),
+        shape = neonShape(18.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         tonalElevation = 1.dp,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
@@ -281,7 +281,7 @@ private fun NoPatchesHint(
             if (!hasDownloaded) {
                 Surface(
                     onClick = onDownload,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = neonShape(12.dp),
                     color = MaterialTheme.colorScheme.primaryContainer
                 ) {
                     Row(
@@ -325,7 +325,7 @@ private fun DownloadResultBanner(
 
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = neonShape(12.dp),
         color = containerColor
     ) {
         Row(
@@ -395,7 +395,7 @@ private fun PatchGamePicker(
                 val selected = game.titleId == selectedTitleId
                 Surface(
                     onClick = { onSelect(game.titleId) },
-                    shape = RoundedCornerShape(18.dp),
+                    shape = neonShape(18.dp),
                     color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
                     border = BorderStroke(
                         1.dp,
@@ -409,7 +409,7 @@ private fun PatchGamePicker(
                     ) {
                         Surface(
                             modifier = Modifier.size(48.dp),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = neonShape(12.dp),
                             color = MaterialTheme.colorScheme.surfaceContainerHighest,
                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
                         ) {
@@ -452,7 +452,7 @@ private fun PatchCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = ScreenHorizontalPadding),
-        shape = RoundedCornerShape(18.dp),
+        shape = neonShape(18.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         tonalElevation = 1.dp,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
@@ -526,7 +526,7 @@ private fun PatchCard(
 @Composable
 private fun PatchBadge(label: String) {
     Surface(
-        shape = RoundedCornerShape(8.dp),
+        shape = neonShape(8.dp),
         color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f)
     ) {
         Text(

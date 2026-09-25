@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -35,6 +34,8 @@ import com.sbro.emucorec.data.TouchControlVisualStyle
 import com.sbro.emucorec.ui.common.SectionCard
 import com.sbro.emucorec.ui.common.VectorAnalogStick
 import com.sbro.emucorec.ui.common.VectorOverlayButton
+import com.sbro.emucorec.ui.theme.neon.neonShape
+import com.sbro.emucorec.ui.theme.neon.neonChipShape
 
 @Composable
 internal fun TouchControlStyleSection(
@@ -61,7 +62,7 @@ internal fun TouchControlStyleSection(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(TouchControlVisualStyle.entries, key = { it.name }) { style ->
-                FilterChip(
+                FilterChip(shape = neonChipShape(), 
                     selected = settings.touchControlVisualStyle == style,
                     onClick = { onStyleSelected(style) },
                     label = { Text(touchStyleLabel(style)) }
@@ -79,7 +80,7 @@ internal fun TouchControlStyleSection(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(TouchControlPressEffect.entries, key = { it.name }) { effect ->
-                FilterChip(
+                FilterChip(shape = neonChipShape(), 
                     selected = settings.touchControlPressEffect == effect,
                     onClick = { onPressEffectSelected(effect) },
                     label = { Text(touchPressEffectLabel(effect)) }
@@ -146,7 +147,7 @@ internal fun StylePreviewCard(
         modifier = Modifier
             .width(176.dp)
             .height(132.dp),
-        shape = RoundedCornerShape(20.dp),
+        shape = neonShape(20.dp),
         color = if (selected) {
             MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.58f)
         } else {
@@ -169,7 +170,7 @@ internal fun StylePreviewCard(
                     .weight(1f)
                     .background(
                         MaterialTheme.colorScheme.background,
-                        RoundedCornerShape(14.dp)
+                        neonShape(14.dp)
                     ),
                 contentAlignment = Alignment.Center
             ) {
@@ -195,7 +196,7 @@ private fun TouchControlsPreview(
             .padding(horizontal = 14.dp)
             .fillMaxWidth()
             .height(124.dp),
-        shape = RoundedCornerShape(22.dp),
+        shape = neonShape(22.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.34f),
         border = BorderStroke(
             1.dp,
@@ -244,10 +245,10 @@ private fun TouchControlsPreview(
 @Composable
 private fun DrawerStyleMiniature(style: DrawerVisualStyle) {
     val shape = when (style) {
-        DrawerVisualStyle.CLASSIC -> RoundedCornerShape(12.dp)
-        DrawerVisualStyle.COMPACT -> RoundedCornerShape(4.dp)
-        DrawerVisualStyle.GLASS -> RoundedCornerShape(18.dp)
-        DrawerVisualStyle.CONSOLE -> RoundedCornerShape(1.dp)
+        DrawerVisualStyle.CLASSIC -> neonShape(12.dp)
+        DrawerVisualStyle.COMPACT -> neonShape(4.dp)
+        DrawerVisualStyle.GLASS -> neonShape(18.dp)
+        DrawerVisualStyle.CONSOLE -> neonShape(1.dp)
     }
     val width = when (style) {
         DrawerVisualStyle.COMPACT -> 76.dp
@@ -276,7 +277,7 @@ private fun DrawerStyleMiniature(style: DrawerVisualStyle) {
                     .background(
                         if (index == 0) MaterialTheme.colorScheme.primary.copy(alpha = 0.72f)
                         else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
-                        RoundedCornerShape(if (style == DrawerVisualStyle.CONSOLE) 1.dp else 5.dp)
+                        neonShape(if (style == DrawerVisualStyle.CONSOLE) 1.dp else 5.dp)
                     )
             )
         }

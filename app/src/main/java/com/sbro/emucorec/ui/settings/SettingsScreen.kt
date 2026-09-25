@@ -29,7 +29,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
@@ -89,6 +88,9 @@ import com.sbro.emucorec.ui.common.NavigationBackButton
 import com.sbro.emucorec.ui.common.SettingHelpButton
 import com.sbro.emucorec.ui.common.rememberDebouncedClick
 import com.sbro.emucorec.ui.theme.ScreenHorizontalPadding
+import com.sbro.emucorec.ui.theme.neon.neonShape
+import com.sbro.emucorec.ui.theme.neon.neonChipShape
+import com.sbro.emucorec.ui.theme.neon.neonButtonShape
 
 private val SettingsRowHorizontalPadding = ScreenHorizontalPadding
 private val SettingsRowInnerHorizontalPadding = 14.dp
@@ -233,7 +235,7 @@ fun SettingsScreen(
                 title = { Text(stringResource(R.string.settings_reset_defaults_title)) },
                 text = { Text(stringResource(R.string.settings_reset_defaults_message)) },
                 confirmButton = {
-                    Button(
+                    Button(shape = neonButtonShape(), 
                         onClick = {
                             showResetDialog = false
                             resetSettingsClick()
@@ -262,7 +264,7 @@ fun SettingsScreen(
                 title = { Text(stringResource(R.string.settings_backup_restore_title)) },
                 text = { Text(stringResource(R.string.settings_backup_restore_message)) },
                 confirmButton = {
-                    Button(
+                    Button(shape = neonButtonShape(), 
                         onClick = {
                             showRestoreBackupDialog = false
                             restorePicker.launch(arrayOf("application/json", "text/json", "*/*"))
@@ -304,7 +306,7 @@ private fun SettingsCompactTopBar(
                 top = topInset,
                 bottom = 4.dp
             ),
-        shape = RoundedCornerShape(24.dp),
+        shape = neonShape(24.dp),
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.78f),
         tonalElevation = 1.dp,
         shadowElevation = 0.dp,
@@ -378,7 +380,7 @@ private fun SettingsHeaderIconButton(
 ) {
     Surface(
         modifier = Modifier.size(40.dp),
-        shape = RoundedCornerShape(14.dp),
+        shape = neonShape(14.dp),
         color = MaterialTheme.colorScheme.surface,
         contentColor = MaterialTheme.colorScheme.onSurface,
         tonalElevation = 3.dp,
@@ -435,7 +437,7 @@ private fun SettingsTabRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items(items = tabs, key = { it.name }) { tab ->
-            FilterChip(
+            FilterChip(shape = neonChipShape(), 
                 selected = selectedTab == tab,
                 onClick = { onSelected(tab) },
                 colors = FilterChipDefaults.filterChipColors(
@@ -502,7 +504,7 @@ fun SettingToggleRow(
                     }
                 }
             ),
-        shape = RoundedCornerShape(18.dp),
+        shape = neonShape(18.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         tonalElevation = 1.dp,
         shadowElevation = 2.dp,
