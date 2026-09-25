@@ -4,6 +4,7 @@ package com.sbro.emucorec.ui.emulation
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,7 +26,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ExitToApp
@@ -85,6 +85,13 @@ import com.sbro.emucorec.ui.settings.Ps3CoreSettingsCategory
 import com.sbro.emucorec.ui.settings.Ps3CoreSettingsSection
 import com.sbro.emucorec.ui.settings.Ps3CoreSettingsSurface
 import com.sbro.emucorec.ui.settings.Ps3CoreSettingsScope
+import com.sbro.emucorec.ui.theme.neon.LocalNeonTheme
+import com.sbro.emucorec.ui.theme.neon.NeonCrtOverlay
+import com.sbro.emucorec.ui.theme.neon.neonAccentColor
+import com.sbro.emucorec.ui.theme.neon.neonChipShape
+import com.sbro.emucorec.ui.theme.neon.neonPillShape
+import com.sbro.emucorec.ui.theme.neon.neonShape
+import com.sbro.emucorec.ui.theme.neon.neonShapeCorners
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -105,6 +112,16 @@ private data class EmulationMenuPalette(
 @Composable
 private fun emulationMenuPalette(): EmulationMenuPalette {
     val scheme = MaterialTheme.colorScheme
+    if (LocalNeonTheme.current) {
+        return EmulationMenuPalette(
+            panel = scheme.surface.copy(alpha = 0.96f),
+            panelSoft = scheme.surfaceContainerLow,
+            row = scheme.surfaceVariant.copy(alpha = 0.30f),
+            border = scheme.onSurface.copy(alpha = 0.06f),
+            textPrimary = scheme.onSurface,
+            textSecondary = scheme.onSurfaceVariant
+        )
+    }
     val dark = scheme.background.luminance() < 0.5f
     return EmulationMenuPalette(
         panel = if (dark) Color(0xEE10131A) else Color(0xF7FAFBFF),
@@ -130,7 +147,7 @@ fun EmulationQuickBar(
     val palette = emulationMenuPalette()
     Surface(
         modifier = modifier.padding(top = 12.dp),
-        shape = RoundedCornerShape(28.dp),
+        shape = neonShape(28.dp),
         color = palette.panel,
         border = BorderStroke(1.dp, palette.border),
         tonalElevation = 4.dp,
@@ -142,12 +159,14 @@ fun EmulationQuickBar(
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             QuickBarButton(
+                accentIndex = 0,
                 icon = Icons.Rounded.Home,
                 contentDescription = stringResource(R.string.emulation_quickbar_home_menu),
                 onClick = onOpenCoreHomeMenu,
                 palette = palette
             )
             QuickBarButton(
+                accentIndex = 1,
                 icon = Icons.Rounded.Tune,
                 contentDescription = stringResource(R.string.emulation_quickbar_open_menu),
                 onClick = onOpenMenu,
@@ -159,23 +178,31 @@ fun EmulationQuickBar(
 
 @Composable
 private fun QuickBarButton(
+    accentIndex: Int,
     icon: ImageVector,
     contentDescription: String,
     onClick: () -> Unit,
     palette: EmulationMenuPalette
 ) {
+    val neon = LocalNeonTheme.current
+    val shape = if (neon) neonShape(14.dp) else CircleShape
+    val accent = neonAccentColor(accentIndex)
     Box(
         modifier = Modifier
             .size(48.dp)
-            .clip(CircleShape)
-            .background(palette.row)
+            .clip(shape)
+            .background(if (neon) accent.copy(alpha = 0.10f) else palette.row)
+            .then(
+                if (neon) Modifier.border(1.dp, accent.copy(alpha = 0.42f), shape)
+                else Modifier
+            )
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,
-            tint = palette.textPrimary,
+            tint = if (neon) accent else palette.textPrimary,
             modifier = Modifier.size(22.dp)
         )
     }
@@ -197,15 +224,96 @@ fun EmulationGameMenu(
     var selectedTab by remember { mutableStateOf(EmulationMenuTab.Game) }
     val effectiveStyle = if (expandHorizontally) layoutStyle else GameMenuLayoutStyle.COMMAND_CENTER
     val shape = if (!expandHorizontally) {
-        RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        neonShapeCorners(topStart = 24.dp, topEnd = 24.dp)
     } else {
         when (effectiveStyle) {
             GameMenuLayoutStyle.DASHBOARD,
-            GameMenuLayoutStyle.COMMAND_CENTER,
-            GameMenuLayoutStyle.SIDEBAR -> RoundedCornerShape(24.dp)
-            GameMenuLayoutStyle.COMPACT -> RoundedCornerShape(16.dp)
+            GameMenuLayoutStyle.COMMAND_CENTER -> neonShape(24.dp)
+            GameMenuLayoutStyle.COMPACT -> neonShapeCorners(topStart = 16.dp, bottomStart = 16.dp)
+            GameMenuLayoutStyle.SIDEBAR -> neonShapeCorners(topStart = 24.dp, bottomStart = 24.dp)
         }
     }
+
+    if (expandHorizontally && effectiveStyle == GameMenuLayoutStyle.SIDEBAR) {
+        Row(
+            modifier = modifier
+                .then(
+                    if (LocalNeonTheme.current) Modifier.fillMaxSize()
+                    else Modifier.fillMaxHeight()
+                ),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.Top
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .widthIn(min = 300.dp, max = 420.dp),
+                shape = neonShape(if (LocalNeonTheme.current) 28.dp else 24.dp),
+                color = palette.panel,
+                border = BorderStroke(1.dp, palette.border),
+                tonalElevation = if (LocalNeonTheme.current) 0.dp else 6.dp,
+                shadowElevation = if (LocalNeonTheme.current) 0.dp else 18.dp
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    MenuScrollableContent(
+                        gameTitle = gameTitle,
+                        gameId = gameId,
+                        config = config,
+                        paused = paused,
+                        sessionElapsedMs = sessionElapsedMs,
+                        physicalGamepadConnected = physicalGamepadConnected,
+                        callbacks = callbacks,
+                        selectedTab = selectedTab,
+                        showHorizontalTabs = false,
+                        horizontalPadding = 18.dp
+                    )
+                    if (LocalNeonTheme.current) {
+                        NeonCrtOverlay()
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Surface(
+                modifier = Modifier
+                    .width(74.dp)
+                    .fillMaxHeight(),
+                shape = neonShape(24.dp),
+                color = if (LocalNeonTheme.current) {
+                    MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
+                } else {
+                    palette.panel
+                },
+                border = BorderStroke(
+                    1.dp,
+                    if (LocalNeonTheme.current) {
+                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.48f)
+                    } else {
+                        palette.border
+                    }
+                ),
+                tonalElevation = if (LocalNeonTheme.current) 0.dp else 4.dp,
+                shadowElevation = if (LocalNeonTheme.current) 0.dp else 12.dp
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    MenuVerticalTabs(
+                        selectedTab = selectedTab,
+                        onSelected = { selectedTab = it },
+                        iconOnly = true,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(vertical = 14.dp, horizontal = 8.dp)
+                    )
+                    if (LocalNeonTheme.current) {
+                        NeonCrtOverlay()
+                    }
+                }
+            }
+        }
+        return
+    }
+
     Surface(
         modifier = modifier
             .padding(vertical = 4.dp)
@@ -240,18 +348,35 @@ fun EmulationGameMenu(
         tonalElevation = 6.dp,
         shadowElevation = 18.dp
     ) {
-        when (effectiveStyle) {
-            GameMenuLayoutStyle.DASHBOARD -> Row(modifier = Modifier.fillMaxSize()) {
-                MenuVerticalTabs(
-                    selectedTab = selectedTab,
-                    onSelected = { selectedTab = it },
-                    iconOnly = false,
-                    modifier = Modifier
-                        .width(188.dp)
-                        .fillMaxHeight()
-                        .padding(14.dp)
-                )
-                MenuScrollableContent(
+        Box(modifier = Modifier.fillMaxSize()) {
+            when (effectiveStyle) {
+                GameMenuLayoutStyle.DASHBOARD -> Row(modifier = Modifier.fillMaxSize()) {
+                    MenuVerticalTabs(
+                        selectedTab = selectedTab,
+                        onSelected = { selectedTab = it },
+                        iconOnly = false,
+                        modifier = Modifier
+                            .width(188.dp)
+                            .fillMaxHeight()
+                            .padding(14.dp)
+                    )
+                    MenuScrollableContent(
+                        gameTitle = gameTitle,
+                        gameId = gameId,
+                        config = config,
+                        paused = paused,
+                        sessionElapsedMs = sessionElapsedMs,
+                        physicalGamepadConnected = physicalGamepadConnected,
+                        callbacks = callbacks,
+                        selectedTab = selectedTab,
+                        showHorizontalTabs = false,
+                        horizontalPadding = 18.dp,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                GameMenuLayoutStyle.SIDEBAR -> Unit
+                GameMenuLayoutStyle.COMMAND_CENTER,
+                GameMenuLayoutStyle.COMPACT -> MenuScrollableContent(
                     gameTitle = gameTitle,
                     gameId = gameId,
                     config = config,
@@ -260,51 +385,16 @@ fun EmulationGameMenu(
                     physicalGamepadConnected = physicalGamepadConnected,
                     callbacks = callbacks,
                     selectedTab = selectedTab,
-                    showHorizontalTabs = false,
-                    horizontalPadding = 18.dp,
-                    modifier = Modifier.weight(1f)
+                    showHorizontalTabs = true,
+                    horizontalPadding = if (effectiveStyle == GameMenuLayoutStyle.COMPACT) 12.dp else 18.dp,
+                    compact = effectiveStyle == GameMenuLayoutStyle.COMPACT,
+                    showSheetHandle = !expandHorizontally,
+                    onSelected = { selectedTab = it }
                 )
             }
-            GameMenuLayoutStyle.SIDEBAR -> Row(modifier = Modifier.fillMaxSize()) {
-                MenuScrollableContent(
-                    gameTitle = gameTitle,
-                    gameId = gameId,
-                    config = config,
-                    paused = paused,
-                    sessionElapsedMs = sessionElapsedMs,
-                    physicalGamepadConnected = physicalGamepadConnected,
-                    callbacks = callbacks,
-                    selectedTab = selectedTab,
-                    showHorizontalTabs = false,
-                    horizontalPadding = 18.dp,
-                    modifier = Modifier.weight(1f)
-                )
-                MenuVerticalTabs(
-                    selectedTab = selectedTab,
-                    onSelected = { selectedTab = it },
-                    iconOnly = true,
-                    modifier = Modifier
-                        .width(66.dp)
-                        .fillMaxHeight()
-                        .padding(vertical = 14.dp, horizontal = 8.dp)
-                )
+            if (LocalNeonTheme.current) {
+                NeonCrtOverlay()
             }
-            GameMenuLayoutStyle.COMMAND_CENTER,
-            GameMenuLayoutStyle.COMPACT -> MenuScrollableContent(
-                gameTitle = gameTitle,
-                gameId = gameId,
-                config = config,
-                paused = paused,
-                sessionElapsedMs = sessionElapsedMs,
-                physicalGamepadConnected = physicalGamepadConnected,
-                callbacks = callbacks,
-                selectedTab = selectedTab,
-                showHorizontalTabs = true,
-                horizontalPadding = if (effectiveStyle == GameMenuLayoutStyle.COMPACT) 12.dp else 18.dp,
-                compact = effectiveStyle == GameMenuLayoutStyle.COMPACT,
-                showSheetHandle = !expandHorizontally,
-                onSelected = { selectedTab = it }
-            )
         }
     }
 }
@@ -326,7 +416,6 @@ private fun MenuScrollableContent(
     showSheetHandle: Boolean = false,
     onSelected: (EmulationMenuTab) -> Unit = {}
 ) {
-    val palette = emulationMenuPalette()
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -343,19 +432,15 @@ private fun MenuScrollableContent(
         MenuHeader(gameTitle = gameTitle, gameId = gameId, paused = paused)
         MenuTopActions(paused = paused, callbacks = callbacks)
         if (showHorizontalTabs) {
-            // Tabs live in their own card so the strip reads as a separate block instead of
-            // blending into the panel and the content below it.
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                color = palette.row,
-                border = BorderStroke(1.dp, palette.border)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalBleed(horizontalPadding)
             ) {
                 MenuTabs(
                     selectedTab = selectedTab,
                     onSelected = onSelected,
-                    horizontalContentPadding = horizontalPadding + 8.dp,
-                    modifier = Modifier.padding(vertical = 6.dp)
+                    horizontalContentPadding = horizontalPadding
                 )
             }
         }
@@ -471,7 +556,7 @@ private fun MenuInfoRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(neonShape(12.dp))
             .background(palette.row)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -836,7 +921,7 @@ private fun AchievementSetProgress(set: Ps3TrophySet) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(neonShape(12.dp))
             .background(palette.row)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -847,7 +932,7 @@ private fun AchievementSetProgress(set: Ps3TrophySet) {
         ) {
             Surface(
                 modifier = Modifier.size(42.dp),
-                shape = RoundedCornerShape(10.dp),
+                shape = neonShape(10.dp),
                 color = palette.panelSoft,
                 border = BorderStroke(1.dp, palette.border)
             ) {
@@ -889,7 +974,7 @@ private fun AchievementMenuRow(trophy: Ps3Trophy) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(neonShape(12.dp))
             .background(palette.row)
             .padding(horizontal = 10.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -897,7 +982,7 @@ private fun AchievementMenuRow(trophy: Ps3Trophy) {
     ) {
         Surface(
             modifier = Modifier.size(42.dp),
-            shape = RoundedCornerShape(10.dp),
+            shape = neonShape(10.dp),
             color = palette.panelSoft,
             border = BorderStroke(1.dp, palette.border)
         ) {
@@ -1017,7 +1102,7 @@ private fun AchievementMenuSkeleton() {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(neonShape(12.dp))
             .background(palette.row)
             .padding(horizontal = 10.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1026,7 +1111,7 @@ private fun AchievementMenuSkeleton() {
         Box(
             modifier = Modifier
                 .size(42.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .clip(neonShape(10.dp))
                 .background(palette.border)
         )
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -1034,14 +1119,14 @@ private fun AchievementMenuSkeleton() {
                 modifier = Modifier
                     .fillMaxWidth(0.7f)
                     .height(12.dp)
-                    .clip(RoundedCornerShape(50))
+                    .clip(neonPillShape())
                     .background(palette.border)
             )
             Box(
                 modifier = Modifier
                     .fillMaxWidth(0.48f)
                     .height(10.dp)
-                    .clip(RoundedCornerShape(50))
+                    .clip(neonPillShape())
                     .background(palette.border.copy(alpha = 0.72f))
             )
         }
@@ -1054,7 +1139,7 @@ private fun MenuEmptyAchievements() {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(neonShape(12.dp))
             .background(palette.row)
             .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1108,7 +1193,7 @@ private fun MenuTopAction(
     val tint = if (destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
     Surface(
         modifier = modifier.height(44.dp),
-        shape = RoundedCornerShape(12.dp),
+        shape = neonShape(12.dp),
         color = if (destructive) MaterialTheme.colorScheme.error.copy(alpha = 0.16f) else palette.row,
         border = BorderStroke(1.dp, if (destructive) MaterialTheme.colorScheme.error.copy(alpha = 0.34f) else palette.border),
         onClick = onClick
@@ -1148,7 +1233,7 @@ private fun MenuTabs(
             val selected = selectedTab == item.tab
             Surface(
                 onClick = { onSelected(item.tab) },
-                shape = RoundedCornerShape(12.dp),
+                shape = neonShape(12.dp),
                 color = if (selected) {
                     MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
                 } else {
@@ -1187,7 +1272,7 @@ private fun MenuVerticalTabs(
             Surface(
                 onClick = { onSelected(item.tab) },
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
+                shape = neonShape(12.dp),
                 color = if (selected) {
                     MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
                 } else {
@@ -1297,7 +1382,7 @@ private fun SheetHandle() {
         Box(
             modifier = Modifier
                 .size(width = 42.dp, height = 4.dp)
-                .clip(RoundedCornerShape(2.dp))
+                .clip(neonShape(2.dp))
                 .background(palette.textSecondary.copy(alpha = 0.26f))
         )
     }
@@ -1307,7 +1392,7 @@ private fun SheetHandle() {
 private fun MenuHeader(gameTitle: String, gameId: String, paused: Boolean) {
     val palette = emulationMenuPalette()
     Surface(
-        shape = RoundedCornerShape(16.dp),
+        shape = neonShape(16.dp),
         color = palette.row,
         border = BorderStroke(1.dp, palette.border)
     ) {
@@ -1366,7 +1451,7 @@ private fun MenuSection(
 ) {
     val palette = emulationMenuPalette()
     Surface(
-        shape = RoundedCornerShape(16.dp),
+        shape = neonShape(16.dp),
         color = palette.panelSoft,
         border = BorderStroke(1.dp, palette.border)
     ) {
@@ -1414,7 +1499,7 @@ private fun MenuSection(
 @Composable
 private fun Badge(text: String, color: Color) {
     Surface(
-        shape = RoundedCornerShape(50),
+        shape = neonPillShape(),
         color = color.copy(alpha = 0.18f),
         border = BorderStroke(1.dp, color.copy(alpha = 0.45f))
     ) {
@@ -1439,19 +1524,23 @@ private fun MenuToggleRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(neonShape(12.dp))
             .clickable(enabled = enabled) { onCheckedChange(!checked) }
             .background(palette.row)
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = palette.textPrimary.copy(alpha = if (enabled) 1f else 0.48f),
-            modifier = Modifier.weight(1f)
-        )
-        RowBadge(badge)
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = palette.textPrimary.copy(alpha = if (enabled) 1f else 0.48f)
+            )
+            RowBadge(badge)
+        }
         Switch(checked = checked, enabled = enabled, onCheckedChange = onCheckedChange)
     }
 }
@@ -1475,23 +1564,33 @@ private fun MenuSliderRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(neonShape(12.dp))
             .background(palette.row)
             .padding(horizontal = 12.dp, vertical = 9.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyMedium,
-                color = palette.textPrimary.copy(alpha = if (enabled) 1f else 0.48f),
-                modifier = Modifier.weight(1f)
-            )
-            RowBadge(badge)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = palette.textPrimary.copy(alpha = if (enabled) 1f else 0.48f)
+                )
+                RowBadge(badge)
+            }
             Text(
                 text = valueText,
                 style = MaterialTheme.typography.labelMedium,
-                color = palette.textSecondary
+                color = palette.textSecondary,
+                modifier = Modifier.widthIn(max = 140.dp),
+                maxLines = 2
             )
         }
         Slider(
@@ -1541,6 +1640,7 @@ private fun MenuChipRow(
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             options.forEach { (value, text) ->
                 FilterChip(
+                    shape = neonChipShape(),
                     selected = selected == value,
                     onClick = { onSelected(value) },
                     enabled = enabled,
@@ -1569,8 +1669,9 @@ private fun MenuActionRow(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(neonShape(14.dp))
             .clickable(onClick = onClick),
+        shape = neonShape(14.dp),
         color = containerColor,
         border = BorderStroke(1.dp, palette.border)
     ) {

@@ -521,6 +521,7 @@
     <string name="settings_theme_system">النظام</string>
     <string name="settings_theme_light">فاتح</string>
     <string name="settings_theme_dark">داكن</string>
+    <string name="settings_theme_neon">نيون</string>
     <string name="settings_about_privacy_policy">سياسة الخصوصية</string>
     <string name="settings_about_privacy_policy_desc">افتح سياسة خصوصية EmuCoreC.</string>
     <string name="shell_discord_server">خادم Discord</string>

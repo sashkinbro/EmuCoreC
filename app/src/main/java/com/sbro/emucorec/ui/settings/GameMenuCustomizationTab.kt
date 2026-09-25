@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import com.sbro.emucorec.R
 import com.sbro.emucorec.data.GameMenuLayoutStyle
 import com.sbro.emucorec.ui.common.SectionCard
+import com.sbro.emucorec.ui.theme.neon.neonShape
 
 @Composable
 internal fun GameMenuStyleSection(
@@ -75,7 +75,7 @@ private fun GameMenuLayoutMiniature(style: GameMenuLayoutStyle) {
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .background(panel, RoundedCornerShape(10.dp))
+                    .background(panel, neonShape(10.dp))
                     .padding(9.dp),
                 verticalArrangement = Arrangement.spacedBy(7.dp)
             ) {
@@ -86,7 +86,7 @@ private fun GameMenuLayoutMiniature(style: GameMenuLayoutStyle) {
                 modifier = Modifier
                     .width(28.dp)
                     .fillMaxHeight()
-                    .background(panel, RoundedCornerShape(9.dp))
+                    .background(panel, neonShape(9.dp))
                     .padding(6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
@@ -98,7 +98,7 @@ private fun GameMenuLayoutMiniature(style: GameMenuLayoutStyle) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(10.dp)
-                .background(panel, RoundedCornerShape(9.dp))
+                .background(panel, neonShape(9.dp))
         ) {
             Column(
                 modifier = Modifier
@@ -124,7 +124,7 @@ private fun GameMenuLayoutMiniature(style: GameMenuLayoutStyle) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(10.dp)
-                .background(panel, RoundedCornerShape(9.dp))
+                .background(panel, neonShape(9.dp))
                 .padding(8.dp),
             verticalArrangement = Arrangement.spacedBy(7.dp)
         ) {
@@ -134,7 +134,7 @@ private fun GameMenuLayoutMiniature(style: GameMenuLayoutStyle) {
                         modifier = Modifier
                             .weight(1f)
                             .height(11.dp)
-                            .background(if (it == 0) primary else row, RoundedCornerShape(4.dp))
+                            .background(if (it == 0) primary else row, neonShape(4.dp))
                     )
                 }
             }
@@ -150,7 +150,7 @@ private fun GameMenuLayoutMiniature(style: GameMenuLayoutStyle) {
                 modifier = Modifier
                     .width(96.dp)
                     .fillMaxHeight(0.92f)
-                    .background(panel, RoundedCornerShape(6.dp))
+                    .background(panel, neonShape(6.dp))
                     .padding(7.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
@@ -160,7 +160,7 @@ private fun GameMenuLayoutMiniature(style: GameMenuLayoutStyle) {
                             modifier = Modifier
                                 .weight(1f)
                                 .height(9.dp)
-                                .background(if (it == 0) primary else row, RoundedCornerShape(3.dp))
+                                .background(if (it == 0) primary else row, neonShape(3.dp))
                         )
                     }
                 }
@@ -176,7 +176,7 @@ private fun MiniLine(color: androidx.compose.ui.graphics.Color, fraction: Float)
         modifier = Modifier
             .fillMaxWidth(fraction)
             .height(8.dp)
-            .background(color, RoundedCornerShape(4.dp))
+            .background(color, neonShape(4.dp))
     )
 }
 

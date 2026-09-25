@@ -519,6 +519,7 @@
     <string name="settings_theme_system">Системна</string>
     <string name="settings_theme_light">Світла</string>
     <string name="settings_theme_dark">Темна</string>
+    <string name="settings_theme_neon">Неон</string>
     <string name="settings_about_privacy_policy">Політика конфіденційності</string>
     <string name="settings_about_privacy_policy_desc">Відкрити політику конфіденційності EmuCoreC.</string>
     <string name="shell_discord_server">Сервер Discord</string>

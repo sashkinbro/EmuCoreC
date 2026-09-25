@@ -517,6 +517,7 @@
     <string name="settings_theme_system">सिस्टम</string>
     <string name="settings_theme_light">लाइट</string>
     <string name="settings_theme_dark">डार्क</string>
+    <string name="settings_theme_neon">नियॉन</string>
     <string name="settings_about_privacy_policy">गोपनीयता नीति</string>
     <string name="settings_about_privacy_policy_desc">EmuCoreC गोपनीयता नीति खोलें।</string>
     <string name="shell_discord_server">Discord सर्वर</string>

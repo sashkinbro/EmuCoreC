@@ -62,6 +62,7 @@ class AppPreferences(context: Context) {
         get() = when (prefs.getInt(KEY_THEME_MODE, 0)) {
             1 -> ThemeMode.LIGHT
             2 -> ThemeMode.DARK
+            3 -> ThemeMode.NEON
             else -> ThemeMode.SYSTEM
         }
         set(value) {
@@ -72,6 +73,7 @@ class AppPreferences(context: Context) {
                         ThemeMode.SYSTEM -> 0
                         ThemeMode.LIGHT -> 1
                         ThemeMode.DARK -> 2
+                        ThemeMode.NEON -> 3
                     }
                 )
             }

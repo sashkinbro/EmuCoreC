@@ -117,6 +117,7 @@ class MainActivity : AppCompatActivity() {
             }
             ThemeMode.LIGHT -> false
             ThemeMode.DARK -> true
+            ThemeMode.NEON -> true
         }
         return if (darkTheme) 0xFF000000.toInt() else 0xFFF4F7FB.toInt()
     }

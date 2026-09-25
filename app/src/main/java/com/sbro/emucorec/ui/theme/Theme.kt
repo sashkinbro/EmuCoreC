@@ -1,14 +1,23 @@
 package com.sbro.emucorec.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import com.sbro.emucorec.data.CustomizationSettings
+import com.sbro.emucorec.ui.theme.neon.LocalNeonTheme
+import com.sbro.emucorec.ui.theme.neon.NeonColorScheme
+import com.sbro.emucorec.ui.theme.neon.NeonCrtOverlay
+import com.sbro.emucorec.ui.theme.neon.NeonShapes
+import com.sbro.emucorec.ui.theme.neon.neonMonospace
 
 private val DarkColorScheme = darkColorScheme(
     primary = AccentPrimary,
@@ -68,7 +77,7 @@ private val LightColorScheme = lightColorScheme(
 )
 
 enum class ThemeMode {
-    SYSTEM, LIGHT, DARK
+    SYSTEM, LIGHT, DARK, NEON
 }
 
 val LocalCustomizationSettings = staticCompositionLocalOf { CustomizationSettings() }
@@ -77,20 +86,41 @@ val LocalCustomizationSettings = staticCompositionLocalOf { CustomizationSetting
 fun EmuCoreCTheme(
     themeMode: ThemeMode = ThemeMode.SYSTEM,
     customization: CustomizationSettings = CustomizationSettings(),
+    enableCrtOverlay: Boolean = true,
     content: @Composable () -> Unit
 ) {
     val darkTheme = when (themeMode) {
         ThemeMode.SYSTEM -> isSystemInDarkTheme()
         ThemeMode.LIGHT -> false
         ThemeMode.DARK -> true
+        ThemeMode.NEON -> true
     }
 
-    val customizedTypography = rememberCustomizedTypography(customization)
-    CompositionLocalProvider(LocalCustomizationSettings provides customization) {
-        MaterialTheme(
-            colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme,
-            typography = customizedTypography,
-            content = content
-        )
+    val baseTypography = rememberCustomizedTypography(customization)
+    val typography = if (themeMode == ThemeMode.NEON) {
+        baseTypography.neonMonospace()
+    } else {
+        baseTypography
+    }
+    val shapes: Shapes = if (themeMode == ThemeMode.NEON) NeonShapes else MaterialTheme.shapes
+    MaterialTheme(
+        colorScheme = when (themeMode) {
+            ThemeMode.NEON -> NeonColorScheme
+            else -> if (darkTheme) DarkColorScheme else LightColorScheme
+        },
+        typography = typography,
+        shapes = shapes
+    ) {
+        CompositionLocalProvider(
+            LocalCustomizationSettings provides customization,
+            LocalNeonTheme provides (themeMode == ThemeMode.NEON)
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                content()
+                if (themeMode == ThemeMode.NEON && enableCrtOverlay) {
+                    NeonCrtOverlay()
+                }
+            }
+        }
     }
 }

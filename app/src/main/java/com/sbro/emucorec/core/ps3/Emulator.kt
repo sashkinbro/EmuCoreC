@@ -209,7 +209,7 @@ class Emulator : AppCompatActivity(), InputManager.InputDeviceListener {
         val preferences = AppPreferences(this@Emulator)
         setContent {
             val themeMode by preferences.themeModeFlow.collectAsState(initial = preferences.themeMode)
-            EmuCoreCTheme(themeMode = themeMode) {
+            EmuCoreCTheme(themeMode = themeMode, enableCrtOverlay = false) {
                 EmulationOverlayHost(activity = this@Emulator)
             }
         }

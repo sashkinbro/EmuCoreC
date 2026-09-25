@@ -517,6 +517,7 @@
     <string name="settings_theme_system">Sistem</string>
     <string name="settings_theme_light">Açık</string>
     <string name="settings_theme_dark">Koyu</string>
+    <string name="settings_theme_neon">Neon</string>
     <string name="settings_about_privacy_policy">Gizlilik Politikası</string>
     <string name="settings_about_privacy_policy_desc">EmuCoreC gizlilik politikasını açın.</string>
     <string name="shell_discord_server">Discord Sunucusu</string>

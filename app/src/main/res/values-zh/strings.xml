@@ -516,6 +516,7 @@
     <string name="settings_theme_system">系統</string>
     <string name="settings_theme_light">淺色</string>
     <string name="settings_theme_dark">深色</string>
+    <string name="settings_theme_neon">霓虹</string>
     <string name="settings_about_privacy_policy">隐私政策</string>
     <string name="settings_about_privacy_policy_desc">打开 EmuCoreC 隐私政策。</string>
     <string name="shell_discord_server">Discord 服务器</string>

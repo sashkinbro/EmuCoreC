@@ -518,6 +518,7 @@
     <string name="settings_theme_system">Sistema</string>
     <string name="settings_theme_light">Claro</string>
     <string name="settings_theme_dark">Escuro</string>
+    <string name="settings_theme_neon">Neon</string>
     <string name="settings_about_privacy_policy">Política de Privacidade</string>
     <string name="settings_about_privacy_policy_desc">Abrir a política de privacidade do EmuCoreC.</string>
     <string name="shell_discord_server">Servidor do Discord</string>

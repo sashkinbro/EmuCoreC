@@ -122,6 +122,11 @@ fun CustomizationTab(
                     label = stringResource(R.string.settings_theme_dark),
                     onClick = { preferences.themeMode = ThemeMode.DARK }
                 )
+                ThemeChip(
+                    selected = themeMode == ThemeMode.NEON,
+                    label = stringResource(R.string.settings_theme_neon),
+                    onClick = { preferences.themeMode = ThemeMode.NEON }
+                )
             }
         }
 
