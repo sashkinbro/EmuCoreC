@@ -9043,7 +9043,33 @@ spu_program spu_recompiler_base::analyse(const be_t<u32>* ls, u32 entry_point, s
 
 		bool allow_pattern = true;
 
-		if (g_cfg.core.spu_accurate_reservations)
+		// Title gate for entries admitted on evidence of benefit rather than proof of safety.
+		// The whitelist is keyed by guest-code hash, and CellSpurs is Sony's shared library, so an
+		// entry added for one game turns on for every game that links the same routine. Anything
+		// listed here is confined to the title it was measured on until it has been disassembled.
+		const auto pattern_is_title_gated = [](std::string_view h) -> std::string_view
+		{
+			if (h == "620oYSe8uQqq9eTkhWfMqoEXX0us"sv) return "BLUS30736"sv; // Soulcalibur V
+			return {};
+		};
+
+		// The whitelist runs in BOTH reservation modes.
+		//
+		// It used to sit inside `if (g_cfg.core.spu_accurate_reservations)`, which meant turning
+		// accurate reservations OFF did two entirely unrelated things: it took the non-accurate
+		// shortcuts in do_putllc, AND it skipped this filter completely -- allow_pattern is
+		// initialised true, so every pattern the analyser found was installed unchecked, including
+		// the ones this list exists to refuse.
+		//
+		// That is what "Accurate SPU Reservations = off renders nothing" has always been. The note
+		// on the Soulcalibur V entry below already says it: clearing the gate takes that title to
+		// 50 fps "but the game then renders nothing, because that also admits patterns which are
+		// genuinely unsafe". The speed and the corruption were being attributed to one switch when
+		// they come from two separate mechanisms, and only one of them was wanted.
+		//
+		// Filtering unconditionally can only make the non-accurate mode STRICTER -- it installs a
+		// subset of what it installed before, and exactly what accurate mode already installs -- so
+		// it cannot introduce a pattern that was not already trusted.
 		{
 			// The problem with PUTLLC16 optimization, that it is in theory correct at the bounds of the spu function.
 			// But if the SPU code reuses the cache line data observed, it is not truly atomic.
@@ -9067,6 +9093,26 @@ spu_program spu_recompiler_base::analyse(const be_t<u32>* ls, u32 entry_point, s
 		{
 			add_pattern(inst_attr::putllc16, pattern.put_pc - result.entry_point, value.data);
 		}
+		else
+		{
+			// Say which pattern was refused, and give its hash.
+			//
+			// The whitelist above holds exactly one entry and it is prefixed "disabled_", so with
+			// accurate reservations on -- the default here and upstream -- allow_pattern is always
+			// false and PUTLLC16 is never installed for anything. Every conditional store then
+			// takes do_putllc, which wraps its commit in vm::writer_lock: a global barrier that
+			// stamps cpu_flag::memory on every registered PPU thread and busy-spins until they all
+			// park. Measured on this title that path runs 6,489-62,768 times a frame at 81-98.4%
+			// failure.
+			//
+			// The hash is over the guest bytes of the pattern, so it identifies this loop and no
+			// other build's. Without logging it there is no way to name a pattern for the
+            // whitelist, which is presumably why the list still has one disabled placeholder in it.
+			// Warning, not notice: notice is below the shipped Android log level, so with the
+			// whitelist now running in both reservation modes there was no way to confirm from a
+			// device log that it was filtering anything at all -- the only evidence was
+			// behavioural. This line is what says the gate is live.
+			spu_log.warning("PUTLLC16 pattern refused: hash=%s put_pc=0x%05x lsa_pc=0x%05x", pattern_hash, pattern.put_pc, pattern.lsa_pc);
 
 		spu_log.success("PUTLLC16 Pattern Detected! (mem_count=%d, put_pc=0x%x, pc_rel=%d, offset=0x%x, const=%u, two_regs=%d, reg=%u, runtime=%d, 0x%x-%s, pattern-hash=%s) (putllc0=%d, putllc16+0=%d, all=%d)"
 			, pattern.mem_count, pattern.put_pc, value.type == v_relative, value.off18, value.type == v_const, value.type == v_reg2, value.reg, value.runtime16_select, entry_point, func_hash, pattern_hash, +stats.nowrite, ++stats.single, +stats.all);
