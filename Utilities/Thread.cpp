@@ -2538,6 +2538,14 @@ static struct ::sigaction s_prev_fault_action[NSIG]{};
 // True when this fault is one the emulator's own memory model is responsible for.
 static bool is_emulator_fault(void* addr)
 {
+	if (!addr || !vm::g_exec_addr)
+	{
+		// No address, or the VM is not up yet: before g_exec_addr is set the exec/seg offsets
+		// below are computed against a null base, so every address looks like an emulator fault.
+		// An ART-internal SIGSEGV early in the process would then be reported as one and abort.
+		return false;
+	}
+
 	const u64 exec64 = (reinterpret_cast<u64>(addr) - reinterpret_cast<u64>(vm::g_exec_addr)) / 2;
 	const u64 seg_off = (reinterpret_cast<u64>(addr) - reinterpret_cast<u64>(vm::g_exec_addr)) - vm::g_exec_addr_seg_offset;
 
@@ -2603,7 +2611,10 @@ static void signal_handler(int sig, siginfo_t* info, void* uct) noexcept
 #endif
 #ifdef __ANDROID__
 	// Not our fault: hand it to whoever we displaced (see install_fault_handler_first).
-	if (!is_emulator_fault(info->si_addr))
+	// Also hand it over whenever the faulting thread is not one of ours: a SIGSEGV on an ART or
+	// binder thread is ART's to handle (its JIT uses implicit null checks), and treating it as a
+	// fatal emulator fault takes the whole app down with it.
+	if (!is_emulator_fault(info->si_addr) || !thread_ctrl::get_current())
 	{
 		static thread_local bool s_forwarding = false;
 
