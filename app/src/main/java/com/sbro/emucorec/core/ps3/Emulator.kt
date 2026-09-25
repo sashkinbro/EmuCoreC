@@ -37,6 +37,7 @@ import com.sbro.emucorec.core.input.InputDeviceClassifier
 import com.sbro.emucorec.core.ps3.overlay.InputOverlay
 import com.sbro.emucorec.data.AppPreferences
 import com.sbro.emucorec.data.InstalledGameRepository
+import com.sbro.emucorec.discord.DiscordIntegration
 import com.sbro.emucorec.ui.common.ImmersiveMode
 import com.sbro.emucorec.ui.emulation.EmulationOverlayHost
 import com.sbro.emucorec.ui.theme.EmuCoreCTheme
@@ -118,6 +119,7 @@ class Emulator : AppCompatActivity(), InputManager.InputDeviceListener {
 
     override fun onResume() {
         super.onResume()
+        DiscordIntegration.setPaused(false)
         lifecyclePaused = false
         if (!menuPaused) Ps3Runtime.resume()
         refreshPhysicalGamepadState()
@@ -128,6 +130,7 @@ class Emulator : AppCompatActivity(), InputManager.InputDeviceListener {
 
     override fun onPause() {
         lifecyclePaused = true
+        DiscordIntegration.setPaused(true)
         finishPlayTimeSessionIfNeeded(accumulate = true)
         Ps3Runtime.pause()
         super.onPause()
@@ -135,6 +138,7 @@ class Emulator : AppCompatActivity(), InputManager.InputDeviceListener {
 
     override fun onDestroy() {
         finishPlayTimeSessionIfNeeded()
+        DiscordIntegration.clearGame()
         inputManager?.unregisterInputDeviceListener(this)
         inputManager = null
         inputOverlay.dispose()
@@ -418,6 +422,7 @@ class Emulator : AppCompatActivity(), InputManager.InputDeviceListener {
         playTimeSessionId = session.id
         playTimeSessionTitleId = gameId
         playTimeSessionStartedAt = session.startedAt
+        DiscordIntegration.setPlaying(title, gameId)
     }
 
     private fun finishPlayTimeSessionIfNeeded(accumulate: Boolean = false) {

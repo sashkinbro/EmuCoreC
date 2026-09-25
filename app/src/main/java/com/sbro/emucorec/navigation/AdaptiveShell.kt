@@ -63,7 +63,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
@@ -78,7 +77,7 @@ import com.sbro.emucorec.ui.theme.neon.neonShape
 import com.sbro.emucorec.ui.theme.neon.neonShapeCorners
 
 enum class PrimaryDestination {
-    Library, Setup, GameManager, Patches, PlayTime, Achievements, SaveData, Search, Settings, Profile, Feedback
+    Library, Setup, GameManager, Patches, PlayTime, Achievements, SaveData, Search, Settings, Profile, Discord, Feedback
 }
 
 private enum class MobileLeadingAction {
@@ -103,6 +102,7 @@ fun AdaptiveShell(
     onNavigateSearch: () -> Unit,
     onNavigateSettings: () -> Unit,
     onNavigateProfile: () -> Unit = {},
+    onNavigateDiscord: () -> Unit = {},
     onNavigateFeedback: () -> Unit = {},
     onBackClick: (() -> Unit)? = null,
     onLaunchSystemMenu: (() -> Unit)? = null,
@@ -124,6 +124,7 @@ fun AdaptiveShell(
             onNavigateSearch = onNavigateSearch,
             onNavigateSettings = onNavigateSettings,
             onNavigateProfile = onNavigateProfile,
+            onNavigateDiscord = onNavigateDiscord,
             onNavigateFeedback = onNavigateFeedback,
             onLaunchSystemMenu = onLaunchSystemMenu,
             onInstallContent = onInstallContent,
@@ -176,6 +177,7 @@ fun AdaptiveShell(
             onNavigateSearch = onNavigateSearch,
             onNavigateSettings = onNavigateSettings,
             onNavigateProfile = onNavigateProfile,
+            onNavigateDiscord = onNavigateDiscord,
             onNavigateFeedback = onNavigateFeedback,
             onBackClick = onBackClick,
             onLaunchSystemMenu = onLaunchSystemMenu,
@@ -202,6 +204,7 @@ private fun CompactAdaptiveShell(
     onNavigateSearch: () -> Unit,
     onNavigateSettings: () -> Unit,
     onNavigateProfile: () -> Unit,
+    onNavigateDiscord: () -> Unit,
     onNavigateFeedback: () -> Unit,
     onBackClick: (() -> Unit)?,
     onLaunchSystemMenu: (() -> Unit)?,
@@ -286,6 +289,7 @@ private fun CompactAdaptiveShell(
                     onNavigateSearch = onNavigateSearch,
                     onNavigateSettings = onNavigateSettings,
                     onNavigateProfile = onNavigateProfile,
+                    onNavigateDiscord = onNavigateDiscord,
                     onNavigateFeedback = onNavigateFeedback,
                     onLaunchSystemMenu = onLaunchSystemMenu,
                     onInstallContent = onInstallContent,
@@ -320,6 +324,7 @@ private fun SideNavigation(
     onNavigateSearch: () -> Unit,
     onNavigateSettings: () -> Unit,
     onNavigateProfile: () -> Unit,
+    onNavigateDiscord: () -> Unit,
     onNavigateFeedback: () -> Unit,
     onLaunchSystemMenu: (() -> Unit)?,
     onInstallContent: (() -> Unit)?,
@@ -330,7 +335,6 @@ private fun SideNavigation(
     onCloseDrawer: () -> Unit
 ) {
     val context = LocalContext.current
-    val uriHandler = LocalUriHandler.current
     val drawerInset = when (drawerVisualStyle) {
         DrawerVisualStyle.COMPACT -> 12.dp
         DrawerVisualStyle.CONSOLE -> 22.dp
@@ -383,13 +387,13 @@ private fun SideNavigation(
         onCloseDrawer()
         onNavigateProfile()
     }
+    val navigateDiscord = rememberDebouncedClick {
+        onCloseDrawer()
+        onNavigateDiscord()
+    }
     val navigateFeedback = rememberDebouncedClick {
         onCloseDrawer()
         onNavigateFeedback()
-    }
-    val openDiscord = rememberDebouncedClick {
-        onCloseDrawer()
-        runCatching { uriHandler.openUri(DISCORD_INVITE_URL) }
     }
     val launchSystemMenu = onLaunchSystemMenu?.let {
         rememberDebouncedClick {
@@ -570,15 +574,16 @@ private fun SideNavigation(
                 onClick = navigateProfile
             )
             ShellItem(
+                icon = Icons.Rounded.Forum,
+                label = stringResource(R.string.discord_title),
+                selected = selected == PrimaryDestination.Discord,
+                onClick = navigateDiscord
+            )
+            ShellItem(
                 icon = Icons.Rounded.Feedback,
                 label = stringResource(R.string.feedback_title),
                 selected = selected == PrimaryDestination.Feedback,
                 onClick = navigateFeedback
-            )
-            ShellAction(
-                icon = Icons.Rounded.Forum,
-                label = stringResource(R.string.shell_discord_server),
-                onClick = openDiscord
             )
         }
     }
@@ -607,8 +612,6 @@ private fun SideNavigation(
         }
     }
 }
-
-private const val DISCORD_INVITE_URL = "https://discord.gg/c5EBeNRpz2"
 
 @Composable
 private fun ShellAction(

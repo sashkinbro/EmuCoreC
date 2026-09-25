@@ -23,7 +23,6 @@ import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FolderOpen
-import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Link
@@ -85,7 +84,6 @@ private val SettingsSectionRowPadding = ScreenHorizontalPadding
 private val SettingsCardInnerPadding = 14.dp
 private const val EmuCoreRepositoryUrl = "https://github.com/sashkinbro/EmuCoreC"
 private const val EmuCoreWebsiteUrl = "https://emucorec.web.app"
-private const val EmuCoreDiscordUrl = "https://discord.gg/c5EBeNRpz2"
 private const val EmuCoreSupportUrl = "https://www.patreon.com/c/emucore/membership"
 private const val SashkinAppsPlayStoreUrl = "https://play.google.com/store/apps/dev?id=7136622298887775989"
 private const val RPCS3RepositoryUrl = "https://github.com/RPCS3/rpcs3"
@@ -984,12 +982,6 @@ private fun AboutTab() {
                 title = stringResource(R.string.settings_about_repository),
                 subtitle = stringResource(R.string.settings_about_repository_desc),
                 onClick = { uriHandler.openUri(EmuCoreRepositoryUrl) }
-            )
-            LinkItem(
-                icon = Icons.Rounded.Groups,
-                title = stringResource(R.string.settings_about_discord),
-                subtitle = stringResource(R.string.settings_about_discord_desc),
-                onClick = { uriHandler.openUri(EmuCoreDiscordUrl) }
             )
             LinkItem(
                 icon = Icons.Rounded.Favorite,

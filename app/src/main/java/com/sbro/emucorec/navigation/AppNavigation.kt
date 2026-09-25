@@ -60,6 +60,7 @@ import com.sbro.emucorec.ui.settings.SettingsTab
 import com.sbro.emucorec.ui.settings.SettingsViewModel
 import com.sbro.emucorec.ui.settings.TouchControlsEditorScreen
 import com.sbro.emucorec.ui.settings.settingsTabFromRoute
+import com.sbro.emucorec.ui.discord.DiscordScreen
 import com.sbro.emucorec.ui.setup.InstallGameChoiceDialog
 import com.sbro.emucorec.ui.setup.SetupInstallDialog
 import com.sbro.emucorec.ui.setup.SetupInstallViewModel
@@ -81,6 +82,7 @@ private const val ROUTE_SAVE_MANAGER = "save-manager"
 private const val ROUTE_SAVE_MANAGER_WITH_TITLE = "save-manager/{titleId}"
 private const val ROUTE_SETTINGS = "settings"
 private const val ROUTE_PROFILE = "profile"
+private const val ROUTE_DISCORD = "discord"
 private const val ROUTE_FEEDBACK = "feedback"
 private const val ROUTE_SETTINGS_WITH_TAB = "settings/{tab}"
 private const val ROUTE_APP_LANGUAGE = "app-language"
@@ -204,6 +206,9 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
     val navigateProfile = {
         navController.navigate(ROUTE_PROFILE) { launchSingleTop = true }
     }
+    val navigateDiscord = {
+        navController.navigate(ROUTE_DISCORD) { launchSingleTop = true }
+    }
     val navigateFeedback = {
         navController.navigate(ROUTE_FEEDBACK) { launchSingleTop = true }
     }
@@ -269,6 +274,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                         navController.navigate(settingsRoute()) { launchSingleTop = true }
                     },
                     onNavigateProfile = navigateProfile,
+                    onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
                     onBackClick = navigateHome,
                     onLaunchSystemMenu = launchSystemMenu,
@@ -305,6 +311,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                         navController.navigate(settingsRoute()) { launchSingleTop = true }
                     },
                     onNavigateProfile = navigateProfile,
+                    onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
                     onLaunchSystemMenu = launchSystemMenu,
                     onInstallContent = openInstallChoiceDialog
@@ -354,6 +361,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                         navController.navigate(settingsRoute()) { launchSingleTop = true }
                     },
                     onNavigateProfile = navigateProfile,
+                    onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
                     onBackClick = navigateHome,
                     onLaunchSystemMenu = launchSystemMenu,
@@ -392,6 +400,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     },
                     onNavigateSettings = { },
                     onNavigateProfile = navigateProfile,
+                    onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
                     onBackClick = navigateHome,
                     onLaunchSystemMenu = launchSystemMenu,
@@ -440,6 +449,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     },
                     onNavigateSettings = { },
                     onNavigateProfile = navigateProfile,
+                    onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
                     onBackClick = navigateHome,
                     onLaunchSystemMenu = launchSystemMenu,
@@ -518,6 +528,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                         navController.navigate(settingsRoute()) { launchSingleTop = true }
                     },
                     onNavigateProfile = navigateProfile,
+                    onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
                     onBackClick = navigateHome,
                     onLaunchSystemMenu = launchSystemMenu,
@@ -564,6 +575,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                         navController.navigate(settingsRoute()) { launchSingleTop = true }
                     },
                     onNavigateProfile = navigateProfile,
+                    onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
                     onBackClick = navigateHome,
                     onLaunchSystemMenu = launchSystemMenu,
@@ -604,6 +616,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                         navController.navigate(settingsRoute()) { launchSingleTop = true }
                     },
                     onNavigateProfile = navigateProfile,
+                    onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
                     onBackClick = navigateHome,
                     onLaunchSystemMenu = launchSystemMenu,
@@ -658,6 +671,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                         navController.navigate(settingsRoute()) { launchSingleTop = true }
                     },
                     onNavigateProfile = { },
+                    onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
                     onBackClick = navigateHome,
                     onLaunchSystemMenu = launchSystemMenu,
@@ -668,6 +682,38 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                         onMenuClick = openDrawer,
                         onGameClick = { igdbId -> navController.navigate("$ROUTE_CATALOG_DETAIL_PREFIX/$igdbId") }
                     )
+                }
+            }
+            composable(ROUTE_DISCORD) {
+                AdaptiveShell(
+                    selected = PrimaryDestination.Discord,
+                    onNavigateSetup = {
+                        navController.navigate(ROUTE_SETUP) { launchSingleTop = true }
+                    },
+                    onNavigateLibrary = {
+                        navController.navigate(ROUTE_LIBRARY) { launchSingleTop = true }
+                    },
+                    onNavigateGameManager = { navigateGameManager(null) },
+                    onNavigatePatches = { navigatePatches(null) },
+                    onNavigatePlayTime = { navigatePlayTime(null) },
+                    onNavigateAchievements = navigateAchievementsRoot,
+                    onNavigateSaveData = {
+                        navController.navigate(saveManagerRoute()) { launchSingleTop = true }
+                    },
+                    onNavigateSearch = {
+                        navController.navigate(ROUTE_CATALOG) { launchSingleTop = true }
+                    },
+                    onNavigateSettings = {
+                        navController.navigate(settingsRoute()) { launchSingleTop = true }
+                    },
+                    onNavigateProfile = navigateProfile,
+                    onNavigateDiscord = { },
+                    onNavigateFeedback = navigateFeedback,
+                    onBackClick = { navController.popBackStack() },
+                    onLaunchSystemMenu = null,
+                    onInstallContent = null
+                ) {
+                    DiscordScreen(onBackClick = { navController.popBackStack() })
                 }
             }
             composable(ROUTE_FEEDBACK) {
@@ -693,6 +739,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                         navController.navigate(settingsRoute()) { launchSingleTop = true }
                     },
                     onNavigateProfile = navigateProfile,
+                    onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = {},
                     onBackClick = { navController.popBackStack() },
                     onLaunchSystemMenu = launchSystemMenu,
@@ -730,6 +777,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                         navController.navigate(settingsRoute()) { launchSingleTop = true }
                     },
                     onNavigateProfile = navigateProfile,
+                    onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
                     onBackClick = navigateHome,
                     onLaunchSystemMenu = launchSystemMenu,
@@ -795,6 +843,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                         navController.navigate(settingsRoute()) { launchSingleTop = true }
                     },
                     onNavigateProfile = navigateProfile,
+                    onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
                     onBackClick = navigateHome,
                     onLaunchSystemMenu = launchSystemMenu,

@@ -40,6 +40,34 @@ val cmakeExe  = if (org.gradle.internal.os.OperatingSystem.current().isWindows)
 val ninjaExe  = if (org.gradle.internal.os.OperatingSystem.current().isWindows)
                     "$cmakeDir/ninja.exe" else "$cmakeDir/ninja"
 
+val localBuildProperties = Properties().apply {
+    rootProject.layout.projectDirectory.file("local.properties").asFile
+        .takeIf(File::exists)
+        ?.inputStream()
+        ?.use(::load)
+}
+
+fun buildConfigString(value: String): String = "\"" + value
+    .replace("\\", "\\\\")
+    .replace("\"", "\\\"") + "\""
+
+val feedbackEndpoint = localBuildProperties.getProperty("emucorec.feedback.endpoint")
+    ?: ""
+val feedbackApiKey = localBuildProperties.getProperty("emucorec.feedback.apiKey")
+    ?: ""
+
+// Discord Social SDK is an optional local build input used by the isolated
+// :discord helper process. Point emucorec.discord.sdkDir at the extracted SDK
+// to enable Rich Presence; everything degrades to "SDK unavailable" without it.
+val discordApplicationId = "1536775623287115786"
+val discordSdkDirectory = localBuildProperties.getProperty("emucorec.discord.sdkDir")
+    ?.let(::File)
+    ?.takeIf { sdkDir ->
+        sdkDir.resolve("include/discordpp.h").isFile &&
+            sdkDir.resolve("arm64-v8a/libdiscord_partner_sdk.so").isFile &&
+            sdkDir.resolve("discord_partner_sdk.aar").isFile
+    }
+
 // The RPCS3 root CMake project (this repo is a fork of RPCS3/rpcs3; the
 // android/ subdirectory is added behind if(ANDROID)).
 val rpcs3Root  = rootProject.layout.projectDirectory.asFile.absolutePath
@@ -91,7 +119,7 @@ val configureEmuCorecCore by tasks.registering(Exec::class) {
     // environment does not survive into cmake's nested FetchContent processes,
     // where `git submodule update` needs the Git for Windows bin dirs.
     workingDir = buildDir2
-    commandLine(
+    val configureArgs = mutableListOf(
         "cmd", "/c",
         "$rpcs3Root/android/configure-core.cmd",
         cmakeExe,
@@ -99,6 +127,8 @@ val configureEmuCorecCore by tasks.registering(Exec::class) {
         ndkDir,
         buildDir2.absolutePath
     )
+    discordSdkDirectory?.let { configureArgs += "-DDISCORD_SDK_DIR=${it.invariantSeparatorsPath}" }
+    commandLine(configureArgs)
 }
 
 val buildEmuCorecCore by tasks.registering(Exec::class) {
@@ -110,7 +140,9 @@ val buildEmuCorecCore by tasks.registering(Exec::class) {
     environment("PATH", "$mingwBin;${System.getenv("PATH")}")
 
     workingDir = buildDir2
-    commandLine(ninjaExe, "-C", buildDir2.absolutePath, "emucorec-core")
+    val ninjaTargets = mutableListOf("-C", buildDir2.absolutePath, "emucorec-core")
+    if (discordSdkDirectory != null) ninjaTargets += "emucorec_discord"
+    commandLine(ninjaExe, *ninjaTargets.toTypedArray())
 
     doLast {
         val builtSo = File(buildDir2, "android/libemucorec-core.so")
@@ -133,24 +165,13 @@ val buildEmuCorecCore by tasks.registering(Exec::class) {
         stripped.copyTo(File(jniLibsDir, "libemucorec-core.so"), overwrite = true)
         stripped.delete()
         println("Successfully built and copied libemucorec-core.so to jniLibs/arm64-v8a")
+        val builtDiscordSo = File(buildDir2, "android/libemucorec_discord.so")
+        if (builtDiscordSo.exists()) {
+            builtDiscordSo.copyTo(File(jniLibsDir, "libemucorec_discord.so"), overwrite = true)
+            println("Copied libemucorec_discord.so to jniLibs/arm64-v8a")
+        }
     }
 }
-
-val localBuildProperties = Properties().apply {
-    rootProject.layout.projectDirectory.file("local.properties").asFile
-        .takeIf(File::exists)
-        ?.inputStream()
-        ?.use(::load)
-}
-
-fun buildConfigString(value: String): String = "\"" + value
-    .replace("\\", "\\\\")
-    .replace("\"", "\\\"") + "\""
-
-val feedbackEndpoint = localBuildProperties.getProperty("emucorec.feedback.endpoint")
-    ?: ""
-val feedbackApiKey = localBuildProperties.getProperty("emucorec.feedback.apiKey")
-    ?: ""
 
 android {
     namespace = "com.sbro.emucorec"
@@ -168,6 +189,9 @@ android {
 
         buildConfigField("String", "FEEDBACK_ENDPOINT", buildConfigString(feedbackEndpoint))
         buildConfigField("String", "FEEDBACK_API_KEY", buildConfigString(feedbackApiKey))
+        buildConfigField("long", "DISCORD_APPLICATION_ID", "${discordApplicationId}L")
+        buildConfigField("boolean", "DISCORD_SDK_AVAILABLE", (discordSdkDirectory != null).toString())
+        manifestPlaceholders["discordSdkAvailable"] = (discordSdkDirectory != null).toString()
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -217,6 +241,7 @@ android {
             // so package the upstream Icons directory for first-run extraction.
             assets.setSrcDirs(listOf("src/main/assets", "../bin"))
             jniLibs.setSrcDirs(listOf("src/main/jniLibs"))
+            discordSdkDirectory?.let(jniLibs::srcDir)
         }
     }
 
@@ -230,6 +255,7 @@ android {
     packaging {
         jniLibs {
             useLegacyPackaging = true
+            pickFirsts += "**/libdiscord_partner_sdk.so"
         }
     }
 
@@ -266,6 +292,9 @@ dependencies {
     implementation(libs.google.play.review.ktx)
     implementation(libs.zip4j)
     implementation(libs.junrar)
+    discordSdkDirectory?.let { sdkDir ->
+        implementation(files(sdkDir.resolve("discord_partner_sdk.aar")))
+    }
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
