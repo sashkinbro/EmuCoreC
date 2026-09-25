@@ -121,6 +121,8 @@ namespace rsx
 {
 	std::function<bool(u32 addr, bool is_writing)> g_access_violation_handler;
 
+	atomic_t<bool> g_gpu_device_lost = false;
+
 	// TODO: Proper context manager
 	static rsx::context s_ctx{ .rsxthr = nullptr, .register_state = &method_registers };
 
@@ -1305,9 +1307,35 @@ namespace rsx
 		}
 	}
 
+	void request_device_lost_shutdown(const char* reason)
+	{
+		if (g_gpu_device_lost.exchange(true))
+		{
+			// Already latched; every later call sees the dead device and only the first matters.
+			return;
+		}
+
+		rsx_log.fatal("GPU device lost (%s). Stopping.", reason);
+
+		// Stop cleanly: no savestate (the guest threads are already tearing down, so every SPU
+		// would refuse it) and no automatic restart (a device that faults repeatedly turns that
+		// into a loop the user cannot escape). The app stays up and the reason remains visible.
+		//
+		// Queued instead of called inline: this runs on the RSX thread and the shutdown joins it.
+		// The caller must return to the RSX loop so on_task() returns normally and cpu_task()
+		// reaches on_exit(), which clears the violation handler, finishes the vblank thread and
+		// sets cpu_flag::exit.
+		Emu.CallFromMainThread([]()
+		{
+			Emu.GracefulShutdown(false, true, false);
+		});
+	}
+
 	void thread::on_exit()
 	{
-		if (zcull_ctrl)
+		// Not on a lost device: sync() waits on occlusion query results a dead GPU can never
+		// produce, and it is the first statement here, which would defeat the clean shutdown.
+		if (zcull_ctrl && !g_gpu_device_lost)
 		{
 			zcull_ctrl->sync(this);
 		}

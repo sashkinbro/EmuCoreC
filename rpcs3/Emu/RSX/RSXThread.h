@@ -42,6 +42,12 @@ namespace rsx
 
 	struct context;
 
+	// Latched when the GPU device is lost, so every wait that can hang on a dead device sees it.
+	extern atomic_t<bool> g_gpu_device_lost;
+
+	// Stop the emulator cleanly after a GPU device loss. Safe to call repeatedly.
+	void request_device_lost_shutdown(const char* reason);
+
 	namespace overlays
 	{
 		class display_manager;

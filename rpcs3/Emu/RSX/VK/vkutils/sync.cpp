@@ -12,6 +12,8 @@
 #include "util/asm.hpp"
 #include "util/logs.hpp"
 
+namespace rsx { void request_device_lost_shutdown(const char* reason); }
+
 namespace vk
 {
 	namespace globals
@@ -599,6 +601,14 @@ namespace vk
 					utils::pause();
 					continue;
 				default:
+					if (status == VK_ERROR_DEVICE_LOST)
+					{
+						// A dead device never signals this fence; latch the loss and stop cleanly
+						// instead of waiting out the driver timeout.
+						rsx::request_device_lost_shutdown("waiting on a fence");
+						return status;
+					}
+
 					die_with_error(status);
 					return status;
 				}
@@ -630,6 +640,12 @@ namespace vk
 			case VK_EVENT_RESET:
 				break;
 			default:
+				if (status == VK_ERROR_DEVICE_LOST)
+				{
+					rsx::request_device_lost_shutdown("waiting on an event");
+					return status;
+				}
+
 				die_with_error(status);
 				return status;
 			}

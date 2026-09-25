@@ -45,6 +45,14 @@ namespace vk
 			return query.ready;
 		}
 		default:
+			if (error == VK_ERROR_DEVICE_LOST)
+			{
+				// A dead device will never report this occlusion query; latch the loss and let
+				// the emulator stop cleanly rather than wait on the driver timeout.
+				rsx::request_device_lost_shutdown("polling an occlusion query");
+				return false;
+			}
+
 			die_with_error(error);
 			return false;
 		}

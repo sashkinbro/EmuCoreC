@@ -167,6 +167,11 @@ void VKGSRender::present(vk::frame_context_t *ctx)
 		case VK_ERROR_OUT_OF_DATE_KHR:
 			swapchain_unavailable = true;
 			break;
+		case VK_ERROR_DEVICE_LOST:
+			// Terminal: a new swapchain cannot fix a lost device. Latch the loss and stop
+			// cleanly; dying here would skip thread teardown and leave the app frozen.
+			rsx::request_device_lost_shutdown("presenting a frame");
+			break;
 		default:
 			// Other errors not part of rpcs3. This can be caused by 3rd party injectors with bad code, of which we have no control over.
 			// Let the application attempt to recover instead of crashing outright.
@@ -629,6 +634,12 @@ void VKGSRender::flip(const rsx::display_flip_info_t& info)
 			ensure(m_current_frame, "Could not reinitialize swapchain after VK_ERROR_OUT_OF_DATE_KHR signal!");
 			continue;
 		default:
+			if (status == VK_ERROR_DEVICE_LOST)
+			{
+				rsx::request_device_lost_shutdown("acquiring a swapchain image");
+				return;
+			}
+
 			vk::die_with_error(status);
 		}
 
