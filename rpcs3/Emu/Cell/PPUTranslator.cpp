@@ -280,7 +280,7 @@ Function* PPUTranslator::Translate(const ppu_function& info)
 		// Process the instructions
 		for (m_addr = block.first - base; m_addr < block.first + block.second - base; m_addr += 4)
 		{
-			if (m_ir->GetInsertBlock()->getTerminator())
+			if (llvm_has_terminator(m_ir->GetInsertBlock()))
 			{
 				break;
 			}
@@ -313,7 +313,7 @@ Function* PPUTranslator::Translate(const ppu_function& info)
 		}
 
 		// Finalize current block if necessary (create branch to the next address)
-		if (!m_ir->GetInsertBlock()->getTerminator())
+		if (!llvm_has_terminator(m_ir->GetInsertBlock()))
 		{
 			FlushRegisters();
 			CallFunction(m_addr);

@@ -24,10 +24,6 @@ typedef BOOL (WINAPI* PFNWGLSWAPINTERVALEXTPROC) (int interval);
 #elif defined(__ANDROID__)
 // GLES declarations are included above. Android has no desktop GL/gl.h.
 
-#elif defined(__APPLE__)
-#include <OpenGL/gl.h>
-#include <OpenGL/glu.h>
-
 #else
 #include <GL/gl.h>
 #ifdef HAVE_X11

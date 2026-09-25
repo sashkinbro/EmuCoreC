@@ -60,6 +60,7 @@
 #include "util/tsc.hpp"
 #include "util/sysinfo.hpp"
 #include "util/init_mutex.hpp"
+#include "util/cctype.hpp"
 
 #if defined(ARCH_X64)
 #ifdef _MSC_VER
@@ -1380,7 +1381,7 @@ std::string lv2_obj::name64(u64 name_u64)
 	// NTS string, ignore invalid/newline characters
 	// Example: "lv2\n\0tx" will be printed as "lv2"
 	std::string str{ptr, std::find(ptr, ptr + 7, '\0')};
-	str.erase(std::remove_if(str.begin(), str.end(), [](uchar c){ return !std::isprint(c); }), str.end());
+	str.erase(std::remove_if(str.begin(), str.end(), [](uchar c){ return !utils::isprint(c); }), str.end());
 
 	return str;
 }
@@ -1870,7 +1871,11 @@ bool lv2_obj::awake_unlocked(cpu_thread* cpu, s32 prio)
 			{
 				if (!current_ppu->state.test_and_set(cpu_flag::yield) || current_ppu->hw_sleep_time != 0)
 				{
-					current_ppu->hw_sleep_time += (is_create_thread ? 51 : 35);
+#ifdef _WIN32
+					current_ppu->hw_sleep_time += (is_create_thread ? 600 : 200);
+#else
+					current_ppu->hw_sleep_time += 100;
+#endif
 				}
 				else
 				{

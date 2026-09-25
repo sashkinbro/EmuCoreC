@@ -379,7 +379,11 @@ namespace vk
 
 			if (gpu_name.find("Adreno") != umax)
 			{
-				return driver_vendor::ADRENO;
+#if defined(_WIN32) || defined(ANDROID)
+				return driver_vendor::QUALCOMM;
+#else
+				return driver_vendor::TURNIP;
+#endif
 			}
 
 			if (gpu_name.find("PowerVR") != umax || gpu_name.find("Imagination") != umax)
@@ -424,7 +428,7 @@ namespace vk
 			case VK_DRIVER_ID_ARM_PROPRIETARY:
 				return driver_vendor::ARM_MALI;
 			case VK_DRIVER_ID_QUALCOMM_PROPRIETARY:
-				return driver_vendor::ADRENO;
+				return driver_vendor::QUALCOMM;
 			case VK_DRIVER_ID_MESA_TURNIP:
 				return driver_vendor::TURNIP;
 			case VK_DRIVER_ID_IMAGINATION_PROPRIETARY:
@@ -1184,6 +1188,11 @@ namespace vk
 	{
 		// Rebalance device local memory types
 		memory_map.device_local.rebalance();
+	}
+
+	bool render_device::get_debug_utils_support() const
+	{
+		return g_cfg.video.renderdoc_compatiblity && pgpu->optional_features_support.debug_utils;
 	}
 
 	void render_device::dump_debug_info(
