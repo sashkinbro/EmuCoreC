@@ -1871,4 +1871,9 @@ Ce paramètre n\'est appliqué que lorsque SPU Decoder est défini sur Dynamic o
     <string name="profile_unblock_player">Débloquer</string>
     <string name="save">Enregistrer</string>
     <string name="settings_ra_points_label">Points</string>
+    <string name="core_update_reset_title">Nouveau cœur d’émulateur</string>
+    <string name="core_update_reset_body">Cette mise à jour contient des modifications du cœur de l’émulateur. Réinitialisez le cache et la configuration pour éviter tout dysfonctionnement.</string>
+    <string name="core_update_reset_kept">Le BIOS, les dossiers de jeux, les contrôles, les sauvegardes, les cartes mémoire et les jaquettes sont conservés.</string>
+    <string name="core_update_reset_action">Réinitialiser les paramètres de l’émulateur</string>
+    <string name="core_update_reset_keep">Conserver les paramètres</string>
 </resources>
