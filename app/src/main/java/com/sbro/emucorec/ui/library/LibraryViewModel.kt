@@ -132,6 +132,13 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch(Dispatchers.IO) {
             CoreMaintenanceRepository(context).resetGeneratedCoreState()
             AppPreferences(context).lastCoreBinaryFingerprint = resolveCoreFingerprint(context)
+            withContext(Dispatchers.Main) {
+                android.widget.Toast.makeText(
+                    context,
+                    R.string.core_update_reset_done,
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            }
         }
     }
 

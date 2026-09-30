@@ -720,16 +720,23 @@ fun LibraryScreen(
                 }
             },
             confirmButton = {
-                Button(
-                    shape = neonButtonShape(),
-                    onClick = viewModel::resetGeneratedCoreState
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(stringResource(R.string.core_update_reset_action))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = viewModel::dismissCoreResetPrompt) {
-                    Text(stringResource(R.string.core_update_reset_keep))
+                    Button(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = neonButtonShape(),
+                        onClick = viewModel::resetGeneratedCoreState
+                    ) {
+                        Text(stringResource(R.string.core_update_reset_action))
+                    }
+                    TextButton(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = viewModel::dismissCoreResetPrompt
+                    ) {
+                        Text(stringResource(R.string.core_update_reset_keep))
+                    }
                 }
             }
         )

@@ -1865,9 +1865,10 @@ Over-Under 更接近原生立体声输出，但不太受支持。</string>
     <string name="profile_unblock_player">Unblock</string>
     <string name="save">保存</string>
     <string name="settings_ra_points_label">點數</string>
-    <string name="core_update_reset_title">新模拟器核心</string>
+    <string name="core_update_reset_title">核心更新</string>
     <string name="core_update_reset_body">本次更新包含模拟器核心的更改。建议重置模拟器缓存和配置，以避免出现问题。</string>
     <string name="core_update_reset_kept">BIOS、游戏文件夹、控制设置、存档、记忆卡和封面都会保留。</string>
-    <string name="core_update_reset_action">重置模拟器设置</string>
+    <string name="core_update_reset_action">重置设置</string>
     <string name="core_update_reset_keep">保留当前设置</string>
+    <string name="core_update_reset_done">设置已重置</string>
 </resources>
