@@ -12,6 +12,12 @@ project(rpcs3 LANGUAGES C CXX)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+if(ANDROID)
+    # Google Play requires 16 KiB page size support: keep every ELF load segment aligned
+    # even when a toolchain default changes.
+    add_link_options("-Wl,-z,max-page-size=16384" "-Wl,-z,common-page-size=16384")
+endif()
+
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 13)
         message(FATAL_ERROR "RPCS3 requires at least gcc-13.")
