@@ -704,6 +704,36 @@ fun LibraryScreen(
             }
         )
     }
+
+    if (uiState.showCoreResetDialog) {
+        AlertDialog(
+            onDismissRequest = viewModel::dismissCoreResetPrompt,
+            title = { Text(stringResource(R.string.core_update_reset_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(stringResource(R.string.core_update_reset_body))
+                    Text(
+                        text = stringResource(R.string.core_update_reset_kept),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    shape = neonButtonShape(),
+                    onClick = viewModel::resetGeneratedCoreState
+                ) {
+                    Text(stringResource(R.string.core_update_reset_action))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissCoreResetPrompt) {
+                    Text(stringResource(R.string.core_update_reset_keep))
+                }
+            }
+        )
+    }
 }
 
 @Composable

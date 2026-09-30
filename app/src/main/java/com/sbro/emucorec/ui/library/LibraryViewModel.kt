@@ -6,7 +6,12 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.sbro.emucorec.R
+import com.sbro.emucorec.core.CoreBinaryFingerprint
+import com.sbro.emucorec.core.CoreMaintenanceRepository
+import com.sbro.emucorec.core.CoreUpdateResetAction
 import com.sbro.emucorec.core.InstallStateBus
+import com.sbro.emucorec.core.decideCoreUpdateResetAction
+import com.sbro.emucorec.data.AppPreferences
 import com.sbro.emucorec.data.InstalledGameRepository
 import com.sbro.emucorec.data.InstalledPs3Game
 import kotlinx.coroutines.Dispatchers
@@ -20,19 +25,43 @@ data class LibraryUiState(
     val items: List<InstalledPs3Game> = emptyList(),
     val query: String = "",
     val isLoading: Boolean = true,
-    val hasLoadedOnce: Boolean = false
+    val hasLoadedOnce: Boolean = false,
+    val showCoreResetDialog: Boolean = false
 )
 
 class LibraryViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = InstalledGameRepository()
     private var allItems: List<InstalledPs3Game> = emptyList()
+    private var pendingCoreFingerprint: String? = null
 
     private val _uiState = MutableStateFlow(LibraryUiState())
     val uiState: StateFlow<LibraryUiState> = _uiState.asStateFlow()
 
     init {
         refresh()
+        viewModelScope.launch {
+            val context = getApplication<Application>()
+            val currentFingerprint = withContext(Dispatchers.IO) {
+                CoreBinaryFingerprint.current(context)
+            }
+            pendingCoreFingerprint = currentFingerprint
+            val preferences = AppPreferences(context)
+            val hadExistingInstall = preferences.onboardingCompleted
+            when (
+                decideCoreUpdateResetAction(
+                    preferences.lastCoreBinaryFingerprint,
+                    currentFingerprint,
+                    hadExistingInstall
+                )
+            ) {
+                CoreUpdateResetAction.STORE_SILENTLY ->
+                    preferences.lastCoreBinaryFingerprint = currentFingerprint
+                CoreUpdateResetAction.PROMPT ->
+                    _uiState.value = _uiState.value.copy(showCoreResetDialog = true)
+                CoreUpdateResetAction.NONE -> Unit
+            }
+        }
         viewModelScope.launch {
             InstallStateBus.events.collect {
                 // Skip the replayed event that arrives right after creation:
@@ -95,6 +124,28 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             }
         }
     }
+
+    fun resetGeneratedCoreState() {
+        if (!_uiState.value.showCoreResetDialog) return
+        _uiState.value = _uiState.value.copy(showCoreResetDialog = false)
+        val context = getApplication<Application>()
+        viewModelScope.launch(Dispatchers.IO) {
+            CoreMaintenanceRepository(context).resetGeneratedCoreState()
+            AppPreferences(context).lastCoreBinaryFingerprint = resolveCoreFingerprint(context)
+        }
+    }
+
+    fun dismissCoreResetPrompt() {
+        if (!_uiState.value.showCoreResetDialog) return
+        _uiState.value = _uiState.value.copy(showCoreResetDialog = false)
+        val context = getApplication<Application>()
+        viewModelScope.launch(Dispatchers.IO) {
+            AppPreferences(context).lastCoreBinaryFingerprint = resolveCoreFingerprint(context)
+        }
+    }
+
+    private suspend fun resolveCoreFingerprint(context: Application): String? =
+        pendingCoreFingerprint ?: CoreBinaryFingerprint.current(context)
 
     fun updateQuery(query: String) {
         _uiState.value = _uiState.value.copy(query = query)

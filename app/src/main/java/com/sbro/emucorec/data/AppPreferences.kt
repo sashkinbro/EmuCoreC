@@ -58,6 +58,10 @@ class AppPreferences(context: Context) {
         get() = prefs.getBoolean(KEY_ONBOARDING_COMPLETED, false)
         set(value) = prefs.edit { putBoolean(KEY_ONBOARDING_COMPLETED, value) }
 
+    var lastCoreBinaryFingerprint: String?
+        get() = prefs.getString(KEY_LAST_CORE_BINARY_FINGERPRINT, null)
+        set(value) = prefs.edit { putString(KEY_LAST_CORE_BINARY_FINGERPRINT, value) }
+
     var themeMode: ThemeMode
         get() = when (prefs.getInt(KEY_THEME_MODE, 0)) {
             1 -> ThemeMode.LIGHT
@@ -196,6 +200,7 @@ class AppPreferences(context: Context) {
         private const val KEY_PS3_STORAGE_ROOT_PATH = "ps3_storage_root_path"
         private const val KEY_GAME_DIRECTORIES = "game_directories"
         private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
+        private const val KEY_LAST_CORE_BINARY_FINGERPRINT = "last_core_binary_fingerprint"
         private const val KEY_THEME_MODE = "theme_mode"
         private const val KEY_APP_LANGUAGE = "app_language"
         private const val KEY_SKIPPED_UPDATE_TAG = "skipped_update_tag"
