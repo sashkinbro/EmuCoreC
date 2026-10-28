@@ -718,17 +718,13 @@ error_code sys_net_bnet_getsockopt(ppu_thread& ppu, s32 s, s32 level, s32 optnam
 
 	const auto sock = idm::check<lv2_socket>(s, [&, notify = lv2_obj::notify_all_t()](lv2_socket& sock) -> s32
 		{
-			if (len < sizeof(s32))
-			{
-				return -SYS_NET_EINVAL;
-			}
-
 			const auto& [res, out_val, out_len] = sock.getsockopt(level, optname, *optlen);
 
 			if (res == CELL_OK)
 			{
-				std::memcpy(optval.get_ptr(), out_val.ch, out_len);
-				*optlen = out_len;
+				const u32 len_copied = std::min(out_len, len);
+				std::memcpy(optval.get_ptr(), out_val.ch, len_copied);
+				*optlen = len_copied;
 			}
 
 			return res;

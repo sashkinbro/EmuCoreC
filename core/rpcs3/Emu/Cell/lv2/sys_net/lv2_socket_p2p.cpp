@@ -9,22 +9,31 @@ LOG_CHANNEL(sys_net);
 lv2_socket_p2p::lv2_socket_p2p(lv2_socket_family family, lv2_socket_type type, lv2_ip_protocol protocol)
 	: lv2_socket(family, type, protocol)
 {
-	sockopt_cache cache_type;
-	cache_type.data._int = SYS_NET_SOCK_DGRAM_P2P;
-	cache_type.len = 4;
+	initialize_socket_options(type);
+}
 
-	sockopts[(static_cast<u64>(SYS_NET_SOL_SOCKET) << 32ull) | SYS_NET_SO_TYPE] = cache_type;
+void lv2_socket_p2p::initialize_socket_options(lv2_socket_type type)
+{
+	so_type = type;
+	so_rcvbuf = type == SYS_NET_SOCK_DGRAM_P2P ? 124800 : 65535;
 }
 
 lv2_socket_p2p::lv2_socket_p2p(utils::serial& ar, lv2_socket_type type)
 	: lv2_socket(stx::make_exact(ar), type)
 {
+	initialize_socket_options(type);
 	ar(port, vport, bound_addr);
 
 	auto data_dequeue = ar.pop<std::deque<std::pair<sys_net_sockaddr_in_p2p, std::vector<u8>>>>();
 
 	for (; !data_dequeue.empty(); data_dequeue.pop_front())
 	{
+		const usz packet_cost = get_packet_cost(data_dequeue.front().second.size());
+		if (data_size >= MAX_RCVBUF_SIZE || packet_cost > MAX_RCVBUF_SIZE - data_size)
+		{
+			continue;
+		}
+		data_size += packet_cost;
 		data.push(std::move(data_dequeue.front()));
 	}
 }
@@ -47,6 +56,14 @@ void lv2_socket_p2p::save(utils::serial& ar)
 void lv2_socket_p2p::handle_new_data(sys_net_sockaddr_in_p2p p2p_addr, std::vector<u8> p2p_data)
 {
 	std::lock_guard lock(mutex);
+	const usz packet_cost = get_packet_cost(p2p_data.size());
+	const usz receive_buffer_size = static_cast<usz>(so_rcvbuf);
+	if (data_size >= receive_buffer_size || packet_cost > receive_buffer_size - data_size)
+	{
+		sys_net.trace("Received P2P packet for vport %d but the receive queue is full", p2p_addr.sin_vport);
+		return;
+	}
+	data_size += packet_cost;
 
 	sys_net.trace("Received a P2P packet for vport %d and saved it", p2p_addr.sin_vport);
 	data.push(std::make_pair(std::move(p2p_addr), std::move(p2p_data)));
@@ -196,6 +213,30 @@ std::pair<s32, sys_net_sockaddr> lv2_socket_p2p::getsockname()
 std::tuple<s32, lv2_socket::sockopt_data, u32> lv2_socket_p2p::getsockopt(s32 level, s32 optname, u32 len)
 {
 	std::lock_guard lock(mutex);
+	if (level == SYS_NET_SOL_SOCKET)
+	{
+		sockopt_data out_val{};
+		switch (optname)
+		{
+		case SYS_NET_SO_TYPE:
+			out_val._int = so_type;
+			return {CELL_OK, out_val, sizeof(s32)};
+		case SYS_NET_SO_RCVBUF:
+			out_val._int = so_rcvbuf;
+			return {CELL_OK, out_val, sizeof(s32)};
+		case SYS_NET_SO_BROADCAST:
+			out_val._int = so_broadcast;
+			return {CELL_OK, out_val, sizeof(s32)};
+		case SYS_NET_SO_NBIO:
+			out_val._int = so_nbio;
+			return {CELL_OK, out_val, sizeof(s32)};
+		case SYS_NET_SO_ERROR:
+			out_val._int = std::exchange(so_error, 0);
+			return {CELL_OK, out_val, sizeof(s32)};
+		default:
+			break;
+		}
+	}
 
 	const u64 key = (static_cast<u64>(level) << 32) | static_cast<u64>(optname);
 
@@ -215,19 +256,25 @@ s32 lv2_socket_p2p::setsockopt(s32 level, s32 optname, const std::vector<u8>& op
 
 	int native_int = *reinterpret_cast<const be_t<s32>*>(optval.data());
 
-	if (level == SYS_NET_SOL_SOCKET && optname == SYS_NET_SO_NBIO)
+	if (level == SYS_NET_SOL_SOCKET)
 	{
-		so_nbio = native_int;
-	}
-	else if (level == SYS_NET_SOL_SOCKET && optname == SYS_NET_SO_BROADCAST)
-	{
-		so_broadcast = native_int;
+		switch (optname)
+		{
+		case SYS_NET_SO_TYPE: return -SYS_NET_ENOPROTOOPT;
+		case SYS_NET_SO_RCVBUF:
+			if (s32 ret = validate_so_rcvbuf(native_int); ret != CELL_OK) return ret;
+			so_rcvbuf = native_int;
+			return CELL_OK;
+		case SYS_NET_SO_NBIO: so_nbio = native_int; return CELL_OK;
+		case SYS_NET_SO_BROADCAST: so_broadcast = native_int; return CELL_OK;
+		default: break;
+		}
 	}
 
 	const u64 key = (static_cast<u64>(level) << 32) | static_cast<u64>(optname);
 	sockopt_cache cache{};
-	memcpy(&cache.data._int, optval.data(), optval.size());
-	cache.len = ::size32(optval);
+	cache.len = std::min(::size32(optval), static_cast<u32>(sizeof(cache.data.ch)));
+	memcpy(&cache.data.ch, optval.data(), cache.len);
 
 	sockopts[key] = std::move(cache);
 
@@ -262,6 +309,7 @@ std::optional<std::tuple<s32, std::vector<u8>, sys_net_sockaddr>> lv2_socket_p2p
 	sys_net_sockaddr sn_addr;
 	memcpy(&sn_addr, &p2p_data.first, sizeof(sn_addr));
 
+	data_size -= get_packet_cost(p2p_data.second.size());
 	data.pop();
 
 	return {{native_result, res_buf, sn_addr}};
