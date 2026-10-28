@@ -15,6 +15,30 @@ internal object BundledPatchInstaller {
         BundledPatch("PPU-6e828d3466bb1272243213bef0df0e499f3965a5", "Freeze fix", "BLUS30779", "01.00"),
         BundledPatch("PPU-db1e09abb1a2785532b89e9a366d2510ba8e070c", "Battle freeze fix", "BLUS31519", "01.00"),
         BundledPatch("PPU-3e9032a3f7857057ef783810bd8f34a439baaa59", "Field at 30 fps with a 60 fps limit", "BLUS30903", "all"),
+        BundledPatch("SPU-42bae8e5d6a9304068ba1c6bbfdc18d656e287a1", "Bink overlay skip", "BLES00928", "all"),
+        BundledPatch("PPU-c4e26433d1eed9166eb0c67b6f66b2268f3704e2", "Freeze Fix", "BCES00052", "all"),
+        BundledPatch("PPU-ec77eaf73a4f55d1c4ece532c3be6db0011e49ca", "Freeze Fix", "NPEA00452", "all"),
+        BundledPatch("PPU-f67f3e99077ba256728ffa16800c75e006661158", "Freeze Fix", "BCUS98127", "01.00"),
+        BundledPatch("PPU-c14042df6304d3e420a9917e6f8e5fc05cc38b4c", "Freeze Fix", "BCUS98127", "01.00"),
+        BundledPatch("PPU-16506d9d5bf692d615645accd24bca1ee1f8f9a6", "Freeze Fix", "NPUA80965", "all"),
+        BundledPatch("PPU-4c819c69904784a56685c31df12f5d492bc0ed64", "Freeze Fix", "BCAS20200", "01.03"),
+        BundledPatch("PPU-4c819c69904784a56685c31df12f5d492bc0ed64", "Freeze Fix", "BCES01141", "01.03"),
+        BundledPatch("PPU-4c819c69904784a56685c31df12f5d492bc0ed64", "Freeze Fix", "BCES01142", "01.03"),
+        BundledPatch("PPU-4c819c69904784a56685c31df12f5d492bc0ed64", "Freeze Fix", "BCUS98175", "01.03"),
+        BundledPatch("PPU-ed460e668a491f5e39f6547f3a24c2f20e2cb39b", "Freeze fix", "BCES01908", "01.00"),
+        BundledPatch("PPU-ed460e668a491f5e39f6547f3a24c2f20e2cb39b", "Freeze fix", "BCES01949", "01.00"),
+        BundledPatch("PPU-fadb0af6fb7bd0113e88fb9af3eb78fe3be05d08", "Freeze fix (all regions)", "BCUS99245", "01.01"),
+        BundledPatch("PPU-fadb0af6fb7bd0113e88fb9af3eb78fe3be05d08", "Freeze fix (all regions)", "NPUA80908", "01.01"),
+        BundledPatch("PPU-fadb0af6fb7bd0113e88fb9af3eb78fe3be05d08", "Freeze fix (all regions)", "BCES01908", "01.01"),
+        BundledPatch("PPU-fadb0af6fb7bd0113e88fb9af3eb78fe3be05d08", "Freeze fix (all regions)", "BCES01949", "01.01"),
+        BundledPatch("PPU-fadb0af6fb7bd0113e88fb9af3eb78fe3be05d08", "Freeze fix (all regions)", "NPEA00457", "01.01"),
+        BundledPatch("PPU-f07f7086588a4ea86a28bd768f0cbe710f5b813b", "Freeze Fix", "BCAS20052", "all"),
+        BundledPatch("PPU-f07f7086588a4ea86a28bd768f0cbe710f5b813b", "Freeze Fix", "BCES00301", "all"),
+        BundledPatch("PPU-f07f7086588a4ea86a28bd768f0cbe710f5b813b", "Freeze Fix", "NPEA00088", "all"),
+        BundledPatch("PPU-f07f7086588a4ea86a28bd768f0cbe710f5b813b", "Freeze Fix", "NPEA00106", "all"),
+        BundledPatch("PPU-1d9e99e1f091cfbdf1714d04e690d9cd816e2971", "Freeze Fix", "NPUA80145", "all"),
+        BundledPatch("PPU-0997e35d2b6738f5cecfda1d76380acca0828365", "Freeze Fix", "BCUS98124", "01.00"),
+        BundledPatch("PPU-aa798f32a1fda1c23a20066edb1c623c486d53cc", "Disable MLAA", "BLUS30736", "01.00"),
     )
 
     fun enablePending(wasEnabled: (String) -> Boolean, enable: (BundledPatch) -> Boolean, markEnabled: (String) -> Unit) {
@@ -25,7 +49,7 @@ internal object BundledPatchInstaller {
 }
 
 internal object BundledPatches {
-    private const val REVISION = 1
+    private const val REVISION = 2
 
     fun ensureInstalled(context: Context, root: String) {
         // Each storage root has its own patch database and its own installation state.
