@@ -9,6 +9,7 @@ inline std::vector<u8> unzip(const T& src)
 }
 
 bool unzip(const void* src, usz size, fs::file& out);
+bool unzip(const u8* src, usz size, u8* dst, usz dst_size);
 
 template <typename T>
 inline bool unzip(const std::vector<u8>& src, fs::file& out)

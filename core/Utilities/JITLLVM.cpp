@@ -628,21 +628,31 @@ public:
 		{
 			const std::vector<u8> cached_data = cached.to_vector<u8>();
 
-			if (cached_data.empty()) [[unlikely]]
+			if (cached_data.size() < 18) [[unlikely]]
 			{
 				return nullptr;
 			}
 
-			const std::vector<u8> out = unzip(cached_data);
-
-			if (out.empty())
+			const usz trailer = cached_data.size() - 4;
+			const u32 out_size = u32{cached_data[trailer]} | (u32{cached_data[trailer + 1]} << 8) |
+				(u32{cached_data[trailer + 2]} << 16) | (u32{cached_data[trailer + 3]} << 24);
+			std::unique_ptr<llvm::WritableMemoryBuffer> buf;
+			if (out_size && (static_cast<u64>(out_size) + 1031) / 1032 <= cached_data.size())
 			{
-				jit_log.error("LLVM: Failed to unzip module: '%s'", path);
-				return nullptr;
+				buf = llvm::WritableMemoryBuffer::getNewUninitMemBuffer(out_size);
 			}
 
-			auto buf = llvm::WritableMemoryBuffer::getNewUninitMemBuffer(out.size());
-			std::memcpy(buf->getBufferStart(), out.data(), out.size());
+			if (!buf || !unzip(cached_data.data(), cached_data.size(), reinterpret_cast<u8*>(buf->getBufferStart()), out_size))
+			{
+				const std::vector<u8> out = unzip(cached_data);
+				if (out.empty())
+				{
+					jit_log.error("LLVM: Failed to unzip module: '%s'", path);
+					return nullptr;
+				}
+				buf = llvm::WritableMemoryBuffer::getNewUninitMemBuffer(out.size());
+				std::memcpy(buf->getBufferStart(), out.data(), out.size());
+			}
 			return buf;
 		}
 
@@ -1121,26 +1131,41 @@ bool jit_compiler::add(const std::string& path)
 		return false;
 	}
 
-	if (auto object_file = llvm::object::ObjectFile::createObjectFile(*cache))
+	return add(std::move(cache), path);
+}
+
+bool jit_compiler::add(std::unique_ptr<llvm::MemoryBuffer> object, const std::string& path)
+{
+	if (!object)
 	{
-		m_engine->addObjectFile(llvm::object::OwningBinary<llvm::object::ObjectFile>(std::move(*object_file), std::move(cache)));
+		jit_log.error("ObjectCache: Cannot add null object: %s", path);
+		return false;
+	}
+
+	if (auto object_file = llvm::object::ObjectFile::createObjectFile(*object))
+	{
+		m_engine->addObjectFile(llvm::object::OwningBinary<llvm::object::ObjectFile>(std::move(*object_file), std::move(object)));
 		jit_log.trace("ObjectCache: Successfully added %s", path);
 		return true;
 	}
 	else
 	{
-		jit_log.error("ObjectCache: Adding failed: %s", path);
+		jit_log.error("ObjectCache: Adding failed: %s (%s)", path, llvm::toString(object_file.takeError()));
 		return false;
 	}
 }
 
-bool jit_compiler::check(const std::string& path)
+std::unique_ptr<llvm::MemoryBuffer> jit_compiler::load_object(const std::string& path)
 {
 	if (auto cache = ObjectCache::load(path))
 	{
 		if (auto object_file = llvm::object::ObjectFile::createObjectFile(*cache))
 		{
-			return true;
+			return cache;
+		}
+		else
+		{
+			llvm::consumeError(object_file.takeError());
 		}
 
 		const bool removed_gz = fs::remove_file(path + ".gz");
@@ -1151,7 +1176,7 @@ bool jit_compiler::check(const std::string& path)
 		}
 	}
 
-	return false;
+	return nullptr;
 }
 
 void jit_compiler::update_global_mapping(const std::string& name, u64 addr)

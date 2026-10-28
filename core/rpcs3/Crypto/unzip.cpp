@@ -2,6 +2,7 @@
 #include "unzip.h"
 
 #include <zlib.h>
+#include <limits>
 
 #include "util/serialization_ext.hpp"
 
@@ -130,6 +131,37 @@ bool unzip(const void* src, usz size, fs::file& out)
 	res = inflateEnd(&strm);
 
 	return is_valid;
+}
+
+bool unzip(const u8* src, usz size, u8* dst, usz dst_size)
+{
+	if (!src || !size || !dst || !dst_size || size > std::numeric_limits<uInt>::max() || dst_size > std::numeric_limits<uInt>::max())
+	{
+		return false;
+	}
+
+	z_stream zs{};
+#ifndef _MSC_VER
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wold-style-cast"
+#endif
+	const int init_result = inflateInit2(&zs, 16 + 15);
+#ifndef _MSC_VER
+#pragma GCC diagnostic pop
+#endif
+	if (init_result != Z_OK)
+	{
+		return false;
+	}
+
+	zs.avail_in = static_cast<uInt>(size);
+	zs.next_in = src;
+	zs.avail_out = static_cast<uInt>(dst_size);
+	zs.next_out = dst;
+	const int result = inflate(&zs, Z_FINISH);
+	const bool valid = result == Z_STREAM_END && zs.total_out == dst_size;
+	inflateEnd(&zs);
+	return valid;
 }
 
 bool zip(const void* src, usz size, fs::file& out, bool multi_thread_it)
