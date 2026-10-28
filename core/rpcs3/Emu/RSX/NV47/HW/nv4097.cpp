@@ -120,7 +120,11 @@ namespace rsx
 			const auto range = compute_write_range(ctx, reg, write_count);
 			if (range.word_count < write_count)
 			{
-				rsx_log.warning("Invalid transform register index (load=%u, index=%u, count=%u)", REGS(ctx)->transform_constant_load(), index, write_count);
+				static std::atomic<bool> reported = false;
+				if (!reported.exchange(true, std::memory_order_relaxed))
+				{
+					rsx_log.warning("Invalid transform register index (load=%u, index=%u, count=%u)", REGS(ctx)->transform_constant_load(), index, write_count);
+				}
 			}
 
 			if (range.word_count == 0)

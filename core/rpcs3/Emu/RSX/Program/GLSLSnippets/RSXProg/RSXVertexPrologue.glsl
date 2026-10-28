@@ -46,6 +46,14 @@ vec4 apply_zclip_xform(
 		// Compress Z and store towards highest end of the range
 		d = min(1., 0.99 + (0.01 * (pos.z - near_plane) / (far_plane - near_plane)));
 	}
+	else if (d < 0.f && d > -0.000002)
+	{
+		d = 0.f;
+	}
+	else if (d > 1.f && d < 1.000002)
+	{
+		d = 1.f;
+	}
 	else // This catch-call also handles w=0 since d=inf
 	{
 		return pos;

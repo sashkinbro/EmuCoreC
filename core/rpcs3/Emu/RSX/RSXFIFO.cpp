@@ -60,6 +60,7 @@ namespace rsx
 			m_fifo_pos = position - (count ? 4 : 0);
 			m_args_ptr = m_iotable->get_addr(m_fifo_pos);
 			m_command_reg = (m_cmd & 0xffff) + m_command_inc * (((m_cmd >> 18) - count) & 0x7ff) - m_command_inc;
+			m_next_cmd_entry = m_fifo_pos + m_remaining_commands * 4;
 		}
 
 		void FIFO_control::inc_get(bool wait)
@@ -119,6 +120,17 @@ namespace rsx
 					return {false, FIFO_ERROR};
 				}
 
+				if (addr == m_next_cmd_entry)
+				{
+					if (const u32 cmd = vm::read32(addr1 | (addr & 127)); cmd & RSX_METHOD_NON_METHOD_CMD_MASK)
+					{
+						m_cache_addr = addr;
+						m_cache_size = 4;
+						write_to_ptr<be_t<u32>>(m_cache[0], cmd);
+						return {true, cmd};
+					}
+				}
+
 				m_cache_size = std::min<u32>((put | 0x7f) - m_cache_addr, u32{sizeof(m_cache)} - 1) + 1;
 
 				if (0x100000 - (m_cache_addr & 0xfffff) < m_cache_size)
@@ -149,6 +161,11 @@ namespace rsx
 
 				u64 start_time = 0;
 				u32 bytes_read = 0;
+				u32 fifo_code_path = m_next_cmd_entry;
+				if (fifo_code_path - m_fifo_pos >= 8192)
+				{
+					fifo_code_path = umax;
+				}
 
 				// Find the next set bit after every iteration
 				for (int i = 0;; i = (std::countr_zero<u32>(std::rotl<u8>(to_fetch, 0 - i - 1)) + i + 1) % 8)
@@ -165,6 +182,29 @@ namespace rsx
 						{
 							// The fetch of the cache line content has been successful, unset its bit
 							to_fetch &= ~(1u << i);
+
+							if (fifo_code_path != umax && (to_fetch & ((1u << i) - 1)) == 0)
+							{
+								const u32 held = to_fetch ? std::countr_zero<u32>(to_fetch) * 128 : bytes_read + 128;
+								const u32 high_addr = m_cache_addr + std::min<u32>(m_cache_size, held);
+								bool flow_control = false;
+								while (fifo_code_path < high_addr)
+								{
+									const u32 cmd = read_from_ptr_unsafe<be_t<u32>>(+m_cache[0], fifo_code_path - m_cache_addr);
+									fifo_code_path += 4;
+									if (cmd & RSX_METHOD_NON_METHOD_CMD_MASK) [[unlikely]]
+									{
+										flow_control = true;
+										break;
+									}
+									fifo_code_path += ((cmd >> 18) & 0x7ff) * 4;
+								}
+								if (flow_control)
+								{
+									m_cache_size = std::max<u32>(fifo_code_path, addr + 4) - m_cache_addr;
+									break;
+								}
+							}
 
 							if (!to_fetch)
 							{
@@ -228,6 +268,7 @@ namespace rsx
 			invalidate_cache();
 
 			m_thread->last_code_jump = m_fifo_pos;
+			m_next_cmd_entry = get;
 
 			if (spin_cmd && m_fifo_pos == get)
 			{
@@ -431,6 +472,7 @@ namespace rsx
 
 			if (m_cmd & RSX_METHOD_NON_METHOD_CMD_MASK) [[unlikely]]
 			{
+				m_next_cmd_entry = umax;
 				if ((m_cmd & RSX_METHOD_OLD_JUMP_CMD_MASK) == RSX_METHOD_OLD_JUMP_CMD ||
 					(m_cmd & RSX_METHOD_NEW_JUMP_CMD_MASK) == RSX_METHOD_NEW_JUMP_CMD ||
 					(m_cmd & RSX_METHOD_CALL_CMD_MASK) == RSX_METHOD_CALL_CMD ||
@@ -448,6 +490,7 @@ namespace rsx
 
 			ensure(!m_remaining_commands);
 			const u32 count = (m_cmd >> 18) & 0x7ff;
+			m_next_cmd_entry = m_fifo_pos + count * 4 + 4;
 
 			if (!count)
 			{

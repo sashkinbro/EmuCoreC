@@ -94,7 +94,13 @@ bool VKGSRender::reinitialize_swapchain()
 #ifdef ANDROID
 	// A SurfaceView can replace its native window without changing dimensions.
 	// Rebuilding only VkSwapchainKHR would keep using the abandoned VkSurfaceKHR.
-	if (!m_instance.recreate_surface(*m_swapchain, m_frame->handle()))
+	if (Emu.IsStopped())
+	{
+		swapchain_unavailable = true;
+		return false;
+	}
+	const auto window = m_frame->handle();
+	if (Emu.IsStopped() || !m_instance.recreate_surface(*m_swapchain, window))
 	{
 		swapchain_unavailable = true;
 		return false;
