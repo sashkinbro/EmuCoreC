@@ -54,6 +54,9 @@ struct EmuCoreCApi {
   void (*clearPendingGameSettings)();
   void (*setMicrophoneDevices)(JNIEnv *, jobjectArray, jintArray);
   void (*prepareUsbDevices)(JNIEnv *, jintArray);
+  bool (*micTestStart)(std::string_view);
+  float (*micTestLevel)();
+  void (*micTestStop)();
   std::string (*getVersion)();
   std::string (*probeDiscInfo)(std::string_view path, std::string_view iconOut);
   bool (*requestSaveState)(unsigned slot, long progressId);
@@ -144,6 +147,9 @@ struct EmuCoreCLibrary : EmuCoreCApi {
     result.clearPendingGameSettings = reinterpret_cast<decltype(clearPendingGameSettings)>(dlsym(handle, "emucorec_clearPendingGameSettings"));
     result.setMicrophoneDevices = reinterpret_cast<decltype(setMicrophoneDevices)>(dlsym(handle, "emucorec_setMicrophoneDevices"));
     result.prepareUsbDevices = reinterpret_cast<decltype(prepareUsbDevices)>(dlsym(handle, "emucorec_prepareUsbDevices"));
+    result.micTestStart = reinterpret_cast<decltype(micTestStart)>(dlsym(handle, "emucorec_micTestStart"));
+    result.micTestLevel = reinterpret_cast<decltype(micTestLevel)>(dlsym(handle, "emucorec_micTestLevel"));
+    result.micTestStop = reinterpret_cast<decltype(micTestStop)>(dlsym(handle, "emucorec_micTestStop"));
     result.getVersion = reinterpret_cast<decltype(getVersion)>(dlsym(handle, "emucorec_getVersion"));
     result.probeDiscInfo = reinterpret_cast<decltype(probeDiscInfo)>(dlsym(handle, "emucorec_probeDiscInfo"));
     result.requestSaveState = reinterpret_cast<decltype(requestSaveState)>(dlsym(handle, "emucorec_requestSaveState"));
@@ -366,6 +372,18 @@ extern "C" JNIEXPORT void JNICALL Java_com_sbro_emucorec_core_Ps3Core_setMicroph
 extern "C" JNIEXPORT void JNICALL Java_com_sbro_emucorec_core_Ps3Core_prepareUsbDevices(
     JNIEnv *env, jobject, jintArray descriptors) {
   if (emucorecLib.prepareUsbDevices) emucorecLib.prepareUsbDevices(env, descriptors);
+}
+
+extern "C" JNIEXPORT jboolean JNICALL Java_com_sbro_emucorec_core_Ps3Core_micTestStart(JNIEnv *env, jobject, jstring name) {
+  return emucorecLib.micTestStart && emucorecLib.micTestStart(unwrap(env, name));
+}
+
+extern "C" JNIEXPORT jfloat JNICALL Java_com_sbro_emucorec_core_Ps3Core_micTestLevel(JNIEnv *, jobject) {
+  return emucorecLib.micTestLevel ? emucorecLib.micTestLevel() : -1.f;
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_sbro_emucorec_core_Ps3Core_micTestStop(JNIEnv *, jobject) {
+  if (emucorecLib.micTestStop) emucorecLib.micTestStop();
 }
 
 extern "C" JNIEXPORT jboolean JNICALL Java_com_sbro_emucorec_core_Ps3Core_queueGameSetting(

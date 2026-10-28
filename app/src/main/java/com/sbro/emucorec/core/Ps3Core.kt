@@ -102,6 +102,9 @@ class Ps3Core {
     external fun queueGameSetting(path: String, value: String): Boolean
     external fun setMicrophoneDevices(names: Array<String>, ids: IntArray)
     external fun prepareUsbDevices(descriptors: IntArray)
+    external fun micTestStart(name: String): Boolean
+    external fun micTestLevel(): Float
+    external fun micTestStop()
     external fun getState(): Int
     external fun kill()
     external fun pause()

@@ -23,6 +23,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -32,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -57,9 +59,14 @@ import com.sbro.emucorec.core.CoreSettingsTreeCache
 import com.sbro.emucorec.core.Ps3Runtime
 import com.sbro.emucorec.ui.common.SectionCard
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.sbro.emucorec.core.Ps3Core
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import org.json.JSONObject
 import java.util.Locale
 import kotlin.math.roundToLong
@@ -259,6 +266,11 @@ fun Ps3CoreSettingsSection(
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
         }
+        if (category == Ps3CoreSettingsCategory.Audio && surface == Ps3CoreSettingsSurface.FullSettings) {
+            val device = settings.firstOrNull { it.path == "Audio@@Microphone Devices" }
+                ?.value?.substringBefore("@@@")?.ifBlank { "Default" } ?: "Default"
+            MicrophoneTest(device)
+        }
         userFacingSettings.groupBy(Ps3CoreSetting::section).forEach { (section, sectionSettings) ->
             if (surface == Ps3CoreSettingsSurface.InGame) {
                 InGameSettingsCard(title = localizedCoreLabel(section)) {
@@ -291,6 +303,67 @@ fun Ps3CoreSettingsSection(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun MicrophoneTest(device: String) {
+    val context = LocalContext.current
+    val owner = LocalLifecycleOwner.current
+    val scope = rememberCoroutineScope()
+    var running by remember { mutableStateOf(false) }
+    var failed by remember { mutableStateOf(false) }
+    var level by remember { mutableFloatStateOf(0f) }
+    var startJob by remember { mutableStateOf<Job?>(null) }
+
+    fun start() {
+        if (startJob?.isActive == true) return
+        startJob = scope.launch {
+            failed = false
+            val opened = withContext(Dispatchers.IO) { runCatching { Ps3Core.instance.micTestStart(device) }.getOrDefault(false) }
+            running = opened
+            failed = !opened
+        }
+    }
+
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) start() else failed = true
+    }
+    LaunchedEffect(running) {
+        while (running) {
+            val next = withContext(Dispatchers.IO) { runCatching { Ps3Core.instance.micTestLevel() }.getOrDefault(-1f) }
+            if (next < 0f) running = false else level = next.coerceIn(0f, 1f)
+            delay(100)
+        }
+    }
+    DisposableEffect(owner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) {
+                startJob?.cancel()
+                runCatching { Ps3Core.instance.micTestStop() }
+                running = false
+            }
+        }
+        owner.lifecycle.addObserver(observer)
+        onDispose {
+            owner.lifecycle.removeObserver(observer)
+            startJob?.cancel()
+            runCatching { Ps3Core.instance.micTestStop() }
+        }
+    }
+    SectionCard(title = localizedCoreLabel("Microphone Devices"), contentPadding = PaddingValues(14.dp)) {
+        TextButton(onClick = {
+            if (running) {
+                runCatching { Ps3Core.instance.micTestStop() }
+                running = false
+            } else if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                start()
+            } else permission.launch(Manifest.permission.RECORD_AUDIO)
+        }) {
+            Text(stringResource(if (running) R.string.common_cancel else R.string.settings_test_vibration_button))
+        }
+        if (running) LinearProgressIndicator(progress = { level }, modifier = Modifier.fillMaxWidth())
+        if (failed) Text(stringResource(R.string.ps3_core_setting_rejected, localizedCoreLabel("Microphone Devices")), color = MaterialTheme.colorScheme.error)
     }
 }
 

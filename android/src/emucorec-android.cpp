@@ -78,6 +78,7 @@
 #include <android/native_window_jni.h>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <condition_variable>
 #include <deque>
 #include <filesystem>
@@ -95,6 +96,8 @@
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wreturn-type-c-linkage"
+
+extern "C" void emucorec_micTestStop();
 
 struct AtExit {
   std::function<void()> cb;
@@ -2707,6 +2710,7 @@ extern "C" int emucorec_boot(std::string_view path_) {
     }
   }
 
+  emucorec_micTestStop();
   usb_android_activate_devices();
   Emu.SetForceBoot(true);
   std::string path = std::string(path_);
@@ -4574,6 +4578,47 @@ extern "C" void emucorec_prepareUsbDevices(JNIEnv* env, jintArray descriptors) {
   if (count) env->GetIntArrayRegion(descriptors, 0, count, input.data());
   if (env->ExceptionCheck()) return;
   usb_android_prepare_devices(std::vector<int>(input.begin(), input.end()));
+}
+
+namespace {
+std::mutex g_mic_test_mutex;
+std::unique_ptr<oboe_capture> g_mic_test;
+float g_mic_test_level = 0.f;
+}
+
+extern "C" bool emucorec_micTestStart(std::string_view device) {
+  std::lock_guard lock(g_mic_test_mutex);
+  if (!Emu.IsStopped()) return false;
+  auto capture = std::make_unique<oboe_capture>();
+  g_mic_test.reset();
+  g_mic_test_level = 0.f;
+  if (!capture->open(std::string(device), 48000, 1) || !capture->start()) return false;
+  g_mic_test = std::move(capture);
+  return true;
+}
+
+extern "C" float emucorec_micTestLevel() {
+  std::lock_guard lock(g_mic_test_mutex);
+  if (!g_mic_test) return -1.f;
+  std::array<s16, 2400> samples{};
+  u64 count = 0;
+  double squares = 0;
+  for (u32 batch = 0; batch < 10; ++batch) {
+    const u32 read = g_mic_test->read(samples.data(), samples.size());
+    for (u32 i = 0; i < read; ++i) squares += static_cast<double>(samples[i]) * samples[i];
+    count += read;
+    if (read < samples.size()) break;
+  }
+  if (count) {
+    const double rms = std::sqrt(squares / count) / 32768.0;
+    g_mic_test_level = static_cast<float>(std::clamp((20.0 * std::log10(std::max(rms, 1e-6)) + 60.0) / 60.0, 0.0, 1.0));
+  }
+  return g_mic_test_level;
+}
+
+extern "C" void emucorec_micTestStop() {
+  std::lock_guard lock(g_mic_test_mutex);
+  g_mic_test.reset();
 }
 
 // Identity strings for the performance overlay header (app version, build and
