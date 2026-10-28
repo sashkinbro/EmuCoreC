@@ -7,11 +7,8 @@ Version: 1.2
 # hand through the Patch Manager's import button -- a step there is no equivalent of
 # on Android, so without bundling them the affected games are simply broken for us.
 #
-# Only patches that fix a game which is otherwise unplayable belong here. This is not
-# a place for 60fps unlocks or resolution mods: those are the online database's job,
-# and shipping them would fork a database we would then have to maintain.
-#
-# Ps3PatchRepo.BUNDLED must list every patch here, or it is imported but never enabled.
+# The default-enabled entries are listed in BundledPatchInstaller. Optional patches
+# remain disabled until selected in the patch manager.
 
 # SONIC THE HEDGEHOG (2006) -- upstream RPCS3 issue #4122, open since 2018.
 #
@@ -50,3 +47,99 @@ PPU-4b46d0161ca657ab16b0a779d9062810ea5ea2dd:
       - [ jumpf, 0x00000000, "RPCS3_HLE_LIBRARY:WaitForSPUsToEmptySNRs" ] # Args: (SPU ID, 3)
       - [ be32, 0x00000000, 0x38800000 ] # li r4, 0
       - [ be32, 0x00000000, 0x44000002 ] # sc
+
+PPU-6e828d3466bb1272243213bef0df0e499f3965a5:
+  "Freeze fix":
+    Games:
+      "Skylanders: Spyro's Adventure":
+        BLUS30779: [ "01.00" ]
+    Author: "jpolo1224"
+    Notes: "Prevents a worker thread from starving while other threads wait for its lock."
+    Patch Version: 1.0
+    Patch:
+      - [ be32, 0x00f5d794, 0x000003e9 ]
+
+PPU-db1e09abb1a2785532b89e9a366d2510ba8e070c:
+  "Battle freeze fix":
+    Games:
+      "J-Stars Victory VS+":
+        BLUS31519: [ "01.00" ]
+    Author: "jpolo1224"
+    Notes: "Stops an effect job from halting on a reused record during battle."
+    Patch Version: 1.0
+    Patch:
+      - [ be32, 0x00858988, 0x3fbf2eb5 ]
+      - [ be32, 0x0085898c, 0x3fe11aae ]
+      - [ be32, 0x00858990, 0x1403d734 ]
+      - [ be32, 0x00858994, 0x210008b4 ]
+      - [ be32, 0x00858998, 0x7c003136 ]
+      - [ be32, 0x0085899c, 0x0c001b62 ]
+      - [ be32, 0x008589a0, 0x754c3133 ]
+      - [ be32, 0x008589a4, 0x180cf2b0 ]
+      - [ be32, 0x008589a8, 0x4080002f ]
+      - [ be32, 0x008589ac, 0x3280002c ]
+      - [ be32, 0x008589b0, 0x4080982d ]
+      - [ be32, 0x008589b4, 0x4080202b ]
+      - [ be32, 0x008589b8, 0x21a00830 ]
+      - [ be32, 0x008589bc, 0x21a008af ]
+      - [ be32, 0x008589c0, 0x21a0092e ]
+      - [ be32, 0x008589c4, 0x21a009ad ]
+      - [ be32, 0x008589c8, 0x21a00a2c ]
+      - [ be32, 0x008589cc, 0x21a00aab ]
+      - [ be32, 0x008589d0, 0x32000200 ]
+      - [ be32, 0x008589d4, 0x00200000 ]
+      - [ be32, 0x008589d8, 0x1c007076 ]
+      - [ be32, 0x008589dc, 0x24133fe0 ]
+
+PPU-3e9032a3f7857057ef783810bd8f34a439baaa59:
+  "Field at 30 fps with a 60 fps limit":
+    Games:
+      "Tales of Graces f":
+        BLUS30903: [ All ]
+    Author: "jpolo1224"
+    Notes: "Keeps field speed correct while battles run at 60 fps."
+    Patch Version: 1.0
+    Patch:
+      - [ calloc, 0x0047739c, 0x11 ]
+      - [ be32, 0x00000000, 0x813f01e4 ]
+      - [ be32, 0x00000000, 0x2f890001 ]
+      - [ be32, 0x00000000, 0x409d0038 ]
+      - [ be32, 0x00000000, 0x817f01dc ]
+      - [ be32, 0x00000000, 0x81430004 ]
+      - [ be32, 0x00000000, 0x7d4a4a14 ]
+      - [ be32, 0x00000000, 0x7c0b5050 ]
+      - [ be32, 0x00000000, 0x2f800000 ]
+      - [ be32, 0x00000000, 0x409c0008 ]
+      - [ be32, 0x00000000, 0x38000000 ]
+      - [ be32, 0x00000000, 0x7f804800 ]
+      - [ be32, 0x00000000, 0x409d0008 ]
+      - [ be32, 0x00000000, 0x7d204b78 ]
+      - [ be32, 0x00000000, 0x901f01e0 ]
+      - [ be32, 0x00000000, 0x7d4b0214 ]
+      - [ be32, 0x00000000, 0x91430004 ]
+      - [ be32, 0x00000000, 0x801f01e0 ]
+
+PPU-602e58994456e14dfd80a6e0f376729b53c3109a:
+  "Private matches start with fewer players":
+    Games:
+      "Batman: Arkham Origins":
+        BLUS31147: [ All ]
+        BLUS31207: [ All ]
+        NPUB31261: [ All ]
+    Author: "jpolo1224"
+    Notes: "Allows the host to start a private match with fewer than three players."
+    Patch Version: 1.0
+    Patch:
+      - [ calloc, 0x00f76ec4, 0x0c ]
+      - [ be32, 0x00000000, 0x80c50000 ]
+      - [ be32, 0x00000000, 0x3ce00002 ]
+      - [ be32, 0x00000000, 0x60e77c03 ]
+      - [ be32, 0x00000000, 0x38600001 ]
+      - [ be32, 0x00000000, 0x7c063800 ]
+      - [ be32, 0x00000000, 0x4082001c ]
+      - [ be32, 0x00000000, 0x80c50004 ]
+      - [ be32, 0x00000000, 0x3ce00001 ]
+      - [ be32, 0x00000000, 0x60e70f5e ]
+      - [ be32, 0x00000000, 0x7c063800 ]
+      - [ be32, 0x00000000, 0x40820008 ]
+      - [ be32, 0x00000000, 0x38600000 ]
