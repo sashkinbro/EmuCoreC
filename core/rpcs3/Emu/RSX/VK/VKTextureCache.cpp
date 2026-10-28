@@ -1014,6 +1014,35 @@ namespace vk
 		dst->pop_layout(cmd);
 	}
 
+	bool texture_cache::supports_linear_image(VkFormat format, VkImageType type, u16 width, VkImageUsageFlags usage)
+	{
+		const auto props = m_device->get_format_properties(format);
+		constexpr VkFormatFeatureFlags relevant = VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT |
+			VK_FORMAT_FEATURE_TRANSFER_SRC_BIT | VK_FORMAT_FEATURE_TRANSFER_DST_BIT | VK_FORMAT_FEATURE_BLIT_SRC_BIT | VK_FORMAT_FEATURE_BLIT_DST_BIT;
+		const auto wanted = props.optimalTilingFeatures & relevant;
+		if (!(wanted & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT) || (props.linearTilingFeatures & wanted) != wanted)
+		{
+			return false;
+		}
+
+		// Cache limits per texture cache, so a new renderer or driver cannot reuse old limits.
+		const u64 key = (u64{static_cast<u32>(format)} << 32) | (u64{static_cast<u32>(type)} << 24) | usage;
+		{
+			reader_lock lock(m_linear_image_limits_lock);
+			if (const auto found = m_linear_image_max_width.find(key); found != m_linear_image_max_width.end())
+			{
+				return width <= found->second;
+			}
+		}
+
+		VkImageFormatProperties limits{};
+		const u32 max_width = vkGetPhysicalDeviceImageFormatProperties(m_device->gpu(), format, type, VK_IMAGE_TILING_LINEAR, usage, 0, &limits) == VK_SUCCESS
+			? limits.maxExtent.width : 0;
+		std::lock_guard lock(m_linear_image_limits_lock);
+		m_linear_image_max_width[key] = max_width;
+		return width <= max_width;
+	}
+
 	cached_texture_section* texture_cache::create_new_texture(vk::command_buffer& cmd, const utils::address_range32& rsx_range, u16 width, u16 height, u16 depth, u16 mipmaps, u32 pitch,
 		u32 gcm_format, rsx::texture_upload_context context, rsx::texture_dimension_extended type, bool swizzled, rsx::component_order swizzle_flags, rsx::flags32_t flags)
 	{
@@ -1160,11 +1189,19 @@ namespace vk
 					create_format.viewFormatCount = mutable_format_list.size();
 				}
 
+				// Avoid tiled-image padding for single-row sampled textures when the driver
+				// supports the same sampling and transfer features for linear images.
+				const bool linear_candidate = height == 1 && depth == 1 && layer == 1 && mipmaps == 1 && create_flags == 0 &&
+					(image_type == VK_IMAGE_TYPE_1D || image_type == VK_IMAGE_TYPE_2D) &&
+					!(usage_flags & ~(VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT));
+				const auto tiling = linear_candidate && supports_linear_image(vk_format, image_type, width, usage_flags)
+					? VK_IMAGE_TILING_LINEAR : VK_IMAGE_TILING_OPTIMAL;
+
 				image = new vk::viewable_image(*m_device,
 					m_memory_types.device_local, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 					image_type, create_format,
 					width, height, depth, mipmaps, layer, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-					VK_IMAGE_TILING_OPTIMAL, usage_flags, create_flags,
+					tiling, usage_flags, create_flags,
 					VMM_ALLOCATION_POOL_TEXTURE_CACHE, rsx::classify_format(gcm_format));
 			}
 
@@ -1502,6 +1539,7 @@ namespace vk
 
 	void texture_cache::initialize(vk::render_device& device, VkQueue submit_queue, vk::data_heap& upload_heap)
 	{
+		m_linear_image_max_width.clear();
 		m_device = &device;
 		m_memory_types = device.get_memory_mapping();
 		m_formats_support = device.get_formats_support();

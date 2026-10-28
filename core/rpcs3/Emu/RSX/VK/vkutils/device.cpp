@@ -180,9 +180,26 @@ namespace vk
 			custom_border_color_support.require_border_color_remap = get_driver_vendor() != driver_vendor::AMD;
 		}
 
-		// v3dv and PanVK support BC1-BC3 which is all we require, support is reported as false since not all formats are supported
-		optional_features_support.texture_compression_bc = features.textureCompressionBC
-				|| get_driver_vendor() == driver_vendor::V3DV || get_driver_vendor() == driver_vendor::PANVK;
+		// Some v3dv and PanVK devices support BC1-BC3 without the full BC feature.
+		// Others, including PanVK on Android Mali, cannot sample these formats.
+		optional_features_support.texture_compression_bc = features.textureCompressionBC;
+		if (!features.textureCompressionBC &&
+			(get_driver_vendor() == driver_vendor::V3DV || get_driver_vendor() == driver_vendor::PANVK))
+		{
+			bool supported = true;
+			for (const VkFormat format : { VK_FORMAT_BC1_RGBA_UNORM_BLOCK, VK_FORMAT_BC1_RGBA_SRGB_BLOCK,
+				VK_FORMAT_BC2_UNORM_BLOCK, VK_FORMAT_BC2_SRGB_BLOCK, VK_FORMAT_BC3_UNORM_BLOCK, VK_FORMAT_BC3_SRGB_BLOCK })
+			{
+				VkFormatProperties props{};
+				vkGetPhysicalDeviceFormatProperties(dev, format, &props);
+				supported = supported && (props.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT);
+			}
+			optional_features_support.texture_compression_bc = supported;
+			if (!supported)
+			{
+				rsx_log.notice("Vulkan: BC1-BC3 sampling unavailable; DXT textures will be decoded on the CPU.");
+			}
+		}
 
 		// Texel buffer UAB is reported to the trigger for some driver crashes on older NV cards
 		if (get_driver_vendor() == driver_vendor::NVIDIA &&

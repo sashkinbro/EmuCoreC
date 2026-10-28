@@ -263,6 +263,28 @@ namespace vk
 		return load_severity;
 	}
 
+	std::string vmm_describe_memory_usage()
+	{
+		std::string result = get_current_mem_allocator()->describe_heap_usage();
+		{
+			reader_lock lock(g_vmm_stats.mutex);
+			constexpr u64 mib = 0x100000;
+			fmt::append(result, "%spools: system %lluM, surface %lluM, textures %lluM, swapchain %lluM, scratch %lluM, other %lluM, %llu samplers",
+				result.empty() ? "" : "; ",
+				vmm_get_application_pool_usage_impl(VMM_ALLOCATION_POOL_SYSTEM) / mib,
+				vmm_get_application_pool_usage_impl(VMM_ALLOCATION_POOL_SURFACE_CACHE) / mib,
+				vmm_get_application_pool_usage_impl(VMM_ALLOCATION_POOL_TEXTURE_CACHE) / mib,
+				vmm_get_application_pool_usage_impl(VMM_ALLOCATION_POOL_SWAPCHAIN) / mib,
+				vmm_get_application_pool_usage_impl(VMM_ALLOCATION_POOL_SCRATCH) / mib,
+				vmm_get_application_pool_usage_impl(VMM_ALLOCATION_POOL_UNDEFINED) / mib,
+				vmm_get_application_pool_usage_impl(VMM_ALLOCATION_POOL_SAMPLER));
+		}
+		const auto [batches, objects, oldest_eid] = g_resource_manager.pending_disposals();
+		fmt::append(result, "; GPU: next event %llu, completed %llu, %llu pending batches, oldest event %llu, %llu objects",
+			current_event_id(), last_completed_event_id(), static_cast<u64>(batches), oldest_eid, static_cast<u64>(objects));
+		return result;
+	}
+
 	bool vmm_handle_memory_pressure(rsx::problem_severity severity)
 	{
 		if (auto vkthr = dynamic_cast<VKGSRender*>(rsx::get_current_renderer()))

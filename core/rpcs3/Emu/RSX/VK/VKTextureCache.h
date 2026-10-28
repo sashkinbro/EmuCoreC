@@ -12,6 +12,7 @@
 
 #include <bit>
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
 namespace vk
@@ -534,6 +535,8 @@ namespace vk
 		vk::gpu_formats_support m_formats_support;
 		VkQueue m_submit_queue;
 		vk::data_heap* m_texture_upload_heap;
+		std::unordered_map<u64, u32> m_linear_image_max_width;
+		shared_mutex m_linear_image_limits_lock;
 
 		// Stuff that has been dereferenced by the GPU goes into these
 		const u32 max_cached_image_pool_size = 256;
@@ -553,6 +556,7 @@ namespace vk
 		vk::image* get_template_from_collection_impl(const rsx::simple_array<copy_region_descriptor>& sections_to_transfer) const;
 
 		std::unique_ptr<vk::viewable_image> find_cached_image(VkFormat format, u16 w, u16 h, u16 d, u16 mipmaps, VkImageType type, VkImageCreateFlags create_flags, VkImageUsageFlags usage, VkSharingMode sharing);
+		bool supports_linear_image(VkFormat format, VkImageType type, u16 width, VkImageUsageFlags usage);
 
 	protected:
 		vk::image_view* create_temporary_subresource_view_impl(

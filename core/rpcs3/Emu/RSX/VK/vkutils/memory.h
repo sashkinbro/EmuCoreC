@@ -97,6 +97,7 @@ namespace vk
 		virtual VkDeviceMemory get_vk_device_memory(mem_handle_t mem_handle) = 0;
 		virtual u64 get_vk_device_memory_offset(mem_handle_t mem_handle) = 0;
 		virtual f32 get_memory_usage() = 0;
+		virtual std::string describe_heap_usage() { return {}; }
 
 		virtual void set_safest_allocation_flags() {}
 		virtual void set_fastest_allocation_flags() {}
@@ -127,6 +128,7 @@ namespace vk
 		VkDeviceMemory get_vk_device_memory(mem_handle_t mem_handle) override;
 		u64 get_vk_device_memory_offset(mem_handle_t mem_handle) override;
 		f32 get_memory_usage() override;
+		std::string describe_heap_usage() override;
 
 		void set_safest_allocation_flags() override;
 		void set_fastest_allocation_flags() override;
@@ -135,6 +137,7 @@ namespace vk
 		VmaAllocator m_allocator;
 		std::array<VmaBudget, VK_MAX_MEMORY_HEAPS> stats;
 		u32 m_rebar_heap_idx = UINT32_MAX;
+		bool m_heap_capped = false;
 	};
 
 
@@ -213,6 +216,7 @@ namespace vk
 	u64  vmm_get_application_memory_usage(const memory_type_info& memory_type);
 	u64  vmm_get_application_pool_usage(vmm_allocation_pool pool);
 	bool vmm_handle_memory_pressure(rsx::problem_severity severity);
+	std::string vmm_describe_memory_usage();
 	rsx::problem_severity vmm_determine_memory_load_severity();
 
 	// Tracking for host memory objects. Allocated count is more important than actual memory amount.

@@ -1,5 +1,6 @@
 #include "device.h"
 #include "memory.h"
+#include "memory_budget.hpp"
 
 #include "Emu/RSX/Utils/algorithm.hpp"
 #include "Emu/system_config.h"
@@ -190,6 +191,7 @@ namespace vk
 				heap_limits.push_back(max_sz);
 			}
 			allocatorInfo.pHeapSizeLimit = heap_limits.data();
+			m_heap_capped = true;
 		}
 
 		if (dev.get_memory_budget_support())
@@ -323,6 +325,7 @@ namespace vk
 			return VK_NULL_HANDLE;
 		}
 
+		rsx_log.error("Video memory at allocation failure: %s", vmm_describe_memory_usage());
 		die_with_error(error_code);
 		fmt::throw_exception("Unreachable! Error_code=0x%x", static_cast<u32>(error_code));
 	}
@@ -379,19 +382,30 @@ namespace vk
 			stats[m_rebar_heap_idx].budget = 0;
 		}
 
-		float max_usage = 0.f;
-		for (const auto& info : stats)
+		return maximum_budget_usage(stats);
+	}
+
+	std::string mem_allocator_vma::describe_heap_usage()
+	{
+		std::array<VmaBudget, VK_MAX_MEMORY_HEAPS> budgets{};
+		vmaGetHeapBudgets(m_allocator, budgets.data());
+		const VkPhysicalDeviceMemoryProperties* props = nullptr;
+		vmaGetMemoryProperties(m_allocator, &props);
+		std::string result;
+		for (u32 i = 0; i < props->memoryHeapCount; ++i)
 		{
-			if (!info.budget)
+			if (!(props->memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT))
 			{
-				break;
+				continue;
 			}
-
-			const float this_usage = (info.usage * 100.f) / info.budget;
-			max_usage = std::max(max_usage, this_usage);
+			const auto& heap = budgets[i];
+			fmt::append(result, "%sheap %u: %lluM in %u blocks of %lluM %s (%lluM in %u allocations), driver %lluM of %lluM",
+				result.empty() ? "" : ", ", i, heap.statistics.blockBytes / 0x100000, heap.statistics.blockCount,
+				props->memoryHeaps[i].size / 0x100000, m_heap_capped ? "cap" : "heap",
+				heap.statistics.allocationBytes / 0x100000, heap.statistics.allocationCount,
+				heap.usage / 0x100000, heap.budget / 0x100000);
 		}
-
-		return max_usage;
+		return result;
 	}
 
 	void mem_allocator_vma::set_safest_allocation_flags()

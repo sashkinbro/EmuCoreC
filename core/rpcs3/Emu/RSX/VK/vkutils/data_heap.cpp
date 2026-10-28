@@ -144,6 +144,7 @@ namespace vk
 			aligned_new_size = size_limit;
 		}
 
+		rsx_log.notice("[%s] Video memory before growing: %s", m_name, vk::vmm_describe_memory_usage());
 		// Wait for DMA activity to end
 		g_fxo->get<rsx::dma_manager>().sync();
 

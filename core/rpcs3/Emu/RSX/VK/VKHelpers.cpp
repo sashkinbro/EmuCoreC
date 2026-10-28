@@ -167,6 +167,13 @@ namespace vk
 		case driver_vendor::TURNIP:
 			// GPU hangs in some titles due to waiting for a query result
 			g_drv_strict_query_scopes = true;
+			// Adreno 830 can hang on hardware primitive restart in LittleBigPlanet.
+			if (gpu_name.find("Adreno (TM) 830") != umax)
+			{
+				const char* const env = std::getenv("ARMSX3_HW_RESTART");
+				g_drv_no_primitive_restart = !(env && env[0] == '1');
+				rsx_log.notice("Adreno 830: primitive restart %s", g_drv_no_primitive_restart ? "emulated" : "on hardware");
+			}
 			break;
 		case driver_vendor::POWERVR:
 		case driver_vendor::XCLIPSE:

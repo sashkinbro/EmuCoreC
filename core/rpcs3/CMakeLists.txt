@@ -198,6 +198,7 @@ if(BUILD_RPCS3_TESTS)
             tests/test_sys_fs.cpp
             tests/test_tuple.cpp
             tests/test_types_util.cpp
+            tests/test_vk_memory_budget.cpp
     )
 
     target_link_libraries(rpcs3_test
