@@ -3,6 +3,7 @@
 #include "Emu/Memory/vm_ptr.h"
 #include "Emu/Cell/ErrorCodes.h"
 #include "Input/product_info.h"
+#include <vector>
 
 class ppu_thread;
 
@@ -61,6 +62,12 @@ struct UsbDeviceIsoRequest
 	be_t<u32> num_packets;
 	be_t<u16> packets[8];
 };
+
+#ifdef __ANDROID__
+void usb_android_prepare_devices(const std::vector<int>& fds);
+void usb_android_activate_devices();
+void usb_android_release_devices();
+#endif
 
 error_code sys_usbd_initialize(ppu_thread& ppu, vm::ptr<u32> handle);
 error_code sys_usbd_finalize(ppu_thread& ppu, u32 handle);

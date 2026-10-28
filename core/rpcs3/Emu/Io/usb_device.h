@@ -265,7 +265,8 @@ protected:
 class usb_device_passthrough : public usb_device
 {
 public:
-	usb_device_passthrough(libusb_device* _device, libusb_device_descriptor& desc, const std::array<u8, 7>& location);
+	usb_device_passthrough(libusb_device* _device, libusb_device_descriptor& desc, const std::array<u8, 7>& location,
+		libusb_device_handle* handle = nullptr, std::shared_ptr<void> handle_owner = {});
 	~usb_device_passthrough();
 
 	bool open_device() override;
@@ -283,6 +284,7 @@ protected:
 protected:
 	libusb_device* lusb_device        = nullptr;
 	libusb_device_handle* lusb_handle = nullptr;
+	std::shared_ptr<void> m_handle_owner;
 
 private:
 	void patch_descriptors();

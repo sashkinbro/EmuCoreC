@@ -4,6 +4,9 @@
 #include "sys_sync.h"
 
 #include <queue>
+#ifdef __ANDROID__
+#include <unistd.h>
+#endif
 #include "Emu/System.h"
 #include "Emu/system_config.h"
 #include "Emu/IdManager.h"
@@ -352,8 +355,84 @@ static void LIBUSB_CALL log_cb(libusb_context* /*ctx*/, enum libusb_log_level le
 }
 #endif
 
+#ifdef __ANDROID__
+namespace
+{
+	struct android_usb_fds
+	{
+		std::vector<int> values;
+		~android_usb_fds() { for (const int fd : values) ::close(fd); }
+	};
+	std::mutex android_usb_mutex;
+	std::shared_ptr<android_usb_fds> android_usb_pending;
+	std::shared_ptr<android_usb_fds> android_usb_active;
+}
+
+void usb_android_prepare_devices(const std::vector<int>& fds)
+{
+	auto pending = std::make_shared<android_usb_fds>();
+	for (const int fd : fds)
+	{
+		const int copy = ::dup(fd);
+		if (copy >= 0) pending->values.push_back(copy);
+		else sys_usbd.error("Could not duplicate Android USB descriptor %d", fd);
+	}
+	std::lock_guard lock(android_usb_mutex);
+	android_usb_pending = std::move(pending);
+}
+
+void usb_android_activate_devices()
+{
+	std::lock_guard lock(android_usb_mutex);
+	android_usb_active = std::move(android_usb_pending);
+}
+
+void usb_android_release_devices()
+{
+	std::lock_guard lock(android_usb_mutex);
+	android_usb_active.reset();
+}
+#endif
+
 void usb_handler_thread::perform_scan()
 {
+#ifdef __ANDROID__
+	std::shared_ptr<android_usb_fds> fds;
+	{
+		std::lock_guard lock(android_usb_mutex);
+		fds = android_usb_active;
+	}
+	if (!fds) return;
+	for (const int fd : fds->values)
+	{
+		libusb_device_handle* handle = nullptr;
+		if (const int res = libusb_wrap_sys_device(ctx, static_cast<intptr_t>(fd), &handle); res < 0)
+		{
+			sys_usbd.error("Failed to wrap Android USB descriptor %d: %s", fd, libusb_error_name(res));
+			continue;
+		}
+		libusb_device* dev = libusb_get_device(handle);
+		libusb_device_descriptor desc{};
+		if (libusb_get_device_descriptor(dev, &desc) < 0) { libusb_close(handle); continue; }
+		const u64 id = (u64{desc.idVendor} << 48) | (u64{desc.idProduct} << 32) | static_cast<u32>(fd);
+		bool attached = false;
+		for (const auto& entry : device_allow_list)
+		{
+			if (!usb_passthrough_devices.contains(id) && desc.idVendor == entry.id_vendor &&
+				desc.idProduct >= entry.id_product_min && desc.idProduct <= entry.id_product_max)
+			{
+				libusb_ref_device(dev);
+				auto device = std::make_shared<usb_device_passthrough>(dev, desc, get_new_location(), handle, fds);
+				connect_usb_device(device, true);
+				usb_passthrough_devices[id] = device;
+				attached = true;
+				break;
+			}
+		}
+		if (!attached) libusb_close(handle);
+	}
+	return;
+#endif
 	// look if any device which we could be interested in is actually connected
 	libusb_device** list = nullptr;
 	const auto ndev = libusb_get_device_list(ctx, &list);
@@ -465,6 +544,12 @@ usb_handler_thread::usb_handler_thread()
 		std::move(log_lv_opt),
 		std::move(log_cb_opt)
 	};
+
+#ifdef __ANDROID__
+	libusb_init_option no_discovery{};
+	no_discovery.option = LIBUSB_OPTION_NO_DEVICE_DISCOVERY;
+	options.push_back(no_discovery);
+#endif
 
 	if (int res = libusb_init_context(&ctx, options.data(), static_cast<int>(options.size())); res < 0)
 #else

@@ -17,6 +17,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import com.sbro.emucorec.core.input.KeyboardMouseManager
+import com.sbro.emucorec.core.UsbPortals
 import com.sbro.emucorec.data.AppPreferences
 import com.sbro.emucorec.data.CustomizationPreferences
 import com.sbro.emucorec.core.review.AndroidInAppReviewAttemptStore
@@ -45,6 +46,7 @@ class MainActivity : AppCompatActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         KeyboardMouseManager.ensureInitialized(this)
+        UsbPortals.watch(this)
         inAppReviewCoordinator = InAppReviewCoordinator(
             progressSource = PlayTimeReviewProgressSource(applicationContext),
             store = AndroidInAppReviewAttemptStore(applicationContext),

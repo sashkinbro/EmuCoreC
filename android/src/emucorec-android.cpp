@@ -49,6 +49,7 @@
 #include "Loader/PUP.h"
 #include "Loader/TAR.h"
 #include "Emu/Cell/lv2/sys_sync.h"
+#include "Emu/Cell/lv2/sys_usbd.h"
 #include "hidapi_libusb.h"
 #include "libusb.h"
 #include "rpcs3_version.h"
@@ -2014,7 +2015,7 @@ static void setupCallbacks() {
       .on_run_completed = save_states::running,
       .on_pause = [](auto...) {},
       .on_resume = [](auto...) {},
-      .on_stop = save_states::stopped,
+      .on_stop = [] { save_states::stopped(); usb_android_release_devices(); },
       .on_ready = [](auto...) {},
       .on_missing_fw = [](auto...) {},
       // RPCS3's stop watchdog calls this when shutting the VM down has taken about 10
@@ -2706,6 +2707,7 @@ extern "C" int emucorec_boot(std::string_view path_) {
     }
   }
 
+  usb_android_activate_devices();
   Emu.SetForceBoot(true);
   std::string path = std::string(path_);
   while (path.ends_with('/')) {
@@ -4548,7 +4550,7 @@ extern "C" void emucorec_setMicrophoneDevices(JNIEnv* env, jobjectArray names, j
   if (!env || !names || !ids) return;
   const jsize count = std::min(env->GetArrayLength(names), env->GetArrayLength(ids));
   std::vector<jint> device_ids(count);
-  env->GetIntArrayRegion(ids, 0, count, device_ids.data());
+  if (count) env->GetIntArrayRegion(ids, 0, count, device_ids.data());
   if (env->ExceptionCheck()) return;
   std::vector<std::pair<std::string, s32>> devices;
   devices.reserve(count);
@@ -4563,6 +4565,15 @@ extern "C" void emucorec_setMicrophoneDevices(JNIEnv* env, jobjectArray names, j
     env->DeleteLocalRef(name);
   }
   oboe_capture::set_devices(std::move(devices));
+}
+
+extern "C" void emucorec_prepareUsbDevices(JNIEnv* env, jintArray descriptors) {
+  if (!env || !descriptors) return;
+  const jsize count = env->GetArrayLength(descriptors);
+  std::vector<jint> input(count);
+  if (count) env->GetIntArrayRegion(descriptors, 0, count, input.data());
+  if (env->ExceptionCheck()) return;
+  usb_android_prepare_devices(std::vector<int>(input.begin(), input.end()));
 }
 
 // Identity strings for the performance overlay header (app version, build and

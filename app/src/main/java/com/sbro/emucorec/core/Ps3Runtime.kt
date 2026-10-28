@@ -233,6 +233,7 @@ object Ps3Runtime {
     fun boot(context: Context, path: String, titleId: String? = null): BootResult {
         if (!ensureInitialized(context)) return BootResult.GenericError
         ensurePumpsRunning()
+        UsbPortals.prepareForGame(context)
         Ps3CoreSettingOverrides.applyForGame(context, titleId)
         return Ps3Core.boot(path)
     }
