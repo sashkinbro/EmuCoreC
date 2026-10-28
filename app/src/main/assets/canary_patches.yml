@@ -429,3 +429,117 @@ PPU-43e618448eed82aa96856338d072f1e4978c36a8:
     Author: illusion
     Patch Version: 1.0
     Patch: [ [ be32, 0x008C2B4C, 0x38600000 ] ]
+
+PPU-0e747cbf4d807d363b085d983fff749c2c9cbdee:
+  "ARMSX3 phase start crash fix":
+    Games:
+      "Splatterhouse":
+        BLUS30335: [ All ]
+        BLES01120: [ All ]
+    Author: jpolo1224
+    Patch Version: 1.0
+    Patch:
+      - [ calloc, 0x006c7860, 0x25 ]
+      - [ be32, 0x00000000, 0x40920090 ]
+      - [ be32, 0x00000000, 0x2f9b0000 ]
+      - [ be32, 0x00000000, 0x409e0088 ]
+      - [ be32, 0x00000000, 0x3d200158 ]
+      - [ be32, 0x00000000, 0x80697e00 ]
+      - [ be32, 0x00000000, 0x2f830000 ]
+      - [ be32, 0x00000000, 0x419e0078 ]
+      - [ be32, 0x00000000, 0x80030250 ]
+      - [ be32, 0x00000000, 0x2f800000 ]
+      - [ be32, 0x00000000, 0x409e006c ]
+      - [ be32, 0x00000000, 0x7b390002 ]
+      - [ be32, 0x00000000, 0x3b390001 ]
+      - [ be32, 0x00000000, 0x2b991388 ]
+      - [ be32, 0x00000000, 0x7b390002 ]
+      - [ be32, 0x00000000, 0x419d0058 ]
+      - [ be32, 0x00000000, 0x813a3c20 ]
+      - [ be32, 0x00000000, 0x3929ffff ]
+      - [ be32, 0x00000000, 0x913a3c20 ]
+      - [ be32, 0x00000000, 0x7f83e378 ]
+      - [ jumpl, 0x00000000, 0x010acb98 ]
+      - [ be32, 0x00000000, 0x3d200158 ]
+      - [ be32, 0x00000000, 0x80697e00 ]
+      - [ be32, 0x00000000, 0x78630020 ]
+      - [ jumpl, 0x00000000, 0x006c67c0 ]
+      - [ be32, 0x00000000, 0x38600064 ]
+      - [ be32, 0x00000000, 0x3960008d ]
+      - [ be32, 0x00000000, 0x44000002 ]
+      - [ be32, 0x00000000, 0x7f83e378 ]
+      - [ be32, 0x00000000, 0x38800000 ]
+      - [ jumpl, 0x00000000, 0x010acb60 ]
+      - [ be32, 0x00000000, 0x813a3c20 ]
+      - [ be32, 0x00000000, 0x39290001 ]
+      - [ be32, 0x00000000, 0x913a3c20 ]
+      - [ be32, 0x00000000, 0x7f5dd378 ]
+      - [ be32, 0x00000000, 0x3bc00000 ]
+      - [ jump, 0x00000000, 0x006c77f8 ]
+      - [ be32, 0x00000000, 0x3be00000 ]
+
+SPU-d0a1508208613e2184fbd64906d34d5f07890033:
+  "ARMSX3 Approximate collision fix":
+    Games:
+      "Grand Theft Auto IV":
+        BLUS30682: [ All ]
+        BLUS30127: [ All ]
+        NPUB30702: [ All ]
+    Author: jpolo1224
+    Patch Version: 1.0
+    Patch:
+      - [ be32, 0x0c4f4, 0x413fbfd4 ]
+      - [ be32, 0x0e3b0, 0x413fbf90 ]
+      - [ be32, 0x0eca0, 0x413fbfa3 ]
+      - [ be32, 0x0f630, 0x413fbf82 ]
+      - [ be32, 0x0fa38, 0x413fbf91 ]
+      - [ be32, 0x10e30, 0x413fbf9b ]
+      - [ be32, 0x11470, 0x413fbfde ]
+      - [ be32, 0x11508, 0x413fbfc4 ]
+      - [ be32, 0x154b0, 0x413fbfbc ]
+      - [ be32, 0x15528, 0x413fbfb2 ]
+      - [ be32, 0x157a0, 0x413fbfcb ]
+      - [ be32, 0x158d8, 0x413fbfa0 ]
+      - [ be32, 0x17098, 0x413fbfbd ]
+      - [ be32, 0x175f8, 0x413fbfcf ]
+
+PPU-f942422316f63af3d64dc940b35ec8fddade0f44:
+  "ARMSX3 boot crash fix":
+    Games:
+      "THE IDOLM@STER 2":
+        NPJB00337: [ "01.00" ]
+    Author: jpolo1224
+    Patch Version: 1.0
+    Patch:
+      - [ be32, 0x00435384, 0x7c0802a6 ]
+      - [ be32, 0x00435388, 0xf8010010 ]
+      - [ be32, 0x0043538c, 0xf821ff81 ]
+      - [ be32, 0x00435390, 0xf8610070 ]
+      - [ be32, 0x00435394, 0x38630068 ]
+      - [ be32, 0x00435398, 0x38800001 ]
+      - [ be32, 0x0043539c, 0x4bffa939 ]
+      - [ be32, 0x004353a0, 0xe8610070 ]
+      - [ be32, 0x004353a4, 0x38210080 ]
+      - [ be32, 0x004353a8, 0xe8010010 ]
+      - [ be32, 0x004353ac, 0x7c0803a6 ]
+      - [ be32, 0x004353b0, 0x4bffffa4 ]
+
+SPU-30d17ae952dd9ccc1abc46b631654e1fe432fde9:
+  "ARMSX3 raw SPU park fix":
+    Games:
+      "Blitz: The League II":
+        BLUS30203: [ All ]
+        BLES00397: [ All ]
+    Author: jpolo1224
+    Patch Version: 1.0
+    Patch: [ [ be32, 0x0ab8c, 0x327f8a00 ] ]
+
+SPU-93f3b15e03c594d9eaf5a0d8521854fd6eb2a8c7:
+  "ARMSX3 raw SPU park fix":
+    Games:
+      "Blitz: The League II":
+        BLUS30203: [ All ]
+        BLES00397: [ All ]
+    Author: jpolo1224
+    Patch Version: 1.0
+    Patch: [ [ be32, 0x075ac, 0x327fd700 ] ]

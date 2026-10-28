@@ -42,6 +42,16 @@ internal object BundledPatchInstaller {
         BundledPatch("PPU-56101fbdbac186fddef72207145015fd314a0be5", "ARMSX3 Junkyard crash fix", "BLUS30061", "01.00"),
         BundledPatch("PPU-30ce8c9f0a9552914275c90e2980749630f3ea18", "ARMSX3 intro movie crash fix", "BCES00112", "01.00"),
         BundledPatch("PPU-30ce8c9f0a9552914275c90e2980749630f3ea18", "ARMSX3 quickplay loading fix", "BCES00112", "01.00"),
+        BundledPatch("PPU-0e747cbf4d807d363b085d983fff749c2c9cbdee", "ARMSX3 phase start crash fix", "BLUS30335", "all"),
+        BundledPatch("PPU-0e747cbf4d807d363b085d983fff749c2c9cbdee", "ARMSX3 phase start crash fix", "BLES01120", "all"),
+        BundledPatch("SPU-d0a1508208613e2184fbd64906d34d5f07890033", "ARMSX3 Approximate collision fix", "BLUS30682", "all"),
+        BundledPatch("SPU-d0a1508208613e2184fbd64906d34d5f07890033", "ARMSX3 Approximate collision fix", "BLUS30127", "all"),
+        BundledPatch("SPU-d0a1508208613e2184fbd64906d34d5f07890033", "ARMSX3 Approximate collision fix", "NPUB30702", "all"),
+        BundledPatch("PPU-f942422316f63af3d64dc940b35ec8fddade0f44", "ARMSX3 boot crash fix", "NPJB00337", "01.00"),
+        BundledPatch("SPU-30d17ae952dd9ccc1abc46b631654e1fe432fde9", "ARMSX3 raw SPU park fix", "BLUS30203", "all"),
+        BundledPatch("SPU-30d17ae952dd9ccc1abc46b631654e1fe432fde9", "ARMSX3 raw SPU park fix", "BLES00397", "all"),
+        BundledPatch("SPU-93f3b15e03c594d9eaf5a0d8521854fd6eb2a8c7", "ARMSX3 raw SPU park fix", "BLUS30203", "all"),
+        BundledPatch("SPU-93f3b15e03c594d9eaf5a0d8521854fd6eb2a8c7", "ARMSX3 raw SPU park fix", "BLES00397", "all"),
     ) + listOf(
         "PPU-42367707f4caac2668f10cb46498f64bde9db440" to "BCUS99247",
         "PPU-4f1e9acd7d98961b4b742fb324a2faba6212ea67" to "BCUS98296",
@@ -63,7 +73,7 @@ internal object BundledPatchInstaller {
 }
 
 internal object BundledPatches {
-    private const val REVISION = 4
+    private const val REVISION = 5
 
     fun ensureInstalled(context: Context, root: String) {
         // Each storage root has its own patch database and its own installation state.
