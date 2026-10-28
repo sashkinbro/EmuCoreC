@@ -5,6 +5,7 @@
 #include "permissions.h"
 #include "welcome_dialog.h"
 #include "main_window.h"
+#include "midi_creator.h"
 #include "emu_settings.h"
 #include "gui_settings.h"
 #include "persistent_settings.h"
@@ -765,6 +766,7 @@ void gui_application::create_callbacks()
 			}
 
 			const bool no_gui = !m_main_window;
+			midi_creator::wait_for_init();
 
 			if (m_main_window)
 			{
