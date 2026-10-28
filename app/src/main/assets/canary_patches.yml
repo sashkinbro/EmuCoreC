@@ -543,3 +543,26 @@ SPU-93f3b15e03c594d9eaf5a0d8521854fd6eb2a8c7:
     Author: jpolo1224
     Patch Version: 1.0
     Patch: [ [ be32, 0x075ac, 0x327fd700 ] ]
+
+PPU-ae204e2198c9a051a44a69913c48f6591b811082:
+  "Disable MLAA(Post-processing On SPU)":
+    Games:
+      "Killzone 3":
+        BCES01007: [ "01.00" ]
+        BCUS98234: [ "01.00" ]
+    Author: illusion
+    Patch Version: 1.0
+    Patch:
+      - [ be32, 0x001be008, 0x38a00000 ]
+
+PPU-4836b8e74c47919f50b030ee6b47d96bc7305387:
+  "Disable MLAA (Post-processing on SPU)":
+    Games:
+      "Killzone 3":
+        BCES01007: [ "01.14" ]
+        BCUS98234: [ "01.14" ]
+    Author: illusion
+    Patch Version: 1.0
+    Patch:
+      - [ be32, 0x001c95a8, 0x38a00000 ]
+      - [ be16, 0x00202128, 0x4800 ]

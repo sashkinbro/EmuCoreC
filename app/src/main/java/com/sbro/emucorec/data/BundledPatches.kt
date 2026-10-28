@@ -52,6 +52,10 @@ internal object BundledPatchInstaller {
         BundledPatch("SPU-30d17ae952dd9ccc1abc46b631654e1fe432fde9", "ARMSX3 raw SPU park fix", "BLES00397", "all"),
         BundledPatch("SPU-93f3b15e03c594d9eaf5a0d8521854fd6eb2a8c7", "ARMSX3 raw SPU park fix", "BLUS30203", "all"),
         BundledPatch("SPU-93f3b15e03c594d9eaf5a0d8521854fd6eb2a8c7", "ARMSX3 raw SPU park fix", "BLES00397", "all"),
+        BundledPatch("PPU-ae204e2198c9a051a44a69913c48f6591b811082", "Disable MLAA(Post-processing On SPU)", "BCES01007", "01.00"),
+        BundledPatch("PPU-ae204e2198c9a051a44a69913c48f6591b811082", "Disable MLAA(Post-processing On SPU)", "BCUS98234", "01.00"),
+        BundledPatch("PPU-4836b8e74c47919f50b030ee6b47d96bc7305387", "Disable MLAA (Post-processing on SPU)", "BCES01007", "01.14"),
+        BundledPatch("PPU-4836b8e74c47919f50b030ee6b47d96bc7305387", "Disable MLAA (Post-processing on SPU)", "BCUS98234", "01.14"),
     ) + listOf(
         "PPU-42367707f4caac2668f10cb46498f64bde9db440" to "BCUS99247",
         "PPU-4f1e9acd7d98961b4b742fb324a2faba6212ea67" to "BCUS98296",
@@ -73,7 +77,7 @@ internal object BundledPatchInstaller {
 }
 
 internal object BundledPatches {
-    private const val REVISION = 5
+    private const val REVISION = 6
 
     fun ensureInstalled(context: Context, root: String) {
         // Each storage root has its own patch database and its own installation state.
