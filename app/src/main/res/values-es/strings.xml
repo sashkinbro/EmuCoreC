@@ -1,4 +1,7 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="emulation_tab_portals">Portales de figuras</string>
+    <string name="emulation_portal_real_active">Hay un portal físico conectado.</string>
+    <string name="emulation_portal_import_failed">No se pudo cargar la figura.</string>
     <string name="emulation_quickbar_home_menu">Menú principal de RPCS3</string>
     <string name="onboarding_storage_title">Almacenamiento del emulador</string>
     <string name="onboarding_status_install_firmware">Instala el software oficial del sistema PS3 de Sony.</string>

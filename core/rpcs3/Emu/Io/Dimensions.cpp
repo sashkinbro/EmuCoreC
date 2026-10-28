@@ -393,15 +393,12 @@ u32 dimensions_toypad::load_figure(const std::array<u8, 0x2D * 0x04>& buf, fs::f
 
 bool dimensions_toypad::remove_figure(u8 pad, u8 index, bool full_remove, bool lock)
 {
+	std::unique_lock guard(m_dimensions_mutex, std::defer_lock);
+	if (lock) guard.lock();
 	dimensions_figure& figure = get_figure_by_index(index);
 	if (figure.index == 255)
 	{
 		return false;
-	}
-
-	if (lock)
-	{
-		m_dimensions_mutex.lock();
 	}
 
 	// When a figure is removed from the toypad, respond to the game with the pad they were removed from, their index,
@@ -421,10 +418,6 @@ bool dimensions_toypad::remove_figure(u8 pad, u8 index, bool full_remove, bool l
 	figure.pad = 255;
 	figure.id = 0;
 
-	if (lock)
-	{
-		m_dimensions_mutex.unlock();
-	}
 	return true;
 }
 

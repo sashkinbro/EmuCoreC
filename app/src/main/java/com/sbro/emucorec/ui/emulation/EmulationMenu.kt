@@ -561,6 +561,7 @@ private fun MenuSelectedContent(
                 )
             }
             EmulationMenuTab.Audio -> InGameCoreSettings(Ps3CoreSettingsCategory.Audio, gameId)
+            EmulationMenuTab.Portals -> ToyPortalPanel()
             EmulationMenuTab.Controls -> {
                 ControlsTab(config = config, callbacks = callbacks)
             }
@@ -580,6 +581,7 @@ private enum class EmulationMenuTab {
     SaveStates,
     Graphics,
     Audio,
+    Portals,
     Controls,
     Achievements,
     Gamepad
@@ -1638,6 +1640,7 @@ private fun emulationMenuTabs(): List<EmulationMenuTabItem> = listOf(
     EmulationMenuTabItem(EmulationMenuTab.SaveStates, stringResource(R.string.emulation_tab_savestates), Icons.Rounded.Save),
     EmulationMenuTabItem(EmulationMenuTab.Graphics, stringResource(R.string.settings_tab_graphics), Icons.Rounded.GraphicEq),
     EmulationMenuTabItem(EmulationMenuTab.Audio, stringResource(R.string.settings_tab_audio), Icons.AutoMirrored.Rounded.VolumeUp),
+    EmulationMenuTabItem(EmulationMenuTab.Portals, stringResource(R.string.emulation_tab_portals), Icons.Rounded.SportsEsports),
     EmulationMenuTabItem(EmulationMenuTab.Controls, stringResource(R.string.emulation_tab_controls), Icons.Rounded.Tune),
     EmulationMenuTabItem(
         EmulationMenuTab.Achievements,

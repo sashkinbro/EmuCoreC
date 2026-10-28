@@ -1,4 +1,7 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="emulation_tab_portals">玩具传送门</string>
+    <string name="emulation_portal_real_active">已连接实体传送门。</string>
+    <string name="emulation_portal_import_failed">无法加载此玩具。</string>
     <string name="emulation_quickbar_home_menu">RPCS3 主選單</string>
     <string name="onboarding_storage_title">模擬器儲存空間</string>
     <string name="onboarding_status_install_firmware">安装 Sony 官方 PS3 系统软件。</string>

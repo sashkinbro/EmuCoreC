@@ -67,6 +67,7 @@ struct UsbDeviceIsoRequest
 void usb_android_prepare_devices(const std::vector<int>& fds);
 void usb_android_activate_devices();
 void usb_android_release_devices();
+u32 usb_android_passed_through();
 #endif
 
 error_code sys_usbd_initialize(ppu_thread& ppu, vm::ptr<u32> handle);

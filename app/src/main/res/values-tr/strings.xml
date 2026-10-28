@@ -1,4 +1,7 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="emulation_tab_portals">Figür portalları</string>
+    <string name="emulation_portal_real_active">Fiziksel bir portal bağlı.</string>
+    <string name="emulation_portal_import_failed">Figür yüklenemedi.</string>
     <string name="emulation_quickbar_home_menu">RPCS3 ana menüsü</string>
     <string name="onboarding_storage_title">Emülatör depolama alanı</string>
     <string name="onboarding_status_install_firmware">Sony\'nin resmi PS3 sistem yazılımını yükleyin.</string>

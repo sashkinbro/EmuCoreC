@@ -1,4 +1,7 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="emulation_tab_portals">Toy portals</string>
+    <string name="emulation_portal_real_active">A physical portal is connected.</string>
+    <string name="emulation_portal_import_failed">Could not load this figure.</string>
     <string name="emulation_quickbar_home_menu">RPCS3 home menu</string>
     <string name="onboarding_storage_title">Emulator storage</string>
     <string name="onboarding_storage_choose_title">Choose emulator storage</string>

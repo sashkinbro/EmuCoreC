@@ -57,6 +57,9 @@ struct EmuCoreCApi {
   bool (*micTestStart)(std::string_view);
   float (*micTestLevel)();
   void (*micTestStop)();
+  int (*portalLoad)(int, int, std::string_view);
+  bool (*portalRemove)(int, int);
+  int (*usbPassedThrough)();
   std::string (*getVersion)();
   std::string (*probeDiscInfo)(std::string_view path, std::string_view iconOut);
   bool (*requestSaveState)(unsigned slot, long progressId);
@@ -150,6 +153,9 @@ struct EmuCoreCLibrary : EmuCoreCApi {
     result.micTestStart = reinterpret_cast<decltype(micTestStart)>(dlsym(handle, "emucorec_micTestStart"));
     result.micTestLevel = reinterpret_cast<decltype(micTestLevel)>(dlsym(handle, "emucorec_micTestLevel"));
     result.micTestStop = reinterpret_cast<decltype(micTestStop)>(dlsym(handle, "emucorec_micTestStop"));
+    result.portalLoad = reinterpret_cast<decltype(portalLoad)>(dlsym(handle, "emucorec_portalLoad"));
+    result.portalRemove = reinterpret_cast<decltype(portalRemove)>(dlsym(handle, "emucorec_portalRemove"));
+    result.usbPassedThrough = reinterpret_cast<decltype(usbPassedThrough)>(dlsym(handle, "emucorec_usbPassedThrough"));
     result.getVersion = reinterpret_cast<decltype(getVersion)>(dlsym(handle, "emucorec_getVersion"));
     result.probeDiscInfo = reinterpret_cast<decltype(probeDiscInfo)>(dlsym(handle, "emucorec_probeDiscInfo"));
     result.requestSaveState = reinterpret_cast<decltype(requestSaveState)>(dlsym(handle, "emucorec_requestSaveState"));
@@ -384,6 +390,18 @@ extern "C" JNIEXPORT jfloat JNICALL Java_com_sbro_emucorec_core_Ps3Core_micTestL
 
 extern "C" JNIEXPORT void JNICALL Java_com_sbro_emucorec_core_Ps3Core_micTestStop(JNIEnv *, jobject) {
   if (emucorecLib.micTestStop) emucorecLib.micTestStop();
+}
+
+extern "C" JNIEXPORT jint JNICALL Java_com_sbro_emucorec_core_Ps3Core_portalLoad(JNIEnv *env, jobject, jint kind, jint position, jstring path) {
+  return emucorecLib.portalLoad ? emucorecLib.portalLoad(kind, position, unwrap(env, path)) : -1;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL Java_com_sbro_emucorec_core_Ps3Core_portalRemove(JNIEnv *, jobject, jint kind, jint position) {
+  return emucorecLib.portalRemove && emucorecLib.portalRemove(kind, position);
+}
+
+extern "C" JNIEXPORT jint JNICALL Java_com_sbro_emucorec_core_Ps3Core_usbPassedThrough(JNIEnv *, jobject) {
+  return emucorecLib.usbPassedThrough ? emucorecLib.usbPassedThrough() : 0;
 }
 
 extern "C" JNIEXPORT jboolean JNICALL Java_com_sbro_emucorec_core_Ps3Core_queueGameSetting(

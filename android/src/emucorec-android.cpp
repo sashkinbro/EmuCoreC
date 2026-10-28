@@ -12,6 +12,9 @@
 #include "Emu/emu_callbacks.h"
 #include "Emu/IdManager.h"
 #include "Emu/Io/KeyboardHandler.h"
+#include "Emu/Io/Skylander.h"
+#include "Emu/Io/Infinity.h"
+#include "Emu/Io/Dimensions.h"
 #include "Emu/Io/Null/NullKeyboardHandler.h"
 #include "Emu/Io/Null/NullMouseHandler.h"
 #include "Emu/Io/Null/NullPadHandler.h"
@@ -4620,6 +4623,59 @@ extern "C" void emucorec_micTestStop() {
   std::lock_guard lock(g_mic_test_mutex);
   g_mic_test.reset();
 }
+
+namespace {
+std::mutex g_portal_mutex;
+u8 dimensions_pad(u8 index) { return index == 1 ? 1 : (index == 0 || index == 3 || index == 4) ? 2 : 3; }
+
+template <usz Size>
+bool read_figure(std::string_view path, fs::file& file, std::array<u8, Size>& data) {
+  file = fs::file(std::string(path), fs::read + fs::write + fs::lock);
+  return file && file.read(data.data(), data.size()) == data.size();
+}
+}
+
+extern "C" int emucorec_portalLoad(int kind, int position, std::string_view path) {
+  std::lock_guard lock(g_portal_mutex);
+  if (position < 0) return -1;
+  fs::file file;
+  if (kind == 0 && position < 8) {
+    std::array<u8, 0x400> data{};
+    if (!read_figure(path, file, data)) return -1;
+    g_skyportal.remove_skylander(static_cast<u8>(position));
+    return g_skyportal.load_skylander(data, std::move(file), position) == position ? position : -1;
+  }
+  if (kind == 1 && position < 9) {
+    std::array<u8, 0x140> data{};
+    if (!read_figure(path, file, data)) return -1;
+    g_infinitybase.remove_figure(static_cast<u8>(position));
+    g_infinitybase.load_figure(data, std::move(file), static_cast<u8>(position));
+    return position;
+  }
+  if (kind == 2 && position < 7) {
+    std::array<u8, 0xb4> data{};
+    if (!read_figure(path, file, data)) return -1;
+    const auto index = static_cast<u8>(position);
+    g_dimensionstoypad.remove_figure(dimensions_pad(index), index, true, true);
+    g_dimensionstoypad.load_figure(data, std::move(file), dimensions_pad(index), index, true);
+    return position;
+  }
+  return -1;
+}
+
+extern "C" bool emucorec_portalRemove(int kind, int position) {
+  std::lock_guard lock(g_portal_mutex);
+  if (position < 0) return false;
+  if (kind == 0 && position < 8) return g_skyportal.remove_skylander(static_cast<u8>(position));
+  if (kind == 1 && position < 9) return g_infinitybase.remove_figure(static_cast<u8>(position));
+  if (kind == 2 && position < 7) {
+    const auto index = static_cast<u8>(position);
+    return g_dimensionstoypad.remove_figure(dimensions_pad(index), index, true, true);
+  }
+  return false;
+}
+
+extern "C" int emucorec_usbPassedThrough() { return static_cast<int>(usb_android_passed_through()); }
 
 // Identity strings for the performance overlay header (app version, build and
 // device name). Called by the app once the core is loaded.

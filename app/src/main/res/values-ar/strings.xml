@@ -1,4 +1,7 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="emulation_tab_portals">بوابات الألعاب</string>
+    <string name="emulation_portal_real_active">تم توصيل بوابة فعلية.</string>
+    <string name="emulation_portal_import_failed">تعذر تحميل المجسم.</string>
     <string name="emulation_quickbar_home_menu">قائمة RPCS3 الرئيسية</string>
     <string name="onboarding_storage_title">مساحة تخزين المحاكي</string>
     <string name="onboarding_status_install_firmware">ثبّت برنامج نظام PS3 الرسمي من Sony.</string>

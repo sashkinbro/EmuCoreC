@@ -1,5 +1,8 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
+    <string name="emulation_tab_portals">درگاه‌های عروسک</string>
+    <string name="emulation_portal_real_active">یک درگاه فیزیکی متصل است.</string>
+    <string name="emulation_portal_import_failed">بارگذاری عروسک انجام نشد.</string>
     <string name="emulation_quickbar_home_menu">منوی اصلی RPCS3</string>
     <string name="onboarding_storage_title">حافظه شبیه‌ساز</string>
     <string name="onboarding_storage_choose_title">انتخاب حافظه شبیه‌ساز</string>

@@ -366,6 +366,7 @@ namespace
 	std::mutex android_usb_mutex;
 	std::shared_ptr<android_usb_fds> android_usb_pending;
 	std::shared_ptr<android_usb_fds> android_usb_active;
+	std::atomic<u32> android_usb_passed_through{0};
 }
 
 void usb_android_prepare_devices(const std::vector<int>& fds)
@@ -391,7 +392,10 @@ void usb_android_release_devices()
 {
 	std::lock_guard lock(android_usb_mutex);
 	android_usb_active.reset();
+	android_usb_passed_through.store(0);
 }
+
+u32 usb_android_passed_through() { return android_usb_passed_through.load(); }
 #endif
 
 void usb_handler_thread::perform_scan()
@@ -402,7 +406,20 @@ void usb_handler_thread::perform_scan()
 		std::lock_guard lock(android_usb_mutex);
 		fds = android_usb_active;
 	}
-	if (!fds) return;
+	if (!fds) { android_usb_passed_through.store(0); return; }
+	u32 passed_through = 0;
+	const auto portal_bit_for = [](u16 vendor, u16 product) -> u32
+	{
+		if (vendor == 0x1430 && product == 0x0150) return 1;
+		if (vendor == 0x0e6f && product == 0x0129) return 2;
+		if (vendor == 0x0e6f && product == 0x0241) return 4;
+		return 0;
+	};
+	for (const auto& entry : usb_passthrough_devices)
+	{
+		const u64 id = entry.first;
+		passed_through |= portal_bit_for(static_cast<u16>(id >> 48), static_cast<u16>(id >> 32));
+	}
 	for (const int fd : fds->values)
 	{
 		libusb_device_handle* handle = nullptr;
@@ -415,6 +432,13 @@ void usb_handler_thread::perform_scan()
 		libusb_device_descriptor desc{};
 		if (libusb_get_device_descriptor(dev, &desc) < 0) { libusb_close(handle); continue; }
 		const u64 id = (u64{desc.idVendor} << 48) | (u64{desc.idProduct} << 32) | static_cast<u32>(fd);
+		const u32 portal_bit = portal_bit_for(desc.idVendor, desc.idProduct);
+		if (usb_passthrough_devices.contains(id))
+		{
+			passed_through |= portal_bit;
+			libusb_close(handle);
+			continue;
+		}
 		bool attached = false;
 		for (const auto& entry : device_allow_list)
 		{
@@ -425,11 +449,16 @@ void usb_handler_thread::perform_scan()
 				auto device = std::make_shared<usb_device_passthrough>(dev, desc, get_new_location(), handle, fds);
 				connect_usb_device(device, true);
 				usb_passthrough_devices[id] = device;
+				passed_through |= portal_bit;
 				attached = true;
 				break;
 			}
 		}
 		if (!attached) libusb_close(handle);
+	}
+	{
+		std::lock_guard lock(android_usb_mutex);
+		if (android_usb_active == fds) android_usb_passed_through.store(passed_through);
 	}
 	return;
 #endif

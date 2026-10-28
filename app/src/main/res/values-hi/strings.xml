@@ -1,4 +1,7 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="emulation_tab_portals">खिलौना पोर्टल</string>
+    <string name="emulation_portal_real_active">एक भौतिक पोर्टल जुड़ा है।</string>
+    <string name="emulation_portal_import_failed">आकृति लोड नहीं हो सकी।</string>
     <string name="emulation_quickbar_home_menu">RPCS3 होम मेनू</string>
     <string name="onboarding_storage_title">एमुलेटर स्टोरेज</string>
     <string name="onboarding_status_install_firmware">Sony का आधिकारिक PS3 सिस्टम सॉफ़्टवेयर इंस्टॉल करें।</string>

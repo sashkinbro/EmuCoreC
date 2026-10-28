@@ -105,6 +105,9 @@ class Ps3Core {
     external fun micTestStart(name: String): Boolean
     external fun micTestLevel(): Float
     external fun micTestStop()
+    external fun portalLoad(kind: Int, position: Int, path: String): Int
+    external fun portalRemove(kind: Int, position: Int): Boolean
+    external fun usbPassedThrough(): Int
     external fun getState(): Int
     external fun kill()
     external fun pause()

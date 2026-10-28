@@ -1,5 +1,8 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
+    <string name="emulation_tab_portals">피규어 포털</string>
+    <string name="emulation_portal_real_active">실제 포털이 연결되었습니다.</string>
+    <string name="emulation_portal_import_failed">피규어를 불러오지 못했습니다.</string>
     <string name="emulation_quickbar_home_menu">RPCS3 홈 메뉴</string>
     <string name="onboarding_storage_title">에뮬레이터 저장 공간</string>
     <string name="onboarding_storage_choose_title">에뮬레이터 저장 공간 선택</string>
