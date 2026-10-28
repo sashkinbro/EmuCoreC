@@ -1143,7 +1143,9 @@ bool jit_compiler::check(const std::string& path)
 			return true;
 		}
 
-		if (fs::remove_file(path))
+		const bool removed_gz = fs::remove_file(path + ".gz");
+		const bool removed = fs::remove_file(path);
+		if (removed_gz || removed)
 		{
 			jit_log.error("ObjectCache: Removed damaged file: %s", path);
 		}
