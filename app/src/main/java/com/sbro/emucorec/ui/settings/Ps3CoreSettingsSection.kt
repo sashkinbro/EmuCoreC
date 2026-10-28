@@ -1,5 +1,10 @@
 package com.sbro.emucorec.ui.settings
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -185,6 +190,25 @@ fun Ps3CoreSettingsSection(
         }
     }
 
+    var pendingMicrophoneChange by remember { mutableStateOf<Pair<Ps3CoreSetting, String>?>(null) }
+    val microphonePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        pendingMicrophoneChange?.let { (setting, value) ->
+            if (granted) write(setting, value)
+            else error = resources.getString(R.string.ps3_core_setting_rejected, setting.name)
+        }
+        pendingMicrophoneChange = null
+    }
+
+    fun writeWithPermission(setting: Ps3CoreSetting, raw: String) {
+        if (setting.path == "Audio@@Microphone Type" && raw != "Null" &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            pendingMicrophoneChange = setting to raw
+            microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
+        } else {
+            write(setting, raw)
+        }
+    }
+
     fun resetGameSetting(setting: Ps3CoreSetting) {
         val gameId = titleId?.takeIf(String::isNotBlank) ?: return
         coroutineScope.launch(Dispatchers.IO) {
@@ -239,7 +263,7 @@ fun Ps3CoreSettingsSection(
                     sectionSettings.forEach { setting ->
                         Ps3CoreSettingRow(
                             setting = setting,
-                            onWrite = { write(setting, it) },
+                            onWrite = { writeWithPermission(setting, it) },
                             onReset = {
                                 if (scope == Ps3CoreSettingsScope.Game) resetGameSetting(setting)
                                 else write(setting, setting.default)
@@ -255,7 +279,7 @@ fun Ps3CoreSettingsSection(
                     sectionSettings.forEach { setting ->
                         Ps3CoreSettingRow(
                             setting = setting,
-                            onWrite = { write(setting, it) },
+                            onWrite = { writeWithPermission(setting, it) },
                             onReset = {
                                 if (scope == Ps3CoreSettingsScope.Game) resetGameSetting(setting)
                                 else write(setting, setting.default)

@@ -172,6 +172,10 @@ else()
 	add_subdirectory(cubeb EXCLUDE_FROM_ALL)
 endif()
 
+if(ANDROID)
+	add_subdirectory(oboe EXCLUDE_FROM_ALL)
+endif()
+
 # SoundTouch
 add_subdirectory(SoundTouch EXCLUDE_FROM_ALL)
 

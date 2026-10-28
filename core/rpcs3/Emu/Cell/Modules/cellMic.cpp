@@ -4,6 +4,9 @@
 #include "Utilities/StrUtil.h"
 
 #include "cellMic.h"
+#ifdef __ANDROID__
+#include "Emu/Audio/Oboe/OboeCapture.h"
+#endif
 #include <Emu/IdManager.h>
 #include <Emu/Cell/lv2/sys_event.h>
 
@@ -158,7 +161,13 @@ void mic_context::load_config_and_init()
 {
 	mic_list = {};
 
-	const std::vector<std::string> device_list = fmt::split(g_cfg.audio.microphone_devices.to_string(), {"@@@"});
+	std::vector<std::string> device_list = fmt::split(g_cfg.audio.microphone_devices.to_string(), {"@@@"});
+#ifdef __ANDROID__
+	if (g_cfg.audio.microphone_type != microphone_handler::null && (device_list.empty() || device_list.front().empty()))
+	{
+		device_list = {"Default"};
+	}
+#endif
 
 	if (!device_list.empty())
 	{
@@ -505,6 +514,44 @@ error_code microphone_device::open_microphone(const u8 type, const u32 dsp_r, co
 
 	mic_opened = true;
 	return CELL_OK;
+#elif defined(__ANDROID__)
+	if (devices.empty()) return CELL_MICIN_ERROR_DEVICE_NOT_SUPPORT;
+	if (device_type == microphone_handler::singstar || device_type == microphone_handler::real_singstar) num_channels = 2;
+	else if (device_type == microphone_handler::rocksmith) num_channels = 1;
+	else if (num_channels != 1 && num_channels != 2 && num_channels != 4) num_channels = 4;
+	devices.resize(device_type == microphone_handler::singstar ? std::min<usz>(devices.size(), 2) : 1);
+	for (auto& device : devices) device.capture = std::make_shared<oboe_capture>();
+	const std::array<u32, 6> supported_rates = {48000, 32000, 24000, 16000, 12000, 8000};
+	std::vector<u32> rates;
+	if (std::find(supported_rates.begin(), supported_rates.end(), raw_samplingrate) != supported_rates.end()) rates.push_back(raw_samplingrate);
+	for (const u32 rate : supported_rates) if (rate != raw_samplingrate) rates.push_back(rate);
+	bool opened = false;
+	for (;;)
+	{
+		for (const u32 rate : rates)
+		{
+			if (devices[0].capture->open(devices[0].name, rate, device_type == microphone_handler::singstar ? 1 : num_channels))
+			{
+				raw_samplingrate = rate;
+				opened = true;
+				break;
+			}
+		}
+		if (opened || num_channels == 1 || device_type == microphone_handler::singstar || device_type == microphone_handler::real_singstar) break;
+		num_channels = num_channels == 4 ? 2 : 1;
+	}
+	if (!opened) return CELL_MICIN_ERROR_DEVICE_NOT_SUPPORT;
+	aux_samplingrate = dsp_samplingrate = raw_samplingrate;
+	devices[0].buf.resize(inbuf_size, 0);
+	if (devices.size() > 1)
+	{
+		if (devices[1].capture->open(devices[1].name, raw_samplingrate, 1)) devices[1].buf.resize(inbuf_size, 0);
+		else devices.resize(1);
+	}
+	if (device_type != microphone_handler::real_singstar) temp_buf.resize(inbuf_size, 0);
+	sample_size = (bit_resolution / 8) * num_channels;
+	mic_opened = true;
+	return CELL_OK;
 #else
 	return CELL_MICIN_ERROR_DEVICE_NOT_SUPPORT;
 #endif
@@ -531,6 +578,11 @@ error_code microphone_device::close_microphone()
 
 	temp_buf.clear();
 	mic_opened = false;
+#elif defined(__ANDROID__)
+	if (mic_started) stop_microphone();
+	for (auto& device : devices) { device.capture.reset(); device.buf.clear(); device.buffered_frames = 0; }
+	temp_buf.clear();
+	mic_opened = false;
 #endif
 
 	return CELL_OK;
@@ -545,6 +597,15 @@ error_code microphone_device::start_microphone()
 		if (ALCenum err = alcGetError(micdevice.device); err != ALC_NO_ERROR)
 		{
 			cellMic.error("Error starting capture of device '%s' (error=%s)", micdevice.name, fmt::alc_error{micdevice.device, err});
+			stop_microphone();
+			return CELL_MICIN_ERROR_FATAL;
+		}
+	}
+#elif defined(__ANDROID__)
+	for (const auto& device : devices)
+	{
+		if (!device.capture || !device.capture->start())
+		{
 			stop_microphone();
 			return CELL_MICIN_ERROR_FATAL;
 		}
@@ -565,6 +626,12 @@ error_code microphone_device::stop_microphone()
 		{
 			cellMic.error("Error stopping capture of device '%s' (error=%s)", micdevice.name, fmt::alc_error{micdevice.device, err});
 		}
+	}
+#elif defined(__ANDROID__)
+	for (auto& device : devices)
+	{
+		if (device.capture) device.capture->stop();
+		device.buffered_frames = 0;
 	}
 #endif
 
@@ -596,6 +663,17 @@ void microphone_device::update_audio()
 		{
 			get_dsp(num_samples);
 		}
+
+#ifdef __ANDROID__
+		if (device_type == microphone_handler::singstar && devices.size() == 2 && num_samples)
+		{
+			for (auto& device : devices)
+			{
+				device.buffered_frames -= num_samples;
+				std::memmove(device.buf.data(), device.buf.data() + num_samples * sizeof(s16), device.buffered_frames * sizeof(s16));
+			}
+		}
+#endif
 
 		// TODO: aux?
 	}
@@ -664,6 +742,28 @@ u32 microphone_device::capture_audio()
 		}
 	}
 
+	return num_samples;
+#elif defined(__ANDROID__)
+	ensure(sample_size > 0);
+	u32 num_samples = inbuf_size / sample_size;
+	if (device_type == microphone_handler::singstar && devices.size() == 2)
+	{
+		for (auto& device : devices)
+		{
+			const u32 capacity = static_cast<u32>(device.buf.size() / sizeof(s16));
+			const u32 room = capacity - device.buffered_frames;
+			if (device.capture && room)
+			{
+				device.buffered_frames += device.capture->read(device.buf.data() + device.buffered_frames * sizeof(s16), room);
+			}
+			num_samples = std::min(num_samples, device.buffered_frames);
+		}
+		return num_samples;
+	}
+	for (auto& device : devices)
+	{
+		num_samples = std::min(num_samples, device.capture ? device.capture->read(device.buf.data(), num_samples) : 0u);
+	}
 	return num_samples;
 #else
 	return 0;

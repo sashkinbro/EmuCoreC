@@ -271,6 +271,10 @@ protected:
 	u32 m_head = 0, m_tail = 0, m_used = 0;
 };
 
+#ifdef __ANDROID__
+class oboe_capture;
+#endif
+
 class microphone_device
 {
 public:
@@ -359,6 +363,10 @@ private:
 		std::string name;
 		ALCdevice* device = nullptr;
 		std::vector<u8> buf;
+#ifdef __ANDROID__
+		std::shared_ptr<oboe_capture> capture;
+		u32 buffered_frames = 0;
+#endif
 	};
 
 	std::vector<std::string> enumerated_devices;

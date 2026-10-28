@@ -52,6 +52,7 @@ struct EmuCoreCApi {
   bool (*settingsSetTransient)(std::string_view path, std::string_view valueString);
   bool (*queueGameSetting)(std::string_view path, std::string_view valueString);
   void (*clearPendingGameSettings)();
+  void (*setMicrophoneDevices)(JNIEnv *, jobjectArray, jintArray);
   std::string (*getVersion)();
   std::string (*probeDiscInfo)(std::string_view path, std::string_view iconOut);
   bool (*requestSaveState)(unsigned slot, long progressId);
@@ -140,6 +141,7 @@ struct EmuCoreCLibrary : EmuCoreCApi {
     result.settingsSetTransient = reinterpret_cast<decltype(settingsSetTransient)>(dlsym(handle, "emucorec_settingsSetTransient"));
     result.queueGameSetting = reinterpret_cast<decltype(queueGameSetting)>(dlsym(handle, "emucorec_queueGameSetting"));
     result.clearPendingGameSettings = reinterpret_cast<decltype(clearPendingGameSettings)>(dlsym(handle, "emucorec_clearPendingGameSettings"));
+    result.setMicrophoneDevices = reinterpret_cast<decltype(setMicrophoneDevices)>(dlsym(handle, "emucorec_setMicrophoneDevices"));
     result.getVersion = reinterpret_cast<decltype(getVersion)>(dlsym(handle, "emucorec_getVersion"));
     result.probeDiscInfo = reinterpret_cast<decltype(probeDiscInfo)>(dlsym(handle, "emucorec_probeDiscInfo"));
     result.requestSaveState = reinterpret_cast<decltype(requestSaveState)>(dlsym(handle, "emucorec_requestSaveState"));
@@ -352,6 +354,11 @@ extern "C" JNIEXPORT jboolean JNICALL Java_com_sbro_emucorec_core_Ps3Core_settin
 extern "C" JNIEXPORT void JNICALL Java_com_sbro_emucorec_core_Ps3Core_clearPendingGameSettings(
     JNIEnv *, jobject) {
   if (emucorecLib.clearPendingGameSettings) emucorecLib.clearPendingGameSettings();
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_sbro_emucorec_core_Ps3Core_setMicrophoneDevices(
+    JNIEnv *env, jobject, jobjectArray names, jintArray ids) {
+  if (emucorecLib.setMicrophoneDevices) emucorecLib.setMicrophoneDevices(env, names, ids);
 }
 
 extern "C" JNIEXPORT jboolean JNICALL Java_com_sbro_emucorec_core_Ps3Core_queueGameSetting(

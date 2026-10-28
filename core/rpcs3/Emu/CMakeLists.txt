@@ -155,6 +155,7 @@ target_sources(rpcs3_emu PRIVATE
     Audio/AudioDumper.cpp
     Audio/AudioBackend.cpp
     Audio/Cubeb/CubebBackend.cpp
+    $<$<BOOL:${ANDROID}>:Audio/Oboe/OboeCapture.cpp>
     Audio/Cubeb/cubeb_enumerator.cpp
 )
 
@@ -708,6 +709,7 @@ target_link_libraries(rpcs3_emu
         3rdparty::wolfssl
         3rdparty::openal
         3rdparty::cubeb
+        $<$<BOOL:${ANDROID}>:3rdparty::oboe>
         3rdparty::soundtouch
         3rdparty::miniupnpc
         3rdparty::libevdev

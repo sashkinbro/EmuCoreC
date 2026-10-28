@@ -80,6 +80,7 @@ object Ps3Runtime {
         }
 
         Ps3Core.initialized = true
+        MicrophoneDevices.initialize(appContext)
         runCatching { FirmwareState.load() }
         ensurePumpsRunning()
         true

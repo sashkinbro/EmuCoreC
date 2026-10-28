@@ -100,6 +100,7 @@ class Ps3Core {
     external fun settingsSetTransient(path: String, value: String): Boolean
     external fun clearPendingGameSettings()
     external fun queueGameSetting(path: String, value: String): Boolean
+    external fun setMicrophoneDevices(names: Array<String>, ids: IntArray)
     external fun getState(): Int
     external fun kill()
     external fun pause()

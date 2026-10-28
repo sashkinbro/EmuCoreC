@@ -119,3 +119,6 @@
 [submodule "3rdparty/libchdr"]
 	path = core/3rdparty/libchdr
 	url = https://github.com/rtissera/libchdr.git
+[submodule "3rdparty/oboe/oboe"]
+	path = core/3rdparty/oboe/oboe
+	url = https://github.com/google/oboe.git

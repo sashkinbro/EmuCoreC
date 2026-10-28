@@ -4,6 +4,7 @@
 #include "Crypto/unpkg.h"
 #include "Crypto/unself.h"
 #include "Emu/Audio/Cubeb/CubebBackend.h"
+#include "Emu/Audio/Oboe/OboeCapture.h"
 #include "Emu/Audio/Null/NullAudioBackend.h"
 #include "Emu/Cell/PPUAnalyser.h"
 #include "Emu/Cell/SPURecompiler.h"
@@ -4541,6 +4542,27 @@ extern "C" bool emucorec_queueGameSetting(std::string_view path, std::string_vie
 
 extern "C" std::string emucorec_getVersion() {
   return rpcs3::get_version().to_string();
+}
+
+extern "C" void emucorec_setMicrophoneDevices(JNIEnv* env, jobjectArray names, jintArray ids) {
+  if (!env || !names || !ids) return;
+  const jsize count = std::min(env->GetArrayLength(names), env->GetArrayLength(ids));
+  std::vector<jint> device_ids(count);
+  env->GetIntArrayRegion(ids, 0, count, device_ids.data());
+  if (env->ExceptionCheck()) return;
+  std::vector<std::pair<std::string, s32>> devices;
+  devices.reserve(count);
+  for (jsize i = 0; i < count; ++i) {
+    auto name = static_cast<jstring>(env->GetObjectArrayElement(names, i));
+    if (!name) continue;
+    const char* chars = env->GetStringUTFChars(name, nullptr);
+    if (chars) {
+      devices.emplace_back(chars, device_ids[i]);
+      env->ReleaseStringUTFChars(name, chars);
+    }
+    env->DeleteLocalRef(name);
+  }
+  oboe_capture::set_devices(std::move(devices));
 }
 
 // Identity strings for the performance overlay header (app version, build and
