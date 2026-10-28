@@ -3297,7 +3297,14 @@ extern "C" bool emucorec_usbDeviceEvent(int fd, int vendorId, int productId,
     if (selectedHandler != g_cfg_input.player1.handler.get()) {
       emucorec_android.notice("install %s pad handler", selectedHandler);
 
+      const auto previousHandler = g_cfg_input.player1.handler.get();
+      const auto previous = handlerToDevices.find(previousHandler);
+      const std::string previousDefault = previousHandler == pad_handler::virtual_pad ? "Virtual" :
+          (previous != handlerToDevices.end() && !previous->second.second.empty() ? previous->second.second.front() : "");
+      g_cfg_input.player1.backup_config(previousDefault);
       g_cfg_input.player1.handler.set(selectedHandler);
+      g_cfg_input.player1.config.restore_defaults();
+      g_cfg_input.player1.config.from_default();
 
       if (selectedHandler == pad_handler::null) {
         g_cfg_input.player1.device.from_default();
@@ -3314,6 +3321,8 @@ extern "C" bool emucorec_usbDeviceEvent(int fd, int vendorId, int productId,
           g_virtual_pads[0] = nullptr;
         }
       }
+
+      g_cfg_input.player1.restore_config(selectedHandler);
 
       g_cfg_input.save("", g_cfg_input_configs.default_config);
 

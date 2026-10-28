@@ -154,6 +154,8 @@ namespace cfg
 			return m_nodes;
 		}
 
+		virtual _base* create_node(const std::string&) { return nullptr; }
+
 		// Serialize node
 		std::string to_string() const override;
 
@@ -168,6 +170,9 @@ namespace cfg
 
 		// Try to convert from string and validate
 		bool validate(std::string_view value);
+
+	protected:
+		void remove_node(const _base* node);
 	};
 
 	class _bool final : public _base

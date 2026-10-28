@@ -1,4 +1,5 @@
 #include <QCheckBox>
+#include <QCollator>
 #include <QPushButton>
 #include <QPainter>
 #include <QPainterPath>
@@ -25,10 +26,20 @@
 #include "Input/keyboard_pad_handler.h"
 
 #include <thread>
+#include <algorithm>
 
 LOG_CHANNEL(cfg_log, "CFG");
 
 cfg_input_configurations g_cfg_input_configs;
+
+static bool config_file_less_than(const QString& lhs, const QString& rhs)
+{
+	const QString default_name = QString::fromStdString(g_cfg_input_configs.default_config);
+	if (lhs == default_name || rhs == default_name) return lhs != rhs && lhs == default_name;
+	static QCollator collator = [] { QCollator c; c.setNumericMode(true); c.setCaseSensitivity(Qt::CaseInsensitive); return c; }();
+	const int comparison = collator.compare(lhs, rhs);
+	return comparison ? comparison < 0 : QString::compare(lhs, rhs) < 0;
+}
 
 inline bool CreateConfigFile(const QString& dir, const QString& name)
 {
@@ -312,6 +323,7 @@ std::pair<QStringList, QString> pad_settings_dialog::get_config_files()
 		active_config_file = default_config_file;
 	}
 
+	std::sort(config_files.begin(), config_files.end(), config_file_less_than);
 	return std::make_pair<QStringList, QString>(std::move(config_files), std::move(active_config_file));
 }
 
@@ -1580,8 +1592,6 @@ void pad_settings_dialog::ChangeHandler()
 	else
 	{
 		handler = ui->chooseHandler->currentData().toString().toStdString();
-		device = player_config->device.to_string();
-		buddy_device = player_config->buddy_device.to_string();
 	}
 
 	cfg_pad& cfg = player_config->config;
@@ -1589,6 +1599,8 @@ void pad_settings_dialog::ChangeHandler()
 	// Change and get this player's current handler.
 	if (auto& cfg_handler = player_config->handler; handler != cfg_handler.to_string())
 	{
+		ApplyCurrentPlayerConfig(m_last_player_id);
+		player_config->backup_config(ui->chooseDevice->count() > 0 ? get_pad_info(ui->chooseDevice, 0).name : std::string{});
 		if (!cfg_handler.from_string(handler))
 		{
 			cfg_log.error("Failed to convert input string: %s", handler);
@@ -1598,6 +1610,7 @@ void pad_settings_dialog::ChangeHandler()
 		// Initialize the new pad config's defaults
 		m_handler = pad_thread::GetHandler(player_config->handler);
 		pad_thread::InitPadConfig(cfg, cfg_handler, m_handler);
+		player_config->restore_config(cfg_handler.get());
 	}
 	else
 	{
@@ -1605,6 +1618,11 @@ void pad_settings_dialog::ChangeHandler()
 	}
 
 	ensure(m_handler);
+	if (!is_ldd_pad)
+	{
+		device = player_config->device.to_string();
+		buddy_device = player_config->buddy_device.to_string();
+	}
 
 	// Get the handler's currently available devices.
 	const std::vector<pad_list_entry> device_list = m_handler->list_devices();
@@ -1616,7 +1634,9 @@ void pad_settings_dialog::ChangeHandler()
 	switch (m_handler->m_type)
 	{
 	case pad_handler::null:
-		GetPlayerConfig().from_default();
+		player_config->device.from_default();
+		player_config->buddy_device.from_default();
+		player_config->config.from_default();
 		if (is_ldd_pad)
 			m_description = tooltips.gamepad_settings.ldd_pad;
 		else
@@ -2074,7 +2094,9 @@ void pad_settings_dialog::AddConfigFile()
 		}
 		if (CreateConfigFile(QString::fromStdString(rpcs3::utils::get_input_config_dir(m_title_id)), config_name))
 		{
-			ui->chooseConfig->addItem(config_name);
+			int index = 0;
+			while (index < ui->chooseConfig->count() && config_file_less_than(ui->chooseConfig->itemText(index), config_name)) index++;
+			ui->chooseConfig->insertItem(index, config_name);
 			ui->chooseConfig->setCurrentText(config_name);
 		}
 		break;

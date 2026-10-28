@@ -390,6 +390,10 @@ void cfg::encode(YAML::Emitter& out, const cfg::_base& rhs)
 		out << YAML::BeginMap;
 		for (const auto& node : static_cast<const node&>(rhs).get_nodes())
 		{
+			if (node->get_type() == type::node && static_cast<const class node*>(node)->get_nodes().empty())
+			{
+				continue;
+			}
 			out << YAML::Key << node->get_name();
 			out << YAML::Value;
 			encode(out, *node);
@@ -492,8 +496,9 @@ bool cfg::decode(const YAML::Node& data, cfg::_base& rhs, bool dynamic, bool str
 			// Find the key among existing nodes
 			const auto& nodes = static_cast<node&>(rhs).get_nodes();
 			const auto it = std::find_if(nodes.cbegin(), nodes.cend(), [&pair](const auto& node) { return ensure(node)->get_name() == pair.first.Scalar(); });
+			_base* entry = it != nodes.cend() ? *it : static_cast<node&>(rhs).create_node(pair.first.Scalar());
 
-			if (it == nodes.cend())
+			if (!entry)
 			{
 				if (strict)
 				{
@@ -503,7 +508,7 @@ bool cfg::decode(const YAML::Node& data, cfg::_base& rhs, bool dynamic, bool str
 				continue;
 			}
 
-			if (!decode(pair.second, *ensure(*it), dynamic, strict) && strict)
+			if (!decode(pair.second, *entry, dynamic, strict) && strict)
 			{
 				success = false;
 			}
@@ -697,6 +702,14 @@ void cfg::node::restore_defaults()
 	for (auto& node : m_nodes)
 	{
 		node->restore_defaults();
+	}
+}
+
+void cfg::node::remove_node(const _base* child)
+{
+	if (const auto it = std::find(m_nodes.cbegin(), m_nodes.cend(), child); it != m_nodes.cend())
+	{
+		m_nodes.erase(it);
 	}
 }
 
