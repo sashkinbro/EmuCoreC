@@ -31,6 +31,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -51,6 +52,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sbro.emucorec.R
 import com.sbro.emucorec.core.Ps3CoreSettingOverrides
+import com.sbro.emucorec.core.MicrophoneDevices
 import com.sbro.emucorec.core.CoreSettingsTreeCache
 import com.sbro.emucorec.core.Ps3Runtime
 import com.sbro.emucorec.ui.common.SectionCard
@@ -427,6 +429,8 @@ private fun Ps3CoreSettingRow(
     val title = localizedCoreLabel(setting.name)
     val description = localizedCoreHelp(setting.path)
     when {
+        setting.path == "Audio@@Microphone Devices" -> MicrophoneDeviceRows(setting, title, description, onWrite, onReset)
+
         setting.type == "bool" -> SettingToggleRow(
             title = title,
             description = description,
@@ -472,6 +476,32 @@ private fun Ps3CoreSettingRow(
         }
 
         else -> CoreTextRow(setting, title, description, onWrite, onReset)
+    }
+}
+
+@Composable
+private fun MicrophoneDeviceRows(setting: Ps3CoreSetting, title: String, description: String, onWrite: (String) -> Unit, onReset: () -> Unit) {
+    val available by MicrophoneDevices.names.collectAsState()
+    val slots = remember(setting.value) { setting.value.split("@@@").toMutableList().apply { while (size < 4) add("") } }
+    for (index in 0..1) {
+        SettingChoiceRow(title = "$title ${index + 1}", description = description, onResetDefault = onReset) {
+            val choices = listOf(if (index == 0) "Default" else "") + available
+            choices.forEach { name ->
+                val label = if (name == "Default") localizedCoreLabel("Automatic") else if (name.isEmpty()) localizedCoreLabel("None") else name
+                val selected = slots[index] == name || (index == 0 && slots[index].isEmpty() && name == "Default")
+                FilterChip(
+                    shape = neonChipShape(), selected = selected,
+                    onClick = {
+                        val updated = slots.toMutableList()
+                        updated[index] = name
+                        if (index == 1 && updated[0].isEmpty()) updated[0] = "Default"
+                        onWrite(updated.joinToString("@@@"))
+                    },
+                    colors = coreFilterChipColors(),
+                    label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                )
+            }
+        }
     }
 }
 
