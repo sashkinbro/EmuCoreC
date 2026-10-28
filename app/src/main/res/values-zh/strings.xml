@@ -1,5 +1,7 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <string name="emulation_tab_portals">玩具传送门</string>
+    <string name="emulation_portal_create">创建玩具</string>
+    <string name="emulation_portal_search">搜索玩具</string>
     <string name="emulation_portal_real_active">已连接实体传送门。</string>
     <string name="emulation_portal_import_failed">无法加载此玩具。</string>
     <string name="emulation_quickbar_home_menu">RPCS3 主選單</string>

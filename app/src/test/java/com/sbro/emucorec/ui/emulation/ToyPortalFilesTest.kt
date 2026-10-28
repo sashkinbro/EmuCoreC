@@ -13,6 +13,13 @@ import org.junit.Test
 
 class ToyPortalFilesTest {
     @Test
+    fun characterSelectionRejectsUnknownAndUnsupportedSenseis() {
+        val entries = sequenceOf("1\t0\tSpyro", "601\t0\tSensei", "2\t0\tUnknown figure", "broken")
+        assertEquals(listOf(ToyPortalCharacter(1, 0, "Spyro")), parsePortalCharacters(entries, 0))
+        assertEquals(listOf(ToyPortalCharacter(1, 0, "Batman")), parsePortalCharacters(sequenceOf("1\tBatman"), 2))
+    }
+
+    @Test
     fun importingSameNameNeverOverwritesAChangedFigure() {
         val dir = Files.createTempDirectory("portal-test").toFile()
         try {

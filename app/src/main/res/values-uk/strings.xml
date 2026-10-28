@@ -1,5 +1,7 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <string name="emulation_tab_portals">Портали фігурок</string>
+    <string name="emulation_portal_create">Створити фігурку</string>
+    <string name="emulation_portal_search">Пошук фігурок</string>
     <string name="emulation_portal_real_active">Підключено фізичний портал.</string>
     <string name="emulation_portal_import_failed">Не вдалося завантажити фігурку.</string>
     <string name="emulation_quickbar_home_menu">Домашнє меню RPCS3</string>

@@ -1,6 +1,8 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
     <string name="emulation_tab_portals">피규어 포털</string>
+    <string name="emulation_portal_create">피규어 만들기</string>
+    <string name="emulation_portal_search">피규어 검색</string>
     <string name="emulation_portal_real_active">실제 포털이 연결되었습니다.</string>
     <string name="emulation_portal_import_failed">피규어를 불러오지 못했습니다.</string>
     <string name="emulation_quickbar_home_menu">RPCS3 홈 메뉴</string>

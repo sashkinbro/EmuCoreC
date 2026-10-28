@@ -108,6 +108,7 @@ class Ps3Core {
     external fun portalLoad(kind: Int, position: Int, path: String): Int
     external fun portalRemove(kind: Int, position: Int): Boolean
     external fun usbPassedThrough(): Int
+    external fun portalCreate(kind: Int, path: String, id: Int, variant: Int): Boolean
     external fun getState(): Int
     external fun kill()
     external fun pause()

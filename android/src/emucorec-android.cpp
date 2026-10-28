@@ -3,6 +3,8 @@
 #include "save_states.h"
 #include "Crypto/unpkg.h"
 #include "Crypto/unself.h"
+#include "Crypto/aes.h"
+#include "Crypto/sha1.h"
 #include "Emu/Audio/Cubeb/CubebBackend.h"
 #include "Emu/Audio/Oboe/OboeCapture.h"
 #include "Emu/Audio/Null/NullAudioBackend.h"
@@ -90,6 +92,7 @@
 #include <jni.h>
 #include <mutex>
 #include <optional>
+#include <random>
 #include <span>
 #include <string>
 #include <sys/resource.h>
@@ -4676,6 +4679,81 @@ extern "C" bool emucorec_portalRemove(int kind, int position) {
 }
 
 extern "C" int emucorec_usbPassedThrough() { return static_cast<int>(usb_android_passed_through()); }
+
+namespace {
+bool write_new_figure(std::string_view path, const u8* data, usz size) {
+  fs::file file(std::string(path), fs::write + fs::create + fs::excl);
+  if (!file) return false;
+  if (file.write(data, size) == size) return true;
+  file.close();
+  fs::remove_file(std::string(path));
+  return false;
+}
+}
+
+extern "C" bool emucorec_portalCreate(int kind, std::string_view path, int id, int variant) {
+  if (id < 0 || variant < 0) return false;
+  if (kind == 0) {
+    if (id > 65535 || variant > 65535 || (id >= 601 && id <= 631)) return false;
+    std::array<u8, 0x400> data{};
+    write_to_ptr<le_t<u32>>(data, 0x36, 0x690F0F0F);
+    for (u32 block = 1; block < 16; ++block) write_to_ptr<le_t<u32>>(data, block * 0x40 + 0x36, 0x69080F7F);
+    write_to_ptr<le_t<u16>>(data, static_cast<u16>((id | variant) + 1));
+    write_to_ptr<le_t<u16>>(data, 0x10, static_cast<u16>(id));
+    write_to_ptr<le_t<u16>>(data, 0x1c, static_cast<u16>(variant));
+    u16 crc = 0xffff;
+    for (u32 i = 0; i < 0x1e; ++i) {
+      crc ^= static_cast<u16>(data[i] << 8);
+      for (u32 bit = 0; bit < 8; ++bit) crc = (crc & 0x8000) ? static_cast<u16>((crc << 1) ^ 0x1021) : static_cast<u16>(crc << 1);
+    }
+    write_to_ptr<le_t<u16>>(data, 0x1e, crc);
+    return write_new_figure(path, data.data(), data.size());
+  }
+  if (kind == 2) {
+    if (id > 65535) return false;
+    std::array<u8, 0xb4> data{};
+    return dimensions_toypad::create_blank_character(data, static_cast<u16>(id)) && write_new_figure(path, data.data(), data.size());
+  }
+  if (kind != 1 || id < 0x10000 || id > 0xffffff || variant < 1 || variant > 3) return false;
+
+  constexpr std::array<u8, 32> salt = {0xAF, 0x62, 0xD2, 0xEC, 0x04, 0x91, 0x96, 0x8C, 0xC5, 0x2A, 0x1A, 0x71, 0x65, 0xF8, 0x65, 0xFE,
+    0x28, 0x63, 0x29, 0x20, 0x44, 0x69, 0x73, 0x6e, 0x65, 0x79, 0x20, 0x32, 0x30, 0x31, 0x33};
+  std::array<u8, 0x140> data{};
+  constexpr u32 first = 0x17878e, other = 0x778788;
+  for (u32 i = 0; i < 3; ++i) data[0x36 + i] = static_cast<u8>(first >> ((2 - i) * 8));
+  for (u32 block = 1; block < 5; ++block)
+    for (u32 i = 0; i < 3; ++i) data[block * 0x40 + 0x36 + i] = static_cast<u8>(other >> ((2 - i) * 8));
+  std::vector<u8> digest_data(salt.begin(), salt.end() - 1);
+  std::array<u8, 16> uid = {0, 0, 0, 0, 0, 0, 0, 0x89, 0x44, 0, 0xc2};
+  std::mt19937 rng(std::random_device{}());
+  std::uniform_int_distribution<int> random_byte(0, 254);
+  for (u32 i = 0; i < 7; ++i) { uid[i] = static_cast<u8>(random_byte(rng)); digest_data.push_back(uid[i]); }
+  std::array<u8, 16> figure = {0, 0, 0, 0, 0, 0, 0, 0, 0, static_cast<u8>(variant), 0xd1, 0x1f};
+  figure[1] = static_cast<u8>(id >> 16); figure[2] = static_cast<u8>(id >> 8); figure[3] = static_cast<u8>(id);
+  if (variant == 1) { figure[4] = 0x0d; figure[5] = 0x08; figure[6] = 0x12; }
+  if (variant == 2) { figure[4] = 0x0e; figure[5] = 0x09; figure[6] = 0x12; }
+  if (variant == 3) { figure[4] = 0x0f; figure[5] = 0x08; figure[6] = 0x1c; }
+  u32 crc = 0;
+  for (u32 i = 0; i < 12; ++i) {
+    crc ^= figure[i];
+    for (u32 bit = 0; bit < 8; ++bit) crc = (crc & 1) ? (crc >> 1) ^ 0xedb88320u : crc >> 1;
+  }
+  for (u32 i = 0; i < 4; ++i) figure[12 + i] = static_cast<u8>(crc >> ((3 - i) * 8));
+  sha1_context sha;
+  u8 digest[20];
+  sha1_starts(&sha); sha1_update(&sha, digest_data.data(), digest_data.size()); sha1_finish(&sha, digest);
+  std::array<u8, 16> key{};
+  for (u32 i = 0; i < 4; ++i) for (u32 j = 0; j < 4; ++j) key[j + i * 4] = digest[3 - j + i * 4];
+  aes_context aes;
+  aes_setkey_enc(&aes, key.data(), 128);
+  std::array<u8, 16> encrypted{}, blank{}, encrypted_blank{};
+  aes_crypt_ecb(&aes, AES_ENCRYPT, figure.data(), encrypted.data());
+  aes_crypt_ecb(&aes, AES_ENCRYPT, blank.data(), encrypted_blank.data());
+  std::memcpy(data.data(), uid.data(), uid.size());
+  std::memcpy(data.data() + 16, encrypted.data(), encrypted.size());
+  for (const u32 block : {4u, 8u, 12u, 13u}) std::memcpy(data.data() + 16 * block, encrypted_blank.data(), encrypted_blank.size());
+  return write_new_figure(path, data.data(), data.size());
+}
 
 // Identity strings for the performance overlay header (app version, build and
 // device name). Called by the app once the core is loaded.

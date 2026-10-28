@@ -1,6 +1,8 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
     <string name="emulation_tab_portals">Portály figurek</string>
+    <string name="emulation_portal_create">Vytvořit figurku</string>
+    <string name="emulation_portal_search">Hledat figurky</string>
     <string name="emulation_portal_real_active">Je připojen fyzický portál.</string>
     <string name="emulation_portal_import_failed">Figurku se nepodařilo načíst.</string>
     <string name="emulation_quickbar_home_menu">Hlavní nabídka RPCS3</string>

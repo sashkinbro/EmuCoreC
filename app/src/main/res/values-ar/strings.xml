@@ -1,5 +1,7 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <string name="emulation_tab_portals">بوابات الألعاب</string>
+    <string name="emulation_portal_create">إنشاء مجسم</string>
+    <string name="emulation_portal_search">البحث عن المجسمات</string>
     <string name="emulation_portal_real_active">تم توصيل بوابة فعلية.</string>
     <string name="emulation_portal_import_failed">تعذر تحميل المجسم.</string>
     <string name="emulation_quickbar_home_menu">قائمة RPCS3 الرئيسية</string>

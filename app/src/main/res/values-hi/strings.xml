@@ -1,5 +1,7 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <string name="emulation_tab_portals">खिलौना पोर्टल</string>
+    <string name="emulation_portal_create">आकृति बनाएँ</string>
+    <string name="emulation_portal_search">आकृतियाँ खोजें</string>
     <string name="emulation_portal_real_active">एक भौतिक पोर्टल जुड़ा है।</string>
     <string name="emulation_portal_import_failed">आकृति लोड नहीं हो सकी।</string>
     <string name="emulation_quickbar_home_menu">RPCS3 होम मेनू</string>

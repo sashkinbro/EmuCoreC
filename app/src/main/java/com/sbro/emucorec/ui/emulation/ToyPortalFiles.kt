@@ -6,6 +6,16 @@ import java.io.File
 import java.io.InputStream
 import java.util.zip.ZipInputStream
 
+internal data class ToyPortalCharacter(val id: Int, val variant: Int, val name: String)
+
+internal fun parsePortalCharacters(lines: Sequence<String>, kind: Int): List<ToyPortalCharacter> = lines.mapNotNull { line ->
+    val parts = line.split('\t')
+    val id = parts.getOrNull(0)?.toIntOrNull() ?: return@mapNotNull null
+    val variant = if (kind == 2) 0 else parts.getOrNull(1)?.toIntOrNull() ?: return@mapNotNull null
+    val name = parts.getOrNull(if (kind == 2) 1 else 2).orEmpty()
+    if (name.isBlank() || name.startsWith("Unknown") || (kind == 0 && id in 601..631)) null else ToyPortalCharacter(id, variant, name)
+}.toList()
+
 internal object ToyPortalFiles {
     fun importArchive(directory: File, input: InputStream, minimumSize: Int, extensions: Set<String>): List<File> {
         val result = mutableListOf<File>()

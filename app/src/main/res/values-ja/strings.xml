@@ -1,6 +1,8 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
     <string name="emulation_tab_portals">フィギュアポータル</string>
+    <string name="emulation_portal_create">フィギュアを作成</string>
+    <string name="emulation_portal_search">フィギュアを検索</string>
     <string name="emulation_portal_real_active">実物のポータルが接続されています。</string>
     <string name="emulation_portal_import_failed">フィギュアを読み込めませんでした。</string>
     <string name="emulation_quickbar_home_menu">RPCS3ホームメニュー</string>

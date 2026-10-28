@@ -1,6 +1,8 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources xmlns:tools="http://schemas.android.com/tools">
     <string name="emulation_tab_portals">Portale figurek</string>
+    <string name="emulation_portal_create">Utwórz figurkę</string>
+    <string name="emulation_portal_search">Szukaj figurek</string>
     <string name="emulation_portal_real_active">Podłączono fizyczny portal.</string>
     <string name="emulation_portal_import_failed">Nie udało się wczytać figurki.</string>
     <string name="emulation_quickbar_home_menu">Menu główne RPCS3</string>

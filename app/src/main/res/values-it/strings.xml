@@ -1,5 +1,7 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <string name="emulation_tab_portals">Portali delle figure</string>
+    <string name="emulation_portal_create">Crea figura</string>
+    <string name="emulation_portal_search">Cerca figure</string>
     <string name="emulation_portal_real_active">È collegato un portale fisico.</string>
     <string name="emulation_portal_import_failed">Impossibile caricare la figura.</string>
     <string name="emulation_quickbar_home_menu">Menu principale RPCS3</string>

@@ -1,5 +1,7 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <string name="emulation_tab_portals">Portails de figurines</string>
+    <string name="emulation_portal_create">Créer une figurine</string>
+    <string name="emulation_portal_search">Rechercher des figurines</string>
     <string name="emulation_portal_real_active">Un portail physique est connecté.</string>
     <string name="emulation_portal_import_failed">Impossible de charger cette figurine.</string>
     <string name="emulation_quickbar_home_menu">Menu d’accueil RPCS3</string>
