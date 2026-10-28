@@ -905,6 +905,7 @@
     <string name="core_label_mfc_commands_shuffling_in_steps">Comandos MFC embaralhados em etapas</string>
     <string name="core_label_mfc_commands_shuffling_limit">Limite de embaralhamento de comandos MFC</string>
     <string name="core_label_mfc_commands_timeout">Tempo limite de comandos MFC</string>
+    <string name="core_label_mfc_shuffle_instructions_decrementer">Contador de instruções de reordenação MFC</string>
     <string name="core_label_mfc_debug">Depuração MFC</string>
     <string name="core_label_microphone_devices">Dispositivos de microfone</string>
     <string name="core_label_microphone_type">Tipo de microfone</string>
@@ -1293,7 +1294,6 @@ Quanto mais leve o jogo estiver no hardware, mais energia ele economizará. (at�
 Pode melhorar o desempenho em alguns casos, especialmente em sistemas com número limitado de threads de hardware.
 Limitar o número de threads provavelmente causará travamentos; é recomendado mantê-lo no valor padrão.</string>
     <string name="core_help_core_mfc_commands_shuffling_limit" formatted="false">Força o atraso de qualquer comando MFC estranho, aguarda pelo menos 2 comandos pendentes para executá-los em ordem aleatória.
-Deve ser usado com qualquer um dos intérpretes SPU atualmente.
 Degrada severamente o desempenho! Se não tiver certeza, não use esta opção.</string>
     <string name="core_help_core_mfc_debug" formatted="false">Cria logs MFC.
 Útil apenas para desenvolvedores.

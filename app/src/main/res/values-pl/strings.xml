@@ -905,6 +905,7 @@
     <string name="core_label_mfc_commands_shuffling_in_steps">Etapowe mieszanie poleceń MFC</string>
     <string name="core_label_mfc_commands_shuffling_limit">Limit mieszania poleceń MFC</string>
     <string name="core_label_mfc_commands_timeout">Limit czasu poleceń MFC</string>
+    <string name="core_label_mfc_shuffle_instructions_decrementer">Licznik instrukcji przestawiania MFC</string>
     <string name="core_label_mfc_debug">Debugowanie MFC</string>
     <string name="core_label_microphone_devices">Urządzenia mikrofonowe</string>
     <string name="core_label_microphone_type">Typ mikrofonu</string>
@@ -1184,7 +1185,7 @@
     <string name="core_help_core_max_llvm_compile_threads" formatted="false">Ogranicza maksymalną liczbę wątków używanych do początkowej kompilacji modułów PPU i SPU.\nObniż tę wartość, aby zwiększyć wydajność innych uruchomionych aplikacji.\nDomyślnie wykorzystywane są wszystkie dostępne wątki.</string>
     <string name="core_help_core_max_cpu_preempt_count" formatted="false">Zmniejsza użycie CPU i pobór energii, wydłużając czas pracy urządzeń mobilnych na baterii. Wartość 0 wyłącza tę funkcję.\nWyższe wartości wzmacniają efekt, ale mogą powodować problemy z dźwiękiem lub wydajnością. Zalecana jest wartość nie większa niż 50.\nOpcja wymusza limit klatek, ponieważ działa tylko przy stabilnej liczbie klatek na sekundę.\nIm mniej wymagająca gra, tym większa oszczędność energii, aż do osiągnięcia limitu wywłaszczeń.</string>
     <string name="core_help_core_max_spurs_threads" formatted="false">Ogranicza maksymalną liczbę wątków SPURS w każdej grupie wątków.\nMoże poprawić wydajność w niektórych przypadkach, zwłaszcza w systemach z ograniczoną liczbą wątków.\nOgraniczenie liczby wątków może spowodować awarię; zalecane jest, aby zostawić to na domyślnej wartości.</string>
-    <string name="core_help_core_mfc_commands_shuffling_limit" formatted="false">Wymusza opóźnienie nieparzystych komend MFC, oczekując na co najmniej 2 zaległe komendy przed ich losowym wykonaniem.\nObecnie wymaga użycia interpreterów SPU.\nPOWODUJE DUŻY SPADEK WYDAJNOŚCI! Jeśli nie jesteś pewien, nie używaj tej opcji.</string>
+    <string name="core_help_core_mfc_commands_shuffling_limit" formatted="false">Wymusza opóźnienie nieparzystych komend MFC, oczekując na co najmniej 2 zaległe komendy przed ich losowym wykonaniem.\nPOWODUJE DUŻY SPADEK WYDAJNOŚCI! Jeśli nie jesteś pewien, nie używaj tej opcji.</string>
     <string name="core_help_core_mfc_debug" formatted="false">Tworzy logi MFC.\nPrzydatne tylko dla deweloperów.\nNigdy nie używaj tego.</string>
     <string name="core_help_audio_microphone_devices" formatted="false">Tryb „Standardowy” jest zalecany dla większości gier.\nSingStar emuluje urządzenie SingStar i służy do gier z tej serii.\nTrybu „Fizyczny SingStar” używaj wyłącznie z oryginalnym urządzeniem SingStar w grach SingStar.\nTryb Rocksmith wymaga adaptera Rocksmith.</string>
     <string name="core_help_audio_microphone_type" formatted="false">Tryb „Standardowy” jest zalecany dla większości gier.\nSingStar emuluje urządzenie SingStar i służy do gier z tej serii.\nTrybu „Fizyczny SingStar” używaj wyłącznie z oryginalnym urządzeniem SingStar w grach SingStar.\nTryb Rocksmith wymaga adaptera Rocksmith.</string>

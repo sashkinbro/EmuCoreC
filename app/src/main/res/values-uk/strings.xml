@@ -906,6 +906,7 @@
     <string name="core_label_mfc_commands_shuffling_in_steps">Перетасування команд MFC покроково</string>
     <string name="core_label_mfc_commands_shuffling_limit">Обмеження перетасування команд MFC</string>
     <string name="core_label_mfc_commands_timeout">Час очікування команд MFC</string>
+    <string name="core_label_mfc_shuffle_instructions_decrementer">Лічильник інструкцій перетасування MFC</string>
     <string name="core_label_mfc_debug">Налагодження MFC</string>
     <string name="core_label_microphone_devices">Мікрофонні пристрої</string>
     <string name="core_label_microphone_type">Тип мікрофона</string>
@@ -1294,7 +1295,6 @@ Infinite додає цикл позитивного зворотного зв’
 У деяких випадках може покращити продуктивність, особливо в системах з обмеженою кількістю апаратних потоків.
 Обмеження кількості потоків може призвести до збоїв; рекомендується залишити це значення за замовчуванням.</string>
     <string name="core_help_core_mfc_commands_shuffling_limit" formatted="false">Примусово затримує будь-яку непарну команду MFC, очікує принаймні 2 очікуваних команд, щоб виконати їх у довільному порядку.
-На даний момент має використовуватися з будь-яким інтерпретатором SPU.
 Сильно погіршує продуктивність! Якщо не впевнені, не використовуйте цю опцію.</string>
     <string name="core_help_core_mfc_debug" formatted="false">Створює журнали MFC.
 Корисно лише розробникам.

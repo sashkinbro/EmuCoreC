@@ -904,6 +904,7 @@
     <string name="core_label_mfc_commands_shuffling_in_steps">MFC Komutları Adımlarla Karıştırılıyor</string>
     <string name="core_label_mfc_commands_shuffling_limit">MFC Komutları Karıştırma Limiti</string>
     <string name="core_label_mfc_commands_timeout">MFC Komutları Zaman Aşımı</string>
+    <string name="core_label_mfc_shuffle_instructions_decrementer">MFC yeniden sıralama komut sayacı</string>
     <string name="core_label_mfc_debug">MFC Hata Ayıklama</string>
     <string name="core_label_microphone_devices">Mikrofon Cihazları</string>
     <string name="core_label_microphone_type">Mikrofon Türü</string>
@@ -1292,7 +1293,6 @@ Oyunun donanımı ne kadar hafif olursa, o kadar fazla güç tasarrufu sağlanı
 Bazı durumlarda, özellikle sınırlı sayıda donanım iş parçacığına sahip sistemlerde performansı artırabilir.
 İş parçacığı sayısını sınırlamak büyük olasılıkla çökmelere neden olacaktır; bunu varsayılan değerde tutmanız önerilir.</string>
     <string name="core_help_core_mfc_commands_shuffling_limit" formatted="false">Herhangi bir tek MFC komutunu geciktirmeye zorlar, en az 2 bekleyen komutun bunları rastgele bir sırada yürütmesini bekler.
-Şu anda her iki SPU tercümanıyla birlikte kullanılması gerekir.
 Performansı ciddi şekilde düşürür! Emin değilseniz bu seçeneği kullanmayın.</string>
     <string name="core_help_core_mfc_debug" formatted="false">MFC günlükleri oluşturur.
 Yalnızca geliştiriciler için faydalıdır.

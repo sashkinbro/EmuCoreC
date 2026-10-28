@@ -1791,7 +1791,7 @@ public:
 			sha1_finish(&ctx, output);
 
 			m_hash.clear();
-			// The 'a' is a codegen generation tag, not decoration.
+			// The letter is a codegen generation tag, not decoration.
 			//
 			// This name keys the on-disk object cache and is built purely from the GUEST
 			// function's bytes, so it is identical before and after any change to how we compile
@@ -1801,7 +1801,7 @@ public:
 			//
 			// The PPU side already learned this and versions its objects (v8-kusa -> v9-kusa
 			// after the XER fix). Bump this letter whenever ARM64 SPU codegen changes semantics.
-			fmt::append(m_hash, "__spu-a-0x%05x-%s", func.entry_point, fmt::base57(output));
+			fmt::append(m_hash, "__spu-b-0x%05x-%s", func.entry_point, fmt::base57(output));
 
 			be_t<u64> hash_start;
 			std::memcpy(&hash_start, output, sizeof(hash_start));
@@ -1829,26 +1829,23 @@ public:
 		m_pp_id = 0;
 
 		std::string function_log;
-
-		this->dump(func, function_log);
 		bool to_log_func = false;
-
-		if (g_cfg.core.spu_debug && !add_loc->logged.exchange(1))
-		{
-			if (!fs::write_file(m_spurt->get_cache_path() + "spu.log", fs::write + fs::append, function_log))
-			{
-				// Fallback: write to main log
-				to_log_func = true;
-			}
-		}
-
 		for (u32 data : func.data)
 		{
 			const spu_opcode_t op{std::bit_cast<be_t<u32>>(data)};
-
-			const auto itype = g_spu_itype.decode(op.opcode);
-
-			if (itype == spu_itype::RDCH && op.ra == SPU_RdDec)
+			if (op.ra == SPU_RdDec && g_spu_itype.decode(op.opcode) == spu_itype::RDCH)
+			{
+				to_log_func = true;
+				break;
+			}
+		}
+		if (g_cfg.core.spu_debug || to_log_func)
+		{
+			this->dump(func, function_log);
+		}
+		if (g_cfg.core.spu_debug && !add_loc->logged.exchange(1))
+		{
+			if (!fs::write_file(m_spurt->get_cache_path() + "spu.log", fs::write + fs::append, function_log))
 			{
 				to_log_func = true;
 			}
@@ -1897,6 +1894,35 @@ public:
 		// Emit code check
 		u32 check_iterations = 0;
 		m_ir->SetInsertPoint(label_test);
+
+		if (g_cfg.core.mfc_transfers_shuffling)
+		{
+			const auto spu_work = [](spu_thread* thread)
+			{
+				bool work_left = thread->do_mfc();
+				if (thread->interrupts_enabled)
+				{
+					thread->get_events(SPU_EVENT_TM);
+					work_left = true;
+				}
+				if (work_left) thread->mfc_queued_ops_timeout = g_cfg.core.mfc_shuffling_instructions;
+				if (thread->check_mfc_interrupts(thread->pc)) spu_runtime::g_escape(thread);
+			};
+			const auto mfc_ops = spu_ptr(&spu_thread::mfc_queued_ops_timeout);
+			const auto next = BasicBlock::Create(m_context, "ShuffleNext", m_function);
+			const auto check = BasicBlock::Create(m_context, "MfcCheck", m_function);
+			const auto work = BasicBlock::Create(m_context, "MfcOps", m_function);
+			const auto old_timeout = spu_context_attr(m_ir->CreateLoad(get_type<u64>(), mfc_ops));
+			m_ir->CreateCondBr(m_ir->CreateIsNull(old_timeout), next, check);
+			m_ir->SetInsertPoint(check);
+			const auto timeout = m_ir->CreateSub(old_timeout, m_ir->getInt64(1));
+			m_ir->CreateStore(timeout, mfc_ops);
+			m_ir->CreateCondBr(m_ir->CreateIsNull(timeout), work, next);
+			m_ir->SetInsertPoint(work);
+			call("spu_work", +spu_work, m_thread);
+			m_ir->CreateBr(next);
+			m_ir->SetInsertPoint(next);
+		}
 
 		// Set block hash for profiling (if enabled)
 		if ((g_cfg.core.spu_prof || g_cfg.core.spu_debug) && g_cfg.core.spu_verification)
@@ -2816,6 +2842,48 @@ public:
 				if (need_check || (bi == 0 && g_cfg.core.spu_block_size != spu_block_size_type::safe))
 				{
 					check_state(baddr);
+					bool is_self_jump = false;
+					for (u32 pred : bb.preds)
+					{
+						if (pred == baddr) { is_self_jump = true; break; }
+					}
+					bool contains_store = false, contains_load = false, contains_floating = false;
+					if (is_self_jump && m_bbs.at(baddr).size < 16)
+					{
+						for (u32 iaddr = baddr, counter = 0; counter < m_bbs.at(baddr).size; iaddr += 4, counter++)
+						{
+							const u32 op = std::bit_cast<be_t<u32>>(func.data[(iaddr - start) / 4]);
+							const auto itype = g_spu_itype.decode(op);
+							if (itype & spu_itype::memory)
+							{
+								if (itype & spu_itype::zregmod) contains_store = true;
+								else contains_load = true;
+							}
+							else if (itype & spu_itype::floating) contains_floating = true;
+						}
+					}
+					if (is_self_jump && !contains_store && !contains_floating && contains_load && m_bbs.at(baddr).size < 12 && g_cfg.core.mfc_transfers_shuffling)
+					{
+						const auto spu_work_limited = [](spu_thread* thread)
+						{
+							if (thread->interrupts_enabled) { thread->mfc_queued_ops_timeout++; return; }
+							if (thread->do_mfc()) thread->mfc_queued_ops_timeout = g_cfg.core.mfc_shuffling_instructions;
+						};
+						const auto mfc_ops = spu_ptr(&spu_thread::mfc_queued_ops_timeout);
+						const auto next = BasicBlock::Create(m_context, "ShuffleNext2", m_function);
+						const auto check = BasicBlock::Create(m_context, "MfcCheck2", m_function);
+						const auto work = BasicBlock::Create(m_context, "MfcOps2", m_function);
+						const auto old_timeout = spu_context_attr(m_ir->CreateLoad(get_type<u64>(), mfc_ops));
+						m_ir->CreateCondBr(m_ir->CreateIsNull(old_timeout), next, check);
+						m_ir->SetInsertPoint(check);
+						const auto timeout = m_ir->CreateSub(old_timeout, m_ir->getInt64(1));
+						m_ir->CreateStore(timeout, mfc_ops);
+						m_ir->CreateCondBr(m_ir->CreateIsNull(timeout), work, next);
+						m_ir->SetInsertPoint(work);
+						call("spu_work_limited", +spu_work_limited, m_thread);
+						m_ir->CreateBr(next);
+						m_ir->SetInsertPoint(next);
+					}
 				}
 
 				const bool is_reduced_loop = m_inst_attrs[(baddr - start) / 4] == inst_attr::reduced_loop;
@@ -3989,12 +4057,19 @@ public:
 		std::string& llvm_log = function_log;
 		raw_string_ostream out(llvm_log);
 
-		fmt::append(llvm_log, "LLVM IR at 0x%x:\n", func.entry_point);
-		out << *_module; // print IR
-		out << "\n\n";
-
-		if (verifyModule(*_module, &out))
+		const auto print_ir = [&]()
 		{
+			fmt::append(llvm_log, "LLVM IR at 0x%x:\n", func.entry_point);
+			out << *_module;
+			out << "\n\n";
+		};
+		std::string verify_log;
+		raw_string_ostream verify_out(verify_log);
+		if (verifyModule(*_module, &verify_out))
+		{
+			if (function_log.empty()) this->dump(func, function_log);
+			print_ir();
+			out << verify_out.str();
 			out.flush();
 			spu_log.error("LLVM: Verification failed at 0x%x:\n%s", func.entry_point, llvm_log);
 
@@ -4013,6 +4088,7 @@ public:
 
 			fmt::throw_exception("Compilation failed");
 		}
+		if (g_cfg.core.spu_debug) print_ir();
 
 #if defined(__APPLE__)
 		// Apple Silicon W^X: enter write mode for JIT memory and pair
@@ -4820,6 +4896,28 @@ public:
 		}
 		case MFC_RdTagStat:
 		{
+			if (g_cfg.core.mfc_transfers_shuffling)
+			{
+				const auto next = llvm::BasicBlock::Create(m_context, "", m_function);
+				const auto fallback = llvm::BasicBlock::Create(m_context, "", m_function);
+				const auto fast = llvm::BasicBlock::Create(m_context, "", m_function);
+				m_ir->CreateCondBr(m_ir->CreateIsNotNull(m_ir->CreateLoad(get_type<u32>(), spu_ptr(&spu_thread::mfc_size))), fallback, fast, m_md_unlikely);
+				m_ir->SetInsertPoint(fast);
+				const auto fast_value = get_rdch(op, ::offset32(&spu_thread::ch_tag_stat), false);
+				const auto after_fast = m_ir->GetInsertBlock();
+				m_ir->CreateBr(next);
+				m_ir->SetInsertPoint(fallback);
+				ensure_gpr_stores();
+				update_pc();
+				const auto fallback_value = call("spu_read_channel", &exec_rdch, m_thread, m_ir->getInt32(MFC_RdTagStat));
+				m_ir->CreateBr(next);
+				m_ir->SetInsertPoint(next);
+				const auto phi = m_ir->CreatePHI(get_type<u32>(), 2);
+				phi->addIncoming(fast_value, after_fast);
+				phi->addIncoming(fallback_value, fallback);
+				res.value = phi;
+				break;
+			}
 			res.value = get_rdch(op, ::offset32(&spu_thread::ch_tag_stat), false);
 			break;
 		}
@@ -5328,7 +5426,7 @@ public:
 					break;
 				}
 
-				bool must_use_cpp_functions = !!g_cfg.core.spu_accurate_dma;
+				bool must_use_cpp_functions = !!g_cfg.core.spu_accurate_dma || !!g_cfg.core.mfc_transfers_shuffling;
 
 				if (u64 cmdh = ci->getZExtValue() & ~(MFC_BARRIER_MASK | MFC_FENCE_MASK | MFC_RESULT_MASK); g_cfg.core.rsx_fifo_accuracy || g_cfg.video.strict_rendering_mode || /*!g_use_rtm*/ true)
 				{
@@ -5578,11 +5676,32 @@ public:
 				m_ir->SetInsertPoint(fail);
 
 				// Get MFC slot, redirect to invalid memory address
-				const auto slot = m_ir->CreateLoad(get_type<u32>(), spu_ptr(&spu_thread::mfc_size));
+				llvm::Value* slot = m_ir->CreateLoad(get_type<u32>(), spu_ptr(&spu_thread::mfc_size));
 				const auto off0 = m_ir->CreateAdd(m_ir->CreateMul(slot, m_ir->getInt32(sizeof(spu_mfc_cmd))), m_ir->getInt32(::offset32(&spu_thread::mfc_queue)));
-				const auto ptr0 = _ptr(m_thread, m_ir->CreateZExt(off0, get_type<u64>()));
+				auto ptr0 = _ptr(m_thread, m_ir->CreateZExt(off0, get_type<u64>()));
 				const auto ptr1 = _ptr(m_memptr, 0xffdeadf0);
-				const auto pmfc = m_ir->CreateSelect(m_ir->CreateICmpULT(slot, m_ir->getInt32(16)), ptr0, ptr1);
+				auto mfc_not_full = m_ir->CreateICmpULT(slot, m_ir->getInt32(g_cfg.core.mfc_transfers_shuffling != 0 ? std::min<u32>(+g_cfg.core.mfc_transfers_shuffling + 1, 16) : 16));
+				if (g_cfg.core.mfc_transfers_shuffling)
+				{
+					const auto exec_mfc = [](spu_thread* thread) { thread->do_mfc(false); };
+					const auto mfc_next = llvm::BasicBlock::Create(m_context, "MfcQueueNext", m_function);
+					const auto mfc_work = llvm::BasicBlock::Create(m_context, "MfcQueueWork", m_function);
+					m_ir->CreateCondBr(mfc_not_full, mfc_next, mfc_work);
+					m_ir->SetInsertPoint(mfc_work);
+					call("spu_mfc", +exec_mfc, m_thread);
+					const auto updated_slot = m_ir->CreateLoad(get_type<u32>(), spu_ptr(&spu_thread::mfc_size));
+					const auto old_slot = slot;
+					m_ir->CreateBr(mfc_next);
+					m_ir->SetInsertPoint(mfc_next);
+					const auto slot_phi = m_ir->CreatePHI(get_type<u32>(), 2);
+					slot_phi->addIncoming(updated_slot, mfc_work);
+					slot_phi->addIncoming(old_slot, fail);
+					slot = slot_phi;
+					mfc_not_full = m_ir->CreateICmpULT(slot, m_ir->getInt32(16));
+					const auto off2 = m_ir->CreateAdd(m_ir->CreateMul(slot, m_ir->getInt32(sizeof(spu_mfc_cmd))), m_ir->getInt32(::offset32(&spu_thread::mfc_queue)));
+					ptr0 = _ptr(m_thread, m_ir->CreateZExt(off2, get_type<u64>()));
+				}
+				const auto pmfc = m_ir->CreateSelect(mfc_not_full, ptr0, ptr1);
 				m_ir->CreateStore(ci, _ptr(pmfc, &spu_mfc_cmd::cmd));
 
 				switch (u64 cmd = ci->getZExtValue())

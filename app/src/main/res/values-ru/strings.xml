@@ -906,6 +906,7 @@
     <string name="core_label_mfc_commands_shuffling_in_steps">Команды MFC перетасовываются по шагам</string>
     <string name="core_label_mfc_commands_shuffling_limit">Предел перетасовки команд MFC</string>
     <string name="core_label_mfc_commands_timeout">Тайм-аут команд MFC</string>
+    <string name="core_label_mfc_shuffle_instructions_decrementer">Счётчик инструкций перемешивания MFC</string>
     <string name="core_label_mfc_debug">Отладка MFC</string>
     <string name="core_label_microphone_devices">Микрофонные устройства</string>
     <string name="core_label_microphone_type">Тип микрофона</string>
@@ -1294,7 +1295,6 @@ Infinite добавляет петлю положительной обратно
 В некоторых случаях может повысить производительность, особенно в системах с ограниченным количеством аппаратных потоков.
 Ограничение количества потоков может привести к сбоям; рекомендуется оставить значение по умолчанию.</string>
     <string name="core_help_core_mfc_commands_shuffling_limit" formatted="false">Принудительно задерживает любую нечетную команду MFC, ожидает как минимум двух ожидающих команд для их выполнения в случайном порядке.
-В настоящее время необходимо использовать с любым из переводчиков SPU.
 Сильно ухудшает производительность! Если вы не уверены, не используйте эту опцию.</string>
     <string name="core_help_core_mfc_debug" formatted="false">Создает журналы MFC.
 Полезно только разработчикам.

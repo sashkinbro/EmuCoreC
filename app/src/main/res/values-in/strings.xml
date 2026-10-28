@@ -903,6 +903,7 @@
     <string name="core_label_mfc_commands_shuffling_in_steps">Pengacakan perintah MFC bertahap</string>
     <string name="core_label_mfc_commands_shuffling_limit">Batas pengacakan perintah MFC</string>
     <string name="core_label_mfc_commands_timeout">Batas waktu perintah MFC</string>
+    <string name="core_label_mfc_shuffle_instructions_decrementer">Penghitung instruksi pengacakan MFC</string>
     <string name="core_label_mfc_debug">Debug MFC</string>
     <string name="core_label_microphone_devices">Perangkat mikrofon</string>
     <string name="core_label_microphone_type">Jenis mikrofon</string>
@@ -1182,7 +1183,7 @@
     <string name="core_help_core_max_llvm_compile_threads" formatted="false">Membatasi jumlah maksimum thread yang digunakan untuk kompilasi modul PPU dan SPU awal. Turunkan ini untuk meningkatkan kinerja aplikasi terbuka lainnya. Defaultnya menggunakan semua thread yang tersedia.</string>
     <string name="core_help_core_max_cpu_preempt_count" formatted="false">Mengurangi penggunaan CPU dan konsumsi daya, meningkatkan masa pakai baterai pada perangkat seluler. (0 berarti dinonaktifkan) Nilai yang lebih tinggi menyebabkan efek yang lebih nyata, namun dapat menyebabkan masalah audio atau kinerja. Nilai yang direkomendasikan adalah 50 atau kurang. Opsi ini memaksakan batas FPS karena aktif ketika framerate stabil. Semakin ringan game pada perangkat kerasnya, semakin banyak daya yang dihematnya. (sampai batas hitungan preemption tercapai)</string>
     <string name="core_help_core_max_spurs_threads" formatted="false">Membatasi jumlah maksimum thread SPURS di setiap grup thread. Dapat meningkatkan kinerja dalam beberapa kasus, terutama pada sistem dengan jumlah thread perangkat keras yang terbatas. Membatasi jumlah thread kemungkinan besar akan menyebabkan crash; disarankan untuk menjaga ini pada nilai default.</string>
-    <string name="core_help_core_mfc_commands_shuffling_limit" formatted="false">Menunda setiap perintah MFC bernomor ganjil, menunggu setidaknya dua perintah tertunda, lalu menjalankannya secara acak. Saat ini harus digunakan dengan salah satu interpreter SPU. Sangat menurunkan kinerja! Jika tidak yakin, jangan gunakan opsi ini.</string>
+    <string name="core_help_core_mfc_commands_shuffling_limit" formatted="false">Menunda setiap perintah MFC bernomor ganjil, menunggu setidaknya dua perintah tertunda, lalu menjalankannya secara acak. Sangat menurunkan kinerja! Jika tidak yakin, jangan gunakan opsi ini.</string>
     <string name="core_help_core_mfc_debug" formatted="false">Membuat log MFC. Hanya berguna bagi pengembang. Jangan pernah gunakan ini.</string>
     <string name="core_help_audio_microphone_devices" formatted="false">Standar harus digunakan untuk sebagian besar game. SingStar mengemulasi perangkat SingStar dan harus digunakan dengan game SingStar. SingStar asli hanya boleh digunakan dengan perangkat SingStar NYATA dengan game SingStar. Rocksmith harus digunakan dengan dongle Rocksmith.</string>
     <string name="core_help_audio_microphone_type" formatted="false">Standar harus digunakan untuk sebagian besar game. SingStar mengemulasi perangkat SingStar dan harus digunakan dengan game SingStar. SingStar asli hanya boleh digunakan dengan perangkat SingStar NYATA dengan game SingStar. Rocksmith harus digunakan dengan dongle Rocksmith.</string>

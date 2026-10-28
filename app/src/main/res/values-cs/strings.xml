@@ -903,6 +903,7 @@
     <string name="core_label_mfc_commands_shuffling_in_steps">Přeskupování příkazů MFC po krocích</string>
     <string name="core_label_mfc_commands_shuffling_limit">Limit přeskupování příkazů MFC</string>
     <string name="core_label_mfc_commands_timeout">Časový limit příkazů MFC</string>
+    <string name="core_label_mfc_shuffle_instructions_decrementer">Odpočet instrukcí přeskupení MFC</string>
     <string name="core_label_mfc_debug">Ladění MFC</string>
     <string name="core_label_microphone_devices">Mikrofony</string>
     <string name="core_label_microphone_type">Typ mikrofonu</string>
@@ -1257,7 +1258,7 @@ Tato možnost si vynutí limit FPS, protože je aktivní, když je snímková fr
     <string name="core_help_core_max_spurs_threads" formatted="false">Omezuje maximální počet vláken SPURS v každé skupině vláken.
 V některých případech může zlepšit výkon, zejména na systémech s omezeným počtem hardwarových vláken.
 Omezení počtu vláken pravděpodobně způsobí pády; je doporučeno ponechat tuto výchozí hodnotu.</string>
-    <string name="core_help_core_mfc_commands_shuffling_limit" formatted="false">Zdrží každý lichý příkaz MFC, počká alespoň na dva čekající příkazy a provede je v náhodném pořadí. Aktuálně vyžaduje některý z interpretů SPU. Výrazně snižuje výkon! Pokud si nejste jisti, tuto možnost nepoužívejte.</string>
+    <string name="core_help_core_mfc_commands_shuffling_limit" formatted="false">Zdrží každý lichý příkaz MFC, počká alespoň na dva čekající příkazy a provede je v náhodném pořadí. Výrazně snižuje výkon! Pokud si nejste jisti, tuto možnost nepoužívejte.</string>
     <string name="core_help_core_mfc_debug" formatted="false">Vytváří protokoly MFC.
 Užitečné pouze pro vývojáře.
 Toto nikdy nepoužívejte.</string>

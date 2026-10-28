@@ -903,6 +903,7 @@
     <string name="core_label_mfc_commands_shuffling_in_steps">جابه‌جایی مرحله‌ای ترتیب فرمان‌های MFC</string>
     <string name="core_label_mfc_commands_shuffling_limit">محدودیت جابه‌جایی ترتیب فرمان‌های MFC</string>
     <string name="core_label_mfc_commands_timeout">مهلت فرمان‌های MFC</string>
+    <string name="core_label_mfc_shuffle_instructions_decrementer">شمارنده دستورهای بازچینی MFC</string>
     <string name="core_label_mfc_debug">اشکال‌زدایی MFC</string>
     <string name="core_label_microphone_devices">دستگاه‌های میکروفون</string>
     <string name="core_label_microphone_type">نوع میکروفون</string>
@@ -1182,7 +1183,7 @@
     <string name="core_help_core_max_llvm_compile_threads" formatted="false">حداکثر تعداد رشته های مورد استفاده برای کامپایل اولیه ماژول PPU و SPU را محدود می کند. برای افزایش عملکرد سایر برنامه های باز، این را کاهش دهید. پیش فرض از تمام رشته های موجود استفاده می کند.</string>
     <string name="core_help_core_max_cpu_preempt_count" formatted="false">مصرف CPU و مصرف انرژی را کاهش می دهد و عمر باتری دستگاه های تلفن همراه را بهبود می بخشد. (0 به معنای غیرفعال است) مقادیر بالاتر باعث ایجاد جلوه واضح تر می شود، اما ممکن است باعث مشکلات صوتی یا عملکرد شود. مقدار 50 یا کمتر توصیه می شود. این گزینه محدودیت FPS را تحمیل می کند زیرا زمانی که نرخ فریم ثابت است فعال است. هرچه بازی بر روی سخت افزار سبک تر باشد، انرژی بیشتری توسط آن ذخیره می شود. (تا زمانی که به مانع شمارش پیش دستی نرسیده باشد)</string>
     <string name="core_help_core_max_spurs_threads" formatted="false">حداکثر تعداد رشته های SPURS را در هر گروه رشته محدود می کند. ممکن است در برخی موارد عملکرد را بهبود بخشد، به خصوص در سیستم‌هایی با تعداد رشته‌های سخت‌افزاری محدود. محدود کردن تعداد رشته ها احتمالاً باعث خرابی می شود. توصیه می شود این را در مقدار پیش فرض نگه دارید.</string>
-    <string name="core_help_core_mfc_commands_shuffling_limit" formatted="false">هر فرمان فرد MFC را به تأخیر می‌اندازد و منتظر حداقل دو فرمان در صف می‌ماند تا آن‌ها را با ترتیب تصادفی اجرا کند. فعلاً باید با یکی از مفسرهای SPU استفاده شود. عملکرد را به‌شدت کاهش می‌دهد! اگر مطمئن نیستید، از این گزینه استفاده نکنید.</string>
+    <string name="core_help_core_mfc_commands_shuffling_limit" formatted="false">هر فرمان فرد MFC را به تأخیر می‌اندازد و منتظر حداقل دو فرمان در صف می‌ماند تا آن‌ها را با ترتیب تصادفی اجرا کند. عملکرد را به‌شدت کاهش می‌دهد! اگر مطمئن نیستید، از این گزینه استفاده نکنید.</string>
     <string name="core_help_core_mfc_debug" formatted="false">گزارش‌های MFC را ایجاد می کند. فقط برای توسعه دهندگان مفید است. هرگز از این استفاده نکنید.</string>
     <string name="core_help_audio_microphone_devices" formatted="false">استاندارد باید برای اکثر بازی ها استفاده شود. SingStar دستگاه SingStar را شبیه سازی می کند و باید با بازی های SingStar استفاده شود. SingStar فیزیکی فقط باید با دستگاه REAL SingStar با بازی های SingStar استفاده شود. Rocksmith باید با دانگل Rocksmith استفاده شود.</string>
     <string name="core_help_audio_microphone_type" formatted="false">استاندارد باید برای اکثر بازی ها استفاده شود. SingStar دستگاه SingStar را شبیه سازی می کند و باید با بازی های SingStar استفاده شود. SingStar فیزیکی فقط باید با دستگاه REAL SingStar با بازی های SingStar استفاده شود. Rocksmith باید با دانگل Rocksmith استفاده شود.</string>

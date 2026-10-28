@@ -904,6 +904,7 @@
     <string name="core_label_mfc_commands_shuffling_in_steps">एमएफसी चरणों में फेरबदल का आदेश देता है</string>
     <string name="core_label_mfc_commands_shuffling_limit">एमएफसी शफ़लिंग सीमा का आदेश देता है</string>
     <string name="core_label_mfc_commands_timeout">एमएफसी कमांड टाइमआउट</string>
+    <string name="core_label_mfc_shuffle_instructions_decrementer">MFC पुनर्क्रमण निर्देश काउंटर</string>
     <string name="core_label_mfc_debug">एमएफसी डीबग</string>
     <string name="core_label_microphone_devices">माइक्रोफ़ोन उपकरण</string>
     <string name="core_label_microphone_type">माइक्रोफ़ोन प्रकार</string>
@@ -1292,7 +1293,6 @@ PS3 नेटिव का उपयोग केवल तभी किया �
 कुछ मामलों में प्रदर्शन में सुधार हो सकता है, विशेष रूप से सीमित संख्या में हार्डवेयर थ्रेड वाले सिस्टम पर।
 थ्रेड्स की संख्या सीमित करने से क्रैश होने की संभावना है; इसे डिफ़ॉल्ट मान पर रखने की अनुशंसा की जाती है।</string>
     <string name="core_help_core_mfc_commands_shuffling_limit" formatted="false">किसी भी विषम एमएफसी कमांड को विलंबित करने के लिए बल, यादृच्छिक क्रम में उन्हें निष्पादित करने के लिए कम से कम 2 लंबित कमांड की प्रतीक्षा करता है।
-वर्तमान में किसी भी एसपीयू दुभाषिए के साथ उपयोग किया जाना चाहिए।
 प्रदर्शन में गंभीर गिरावट! यदि अनिश्चित हो तो इस विकल्प का उपयोग न करें।</string>
     <string name="core_help_core_mfc_debug" formatted="false">एमएफसी लॉग बनाता है।
 केवल डेवलपर्स के लिए उपयोगी.

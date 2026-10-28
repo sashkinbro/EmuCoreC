@@ -1010,6 +1010,9 @@ void spu_cache::initialize(bool build_existing_cache)
 
 	// Read cache
 	auto func_list = cache.get();
+	std::sort(func_list.begin(), func_list.end());
+	func_list.erase(std::unique(func_list.begin(), func_list.end()), func_list.end());
+	std::stable_sort(func_list.begin(), func_list.end(), FN(x.data.size() > y.data.size()));
 	atomic_t<usz> fnext{};
 	atomic_t<u8> fail_flag{0};
 
@@ -1172,28 +1175,6 @@ void spu_cache::initialize(bool build_existing_cache)
 			// Get data start
 			const u32 start = func.lower_bound;
 			const u32 size0 = ::size32(func.data);
-
-			be_t<u64> hash_start;
-			{
-				sha1_context ctx;
-				u8 output[20];
-
-				sha1_starts(&ctx);
-				sha1_update(&ctx, reinterpret_cast<const u8*>(func.data.data()), func.data.size() * 4);
-				sha1_finish(&ctx, output);
-				std::memcpy(&hash_start, output, sizeof(hash_start));
-			}
-
-			// Check hash against allowed bounds
-			const bool inverse_bounds = g_cfg.core.spu_llvm_lower_bound > g_cfg.core.spu_llvm_upper_bound;
-
-			if ((!inverse_bounds && (hash_start < g_cfg.core.spu_llvm_lower_bound || hash_start > g_cfg.core.spu_llvm_upper_bound)) ||
-				(inverse_bounds && (hash_start < g_cfg.core.spu_llvm_lower_bound && hash_start > g_cfg.core.spu_llvm_upper_bound)))
-			{
-				spu_log.error("[Debug] Skipped function %s", fmt::base57(hash_start));
-				result++;
-				continue;
-			}
 
 			// Initialize LS with function data only
 			for (u32 i = 0, pos = start; i < size0; i++, pos += 4)
@@ -1553,8 +1534,8 @@ spu_runtime::spu_runtime()
 	// illegal instruction). Bump SPU_OBJ_CACHE_VERSION whenever SPU codegen itself changes,
 	// including compile-time switches such as the SPU ARM64 byte-gather path.
 	{
-		// v2 retires objects written before the ARM64 i8mm byte-gather path was disabled.
-		constexpr u32 SPU_OBJ_CACHE_VERSION = 2;
+		// v3 retires objects generated before MFC shuffling was reworked.
+		constexpr u32 SPU_OBJ_CACHE_VERSION = 3;
 		constexpr usz SPU_OBJ_CACHE_MAX_FILES = 12000;
 
 		sha1_context ctx;
@@ -1573,9 +1554,11 @@ spu_runtime::spu_runtime()
 		const u32 xfloat = static_cast<u32>(g_cfg.core.spu_xfloat_accuracy.get());
 		const u32 block_size = static_cast<u32>(g_cfg.core.spu_block_size.get());
 		const u32 clocks_scale = static_cast<u32>(g_cfg.core.clocks_scale.get()); // gates the RdDec fast path
+		const u32 mfc_shuffling = static_cast<u32>(g_cfg.core.mfc_transfers_shuffling.get());
 		fold(xfloat);
 		fold(block_size);
 		fold(clocks_scale);
+		fold(mfc_shuffling);
 
 		const u32 flags =
 			(static_cast<u32>(g_cfg.core.use_accurate_dfma.get())         << 0) |
@@ -2472,7 +2455,9 @@ void spu_recompiler_base::dispatch(spu_thread& spu, void*, u8* rip)
 #endif
 	auto program = spu.jit->analyse(spu._ptr<u32>(0), spu.pc);
 #ifdef ARCH_ARM64
-	const auto func = compile_spu_llvm_with_retry(spu.jit, program);
+	const auto func = g_cfg.core.spu_compile_pause
+		? cpu_thread::suspend_all(&spu, {}, [&] { return compile_spu_llvm_with_retry(spu.jit, program); })
+		: compile_spu_llvm_with_retry(spu.jit, program);
 #else
 	const auto func = spu.jit->compile(std::move(program));
 #endif
@@ -9079,10 +9064,30 @@ spu_program spu_recompiler_base::analyse(const be_t<u32>* ls, u32 entry_point, s
 		// they were measured on: the whitelist is keyed by guest-code hash and CellSpurs is a
 		// shared Sony library, so an entry for one game would otherwise turn on for every game
 		// that links the same routine.
-		const auto pattern_is_title_gated = [](std::string_view h) -> std::string_view
+		static constexpr std::string_view skyrim_titles[] = {
+			"BLUS31202"sv, "BLES01885"sv, "BLES01886"sv, "BLUS30778"sv, "BLES01329"sv, "BLES01330"sv
+		};
+		static constexpr std::string_view skyrim_patterns[] = {
+			"7CYy1Z90VX7dZFY6kVj8K9GNoF7j"sv, "UFURPWe0PJn33pQrnA1uCvs90Cp2"sv,
+			"6QJXWujvpQZ5ELepgGjGkbT8Q5L9"sv, "TGbz6z8agWq0Cj8imx7t842cVr35"sv,
+			"foMGepN0zGHPhhxahvcQXqittkZo"sv, "5usgHpKNU2ZCNdy2NUxV4VF7e9uK"sv,
+			"3YiHWkYZG4n4GAN9qr8FMLg9S3LM"sv, "0ufxr18soJFU57mPncwUtGaLKHCJ"sv,
+			"3VV9Sfbt67RVQpb2kZngKTh4qS8q"sv, "PdRpiE1AFai4RJ9LgEZ8xXrsecQT"sv,
+			"sbne73ERLK7k4sALrpEEZQUTGas8"sv, "mGg3dYWtVpn3tLcdx2ygsKEpvuqf"sv,
+			"0wHeUEWZCT14w6FM7od6KX1LKm5z"sv, "2mFGbVHMzS04gt9grTZ772JA96EW"sv,
+			"G5HMcMfinTzqUMuKYue2Ea3iiwE7"sv, "NAZKHqqTQurTF66K4X20YbNeyERN"sv,
+			"Ym49FkT7PE9SZpGKWSyzZCRHFuCY"sv, "i8ZH5UuruSu5enEQX3KuhaUMP3GZ"sv,
+			"s2m83ehX3XuAeQv8KJcdkqVGEdMM"sv
+		};
+		const auto is_skyrim_pattern = [](std::string_view h)
 		{
-			if (h == "620oYSe8uQqq9eTkhWfMqoEXX0us"sv) return "BLUS30736"sv; // Soulcalibur V
-			return {};
+			return std::find(std::begin(skyrim_patterns), std::end(skyrim_patterns), h) != std::end(skyrim_patterns);
+		};
+		const auto pattern_allowed_in_title = [&](std::string_view h, std::string_view title)
+		{
+			if (h == "620oYSe8uQqq9eTkhWfMqoEXX0us"sv) return title == "BLUS30736"sv;
+			if (is_skyrim_pattern(h)) return std::find(std::begin(skyrim_titles), std::end(skyrim_titles), title) != std::end(skyrim_titles);
+			return true;
 		};
 
 		{
@@ -9148,17 +9153,11 @@ spu_program spu_recompiler_base::analyse(const be_t<u32>* ls, u32 entry_point, s
 				"WA0WuYLrZXrcc6Jyw5EMgYRV2bwo"sv,
 			};
 
-			allow_pattern = std::any_of(allowed_patterns.begin(), allowed_patterns.end(), FN(pattern_hash == x));
+			allow_pattern = std::any_of(allowed_patterns.begin(), allowed_patterns.end(), FN(pattern_hash == x)) || is_skyrim_pattern(pattern_hash);
 
-			if (allow_pattern)
+			if (allow_pattern && !pattern_allowed_in_title(pattern_hash, Emu.GetTitleID()))
 			{
-				if (const auto only_title = pattern_is_title_gated(pattern_hash);
-					!only_title.empty() && Emu.GetTitleID() != only_title)
-				{
-					// Admitted on measured benefit, not proven safety, so it stays on the one
-					// title it was measured on.
-					allow_pattern = false;
-				}
+				allow_pattern = false;
 			}
 		}
 
@@ -10095,15 +10094,7 @@ struct spu_fast : public spu_recompiler_base
 		// Install pointer carefully
 		const bool added = !add_loc->compiled && add_loc->compiled.compare_and_swap_test(nullptr, fn);
 
-		// Check hash against allowed bounds
-		const bool inverse_bounds = g_cfg.core.spu_llvm_lower_bound > g_cfg.core.spu_llvm_upper_bound;
-
-		if ((!inverse_bounds && (m_hash_start < g_cfg.core.spu_llvm_lower_bound || m_hash_start > g_cfg.core.spu_llvm_upper_bound)) ||
-			(inverse_bounds && (m_hash_start < g_cfg.core.spu_llvm_lower_bound && m_hash_start > g_cfg.core.spu_llvm_upper_bound)))
-		{
-			spu_log.error("[Debug] Skipped function %s", fmt::base57(be_t<u64>{m_hash_start}));
-		}
-		else if (added)
+		if (added)
 		{
 			// Send work to LLVM compiler thread
 			g_fxo->get<spu_llvm_thread>().registered.push(m_hash_start, add_loc);

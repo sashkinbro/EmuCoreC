@@ -51,7 +51,7 @@ class CoreLocaleContractTest {
         val labelKeys = defaultContract.keys.filter { it.startsWith("core_label_") }
         val helpKeys = defaultContract.keys.filter { it.startsWith("core_help_") }
 
-        assertEquals("Unexpected RPCSX/RPCS3 title/value contract", 471, labelKeys.size)
+        assertEquals("Unexpected RPCSX/RPCS3 title/value contract", 472, labelKeys.size)
         assertEquals("Every user-facing native option needs audited help", 203, helpKeys.size)
         assertTrue(defaultContract.values.none(String::isBlank))
         assertTrue("Mojibake leaked into default core resources", defaultContract.values.none(::containsMojibake))

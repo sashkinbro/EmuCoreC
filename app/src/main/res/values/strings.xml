@@ -904,6 +904,7 @@
     <string name="core_label_mfc_commands_shuffling_in_steps">MFC Commands Shuffling In Steps</string>
     <string name="core_label_mfc_commands_shuffling_limit">MFC Commands Shuffling Limit</string>
     <string name="core_label_mfc_commands_timeout">MFC Commands Timeout</string>
+    <string name="core_label_mfc_shuffle_instructions_decrementer">MFC Shuffle Instructions Decrementer</string>
     <string name="core_label_mfc_debug">MFC Debug</string>
     <string name="core_label_microphone_devices">Microphone Devices</string>
     <string name="core_label_microphone_type">Microphone Type</string>
@@ -1292,7 +1293,6 @@ The lighter the game is on the hardware, the more power is saved by it. (until t
 May improve performance in some cases, especially on systems with limited number of hardware threads.
 Limiting the number of threads is likely to cause crashes; it\'s recommended to keep this at the default value.</string>
     <string name="core_help_core_mfc_commands_shuffling_limit" formatted="false">Forces delaying any odd MFC command, waits for at least 2 pending commands to execute them in a random order.
-Must be used with either SPU interpreters currently.
 Severely degrades performance! If unsure, don\'t use this option.</string>
     <string name="core_help_core_mfc_debug" formatted="false">Creates MFC logs.
 Only useful to developers.

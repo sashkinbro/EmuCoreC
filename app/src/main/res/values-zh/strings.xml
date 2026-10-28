@@ -903,6 +903,7 @@
     <string name="core_label_mfc_commands_shuffling_in_steps">MFC 命令逐步改组</string>
     <string name="core_label_mfc_commands_shuffling_limit">MFC 命令改组限制</string>
     <string name="core_label_mfc_commands_timeout">MFC 命令超时</string>
+    <string name="core_label_mfc_shuffle_instructions_decrementer">MFC 重排序指令计数器</string>
     <string name="core_label_mfc_debug">MFC调试</string>
     <string name="core_label_microphone_devices">麦克风设备</string>
     <string name="core_label_microphone_type">麦克风类型</string>
@@ -1291,7 +1292,6 @@ Basic 在这些情况下将起作用。</string>
 在某些情况下可能会提高性能，特别是在硬件线程数量有限的系统上。
 限制线程数很可能会导致崩溃；建议将此值保留为默认值。</string>
     <string name="core_help_core_mfc_commands_shuffling_limit" formatted="false">强制延迟任何奇怪的 MFC 命令，等待至少 2 个待处理命令以随机顺序执行它们。
-当前必须与任一 SPU 解释器一起使用。
 严重降低性能！如果不确定，请勿使用此选项。</string>
     <string name="core_help_core_mfc_debug" formatted="false">创建 MFC 日志。
 只对开发者有用。

@@ -908,6 +908,7 @@
     <string name="core_label_mfc_commands_shuffling_in_steps">أوامر MFC خلط في الخطوات</string>
     <string name="core_label_mfc_commands_shuffling_limit">الحد الأقصى لخلط أوامر MFC</string>
     <string name="core_label_mfc_commands_timeout">مهلة أوامر MFC</string>
+    <string name="core_label_mfc_shuffle_instructions_decrementer">عداد تنازلي لتعليمات إعادة ترتيب MFC</string>
     <string name="core_label_mfc_debug">تصحيح MFC</string>
     <string name="core_label_microphone_devices">أجهزة الميكروفون</string>
     <string name="core_label_microphone_type">نوع الميكروفون</string>
@@ -1296,7 +1297,6 @@
 قد يؤدي إلى تحسين الأداء في بعض الحالات، خاصة على الأنظمة ذات عدد محدود من مؤشرات ترابط الأجهزة.
 من المحتمل أن يؤدي تحديد عدد سلاسل الرسائل إلى حدوث أعطال؛ من المستحسن الاحتفاظ بهذا بالقيمة الافتراضية.</string>
     <string name="core_help_core_mfc_commands_shuffling_limit" formatted="false">يفرض تأخير أي أمر MFC فردي، وينتظر أمرين معلقين على الأقل لتنفيذهما بترتيب عشوائي.
-يجب استخدامه مع أي من مترجمي SPU حاليًا.
 يحط بشدة الأداء! إذا لم تكن متأكدًا، فلا تستخدم هذا الخيار.</string>
     <string name="core_help_core_mfc_debug" formatted="false">ينشئ سجلات MFC.
 مفيدة فقط للمطورين.

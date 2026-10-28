@@ -905,6 +905,7 @@
     <string name="core_label_mfc_commands_shuffling_in_steps">Comandos MFC barajados en pasos</string>
     <string name="core_label_mfc_commands_shuffling_limit">Límite de mezcla de comandos de MFC</string>
     <string name="core_label_mfc_commands_timeout">Tiempo de espera de comandos MFC</string>
+    <string name="core_label_mfc_shuffle_instructions_decrementer">Contador de instrucciones de reordenación MFC</string>
     <string name="core_label_mfc_debug">Depuración MFC</string>
     <string name="core_label_microphone_devices">Dispositivos de micrófono</string>
     <string name="core_label_microphone_type">Tipo de micrófono</string>
@@ -1293,7 +1294,6 @@ Cuanto más liviano sea el juego en el hardware, más energía ahorrará. (hasta
 Puede mejorar el rendimiento en algunos casos, especialmente en sistemas con un número limitado de subprocesos de hardware.
 Es probable que limitar el número de subprocesos provoque fallos; se recomienda mantenerlo en el valor predeterminado.</string>
     <string name="core_help_core_mfc_commands_shuffling_limit" formatted="false">Fuerza el retraso de cualquier comando MFC impar, espera al menos 2 comandos pendientes para ejecutarlos en orden aleatorio.
-Actualmente debe usarse con cualquiera de los intérpretes SPU.
 ¡Degrada gravemente el rendimiento! Si no está seguro, no utilice esta opción.</string>
     <string name="core_help_core_mfc_debug" formatted="false">Crea registros MFC.
 Sólo útil para desarrolladores.

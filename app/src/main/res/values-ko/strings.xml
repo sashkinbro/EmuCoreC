@@ -903,6 +903,7 @@
     <string name="core_label_mfc_commands_shuffling_in_steps">MFC 명령을 단계적으로 섞음</string>
     <string name="core_label_mfc_commands_shuffling_limit">MFC 명령 셔플링 제한</string>
     <string name="core_label_mfc_commands_timeout">MFC 명령 시간 초과</string>
+    <string name="core_label_mfc_shuffle_instructions_decrementer">MFC 재정렬 명령 카운터</string>
     <string name="core_label_mfc_debug">MFC 디버그</string>
     <string name="core_label_microphone_devices">마이크 장치</string>
     <string name="core_label_microphone_type">마이크 유형</string>
@@ -1224,7 +1225,7 @@ PS3 네이티브는 프레임 속도 문제가 발생할 수 있으므로 자동
 기본값은 사용 가능한 모든 스레드를 사용합니다.</string>
     <string name="core_help_core_max_cpu_preempt_count" formatted="false">CPU 사용량과 전력 소비를 줄여 모바일 기기의 배터리 사용 시간을 늘립니다(0은 비활성화).\n값이 클수록 효과가 커지지만 오디오나 성능 문제가 생길 수 있습니다. 50 이하를 권장합니다.\n프레임 속도가 안정적일 때 작동하므로 이 옵션은 FPS 제한을 강제합니다.\n하드웨어에 주는 게임 부하가 가벼울수록 전력을 더 절약합니다(선점 횟수 한도에 도달할 때까지).</string>
     <string name="core_help_core_max_spurs_threads" formatted="false">각 스레드 그룹의 최대 SPURS 스레드 수를 제한합니다.\n특히 하드웨어 스레드 수가 적은 시스템에서 성능이 향상될 수 있습니다.\n스레드 수를 제한하면 충돌이 발생할 수 있으므로 기본값을 유지하는 것이 좋습니다.</string>
-    <string name="core_help_core_mfc_commands_shuffling_limit" formatted="false">MFC 명령을 지연시키고 최소 2개의 명령이 대기할 때까지 기다린 후 무작위 순서로 실행합니다.\n현재는 SPU 인터프리터 중 하나와 함께 사용해야 합니다.\n성능이 크게 저하됩니다! 잘 모르면 사용하지 마세요.</string>
+    <string name="core_help_core_mfc_commands_shuffling_limit" formatted="false">MFC 명령을 지연시키고 최소 2개의 명령이 대기할 때까지 기다린 후 무작위 순서로 실행합니다.\n성능이 크게 저하됩니다! 잘 모르면 사용하지 마세요.</string>
     <string name="core_help_core_mfc_debug" formatted="false">MFC 로그를 생성합니다.
 개발자에게만 유용합니다.
 이것을 절대 사용하지 마십시오.</string>

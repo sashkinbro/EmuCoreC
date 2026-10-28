@@ -904,6 +904,7 @@
     <string name="core_label_mfc_commands_shuffling_in_steps">MFC-Befehle werden in Schritten gemischt</string>
     <string name="core_label_mfc_commands_shuffling_limit">Mischlimit für MFC-Befehle</string>
     <string name="core_label_mfc_commands_timeout">Zeitüberschreitung bei MFC-Befehlen</string>
+    <string name="core_label_mfc_shuffle_instructions_decrementer">MFC-Umsortierung: Befehlszähler</string>
     <string name="core_label_mfc_debug">MFC-Debug</string>
     <string name="core_label_microphone_devices">Mikrofongeräte</string>
     <string name="core_label_microphone_type">Mikrofontyp</string>
@@ -1292,7 +1293,6 @@ Je leichter das Spiel auf der Hardware ist, desto mehr Strom wird dadurch gespar
 Kann in einigen Fällen die Leistung verbessern, insbesondere auf Systemen mit einer begrenzten Anzahl von Hardware-Threads.
 Die Begrenzung der Anzahl der Threads kann zu Abstürzen führen; Es wird empfohlen, den Standardwert beizubehalten.</string>
     <string name="core_help_core_mfc_commands_shuffling_limit" formatted="false">Erzwingt die Verzögerung jedes ungeraden MFC-Befehls und wartet auf mindestens zwei ausstehende Befehle, um diese in zufälliger Reihenfolge auszuführen.
-Muss derzeit mit einem der beiden SPU-Interpreter verwendet werden.
 Reduziert die Leistung erheblich! Wenn Sie unsicher sind, verwenden Sie diese Option nicht.</string>
     <string name="core_help_core_mfc_debug" formatted="false">Erstellt MFC-Protokolle.
 Nur für Entwickler nützlich.

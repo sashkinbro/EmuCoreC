@@ -903,6 +903,7 @@
     <string name="core_label_mfc_commands_shuffling_in_steps">MFC コマンドを段階的にシャッフルする</string>
     <string name="core_label_mfc_commands_shuffling_limit">MFC コマンドのシャッフル制限</string>
     <string name="core_label_mfc_commands_timeout">MFC コマンドのタイムアウト</string>
+    <string name="core_label_mfc_shuffle_instructions_decrementer">MFC シャッフル命令カウンター</string>
     <string name="core_label_mfc_debug">MFC デバッグ</string>
     <string name="core_label_microphone_devices">マイクデバイス</string>
     <string name="core_label_microphone_type">マイクの種類</string>
@@ -1224,7 +1225,7 @@ PS3 ネイティブは、フレーム ペーシングの問題が発生する可
 デフォルトでは、使用可能なすべてのスレッドが使用されます。</string>
     <string name="core_help_core_max_cpu_preempt_count" formatted="false">CPU使用率と消費電力を抑え、モバイル端末のバッテリー持続時間を延ばします（0で無効）。\n値を大きくすると効果が高まりますが、音声や性能に問題が生じる場合があります。50以下を推奨します。\nフレームレートが安定しているときに働くため、この設定はFPS制限を強制します。\nゲームのハードウェア負荷が軽いほど節電効果が高まります（プリエンプション回数の上限に達するまで）。</string>
     <string name="core_help_core_max_spurs_threads" formatted="false">各スレッドグループのSPURSスレッド数を制限します。\nハードウェアスレッド数が少ない環境などで、性能が向上する場合があります。\nスレッド数の制限によりクラッシュする可能性があるため、初期値のままにすることを推奨します。</string>
-    <string name="core_help_core_mfc_commands_shuffling_limit" formatted="false">MFCコマンドを遅延させ、少なくとも2個のコマンドが保留になるのを待ってからランダムな順序で実行します。\n現在は、いずれかのSPUインタープリターと併用する必要があります。\n性能が大幅に低下します！よくわからない場合は使用しないでください。</string>
+    <string name="core_help_core_mfc_commands_shuffling_limit" formatted="false">MFCコマンドを遅延させ、少なくとも2個のコマンドが保留になるのを待ってからランダムな順序で実行します。\n性能が大幅に低下します！よくわからない場合は使用しないでください。</string>
     <string name="core_help_core_mfc_debug" formatted="false">MFC ログを作成します。
 開発者のみに役立ちます。
 これは絶対に使用しないでください。</string>
