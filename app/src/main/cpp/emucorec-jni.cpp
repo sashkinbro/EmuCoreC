@@ -49,6 +49,9 @@ struct EmuCoreCApi {
                      std::string_view gamePath);
   std::string (*settingsGet)(std::string_view path);
   bool (*settingsSet)(std::string_view path, std::string_view valueString);
+  bool (*settingsSetTransient)(std::string_view path, std::string_view valueString);
+  bool (*queueGameSetting)(std::string_view path, std::string_view valueString);
+  void (*clearPendingGameSettings)();
   std::string (*getVersion)();
   std::string (*probeDiscInfo)(std::string_view path, std::string_view iconOut);
   bool (*requestSaveState)(unsigned slot, long progressId);
@@ -134,6 +137,9 @@ struct EmuCoreCLibrary : EmuCoreCApi {
     result.installKey = reinterpret_cast<decltype(installKey)>(dlsym(handle, "emucorec_installKey"));
     result.settingsGet = reinterpret_cast<decltype(settingsGet)>(dlsym(handle, "emucorec_settingsGet"));
     result.settingsSet = reinterpret_cast<decltype(settingsSet)>(dlsym(handle, "emucorec_settingsSet"));
+    result.settingsSetTransient = reinterpret_cast<decltype(settingsSetTransient)>(dlsym(handle, "emucorec_settingsSetTransient"));
+    result.queueGameSetting = reinterpret_cast<decltype(queueGameSetting)>(dlsym(handle, "emucorec_queueGameSetting"));
+    result.clearPendingGameSettings = reinterpret_cast<decltype(clearPendingGameSettings)>(dlsym(handle, "emucorec_clearPendingGameSettings"));
     result.getVersion = reinterpret_cast<decltype(getVersion)>(dlsym(handle, "emucorec_getVersion"));
     result.probeDiscInfo = reinterpret_cast<decltype(probeDiscInfo)>(dlsym(handle, "emucorec_probeDiscInfo"));
     result.requestSaveState = reinterpret_cast<decltype(requestSaveState)>(dlsym(handle, "emucorec_requestSaveState"));
@@ -335,6 +341,23 @@ Java_com_sbro_emucorec_core_Ps3Core_settingsGet(JNIEnv *env, jobject, jstring jp
 extern "C" JNIEXPORT jboolean JNICALL Java_com_sbro_emucorec_core_Ps3Core_settingsSet(
     JNIEnv *env, jobject, jstring jpath, jstring jvalue) {
   return emucorecLib.settingsSet(unwrap(env, jpath), unwrap(env, jvalue));
+}
+
+extern "C" JNIEXPORT jboolean JNICALL Java_com_sbro_emucorec_core_Ps3Core_settingsSetTransient(
+    JNIEnv *env, jobject, jstring jpath, jstring jvalue) {
+  return emucorecLib.settingsSetTransient &&
+         emucorecLib.settingsSetTransient(unwrap(env, jpath), unwrap(env, jvalue));
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_sbro_emucorec_core_Ps3Core_clearPendingGameSettings(
+    JNIEnv *, jobject) {
+  if (emucorecLib.clearPendingGameSettings) emucorecLib.clearPendingGameSettings();
+}
+
+extern "C" JNIEXPORT jboolean JNICALL Java_com_sbro_emucorec_core_Ps3Core_queueGameSetting(
+    JNIEnv *env, jobject, jstring jpath, jstring jvalue) {
+  return emucorecLib.queueGameSetting &&
+         emucorecLib.queueGameSetting(unwrap(env, jpath), unwrap(env, jvalue));
 }
 
 extern "C" JNIEXPORT jstring JNICALL Java_com_sbro_emucorec_core_Ps3Core_getVersion(

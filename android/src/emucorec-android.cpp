@@ -4349,7 +4349,63 @@ extern void set_app_info(std::string version, std::string build, std::string dev
 // Between begin/end the save is deferred and coalesced into exactly one write. Single
 // settingsSet calls (the dynamic settings screen) are unaffected and still save immediately.
 static std::atomic<int> g_settings_batch_depth{0};
-static std::atomic<bool> g_settings_batch_dirty{false};
+static std::mutex g_global_settings_mutex;
+static std::vector<std::pair<std::string, std::string>> g_global_settings_edits;
+static std::mutex g_game_settings_mutex;
+static std::vector<std::pair<std::string, std::string>> g_pending_game_settings;
+
+extern "C" void emucorec_clearPendingGameSettings() {
+  std::lock_guard lock(g_game_settings_mutex);
+  g_pending_game_settings.clear();
+}
+
+// Emulator::Init reloads global settings, then Load applies the title database.
+// Replay the explicit game profile after both layers have been applied.
+extern "C" void emucorec_apply_pending_game_settings() {
+  std::vector<std::pair<std::string, std::string>> settings;
+  {
+    std::lock_guard lock(g_game_settings_mutex);
+    settings.swap(g_pending_game_settings);
+  }
+  for (const auto &[path, value] : settings) {
+    auto *node = find_cfg_node(&g_cfg, path);
+    if (!node || !node->from_string(value)) {
+      emucorec_android.error("Could not apply game setting %s", path);
+    }
+  }
+}
+
+// Called with g_global_settings_mutex held. Apply only explicit global edits to
+// the disk configuration; the live tree can contain a game's overrides.
+static bool write_global_settings_edits() {
+  if (g_global_settings_edits.empty()) return true;
+  const std::string path = fs::get_config_dir(true) + "config.yml";
+  auto saved = std::make_unique<cfg_root>();
+  saved->from_default();
+  if (const fs::file file{path}) {
+    if (!saved->from_string(file.to_string())) {
+      emucorec_android.error("settingsSet: cannot parse %s; preserving it", path);
+      return false;
+    }
+  } else if (fs::is_file(path)) {
+    emucorec_android.error("settingsSet: cannot read %s; preserving it", path);
+    return false;
+  } else {
+    saved->video.renderer.set(g_cfg.video.renderer.get());
+    saved->video.vk.adapter.from_string(g_cfg.video.vk.adapter.to_string());
+  }
+  for (const auto &[node_path, value] : g_global_settings_edits) {
+    auto *node = find_cfg_node(saved.get(), node_path);
+    if (!node || !node->from_string(value)) {
+      emucorec_android.error("settingsSet: cannot persist %s", node_path);
+      return false;
+    }
+  }
+  if (!Emulator::SaveSettingsFile(saved->to_string(), "")) return false;
+  g_global_settings_edits.clear();
+  g_backup_cfg.from_string(g_cfg.to_string());
+  return true;
+}
 
 extern "C" void emucorec_settingsBeginBatch() { g_settings_batch_depth.fetch_add(1); }
 
@@ -4358,14 +4414,12 @@ extern "C" void emucorec_settingsEndBatch() {
   if (g_settings_batch_depth.fetch_sub(1) != 1) {
     return;
   }
-  if (g_settings_batch_dirty.exchange(false)) {
-    Emulator::SaveSettings(g_cfg.to_string(), "");
-  }
+  std::lock_guard lock(g_global_settings_mutex);
+  write_global_settings_edits();
 }
 
 
-extern "C" bool emucorec_settingsSet(std::string_view path,
-                                   std::string_view valueString) {
+static bool settings_set(std::string_view path, std::string_view valueString, bool persist, bool queue_game = false) {
   auto root = find_cfg_node(&g_cfg, path);
 
   if (root == nullptr) {
@@ -4406,16 +4460,32 @@ extern "C" bool emucorec_settingsSet(std::string_view path,
   }
 #endif
 
+  if (queue_game) {
+    auto test = std::make_unique<cfg_root>();
+    test->from_default();
+    if (!test->from_string(g_cfg.to_string())) return false;
+    auto *test_node = find_cfg_node(test.get(), path);
+    if (!test_node || !test_node->from_string(decoded)) return false;
+    std::lock_guard lock(g_game_settings_mutex);
+    g_pending_game_settings.emplace_back(path, decoded);
+    return true;
+  }
+
+  const std::string previous = root->to_string();
   if (!root->from_string(decoded, !Emu.IsStopped())) {
     emucorec_android.error("settingsSet: node %s does not accept value '%s'", path,
                         decoded);
     return false;
   }
 
-  if (g_settings_batch_depth.load() > 0) {
-    g_settings_batch_dirty.store(true);
-  } else {
-    Emulator::SaveSettings(g_cfg.to_string(), "");
+  if (persist) {
+    std::lock_guard lock(g_global_settings_mutex);
+    g_global_settings_edits.emplace_back(path, decoded);
+    if (g_settings_batch_depth.load() <= 0 && !write_global_settings_edits()) {
+      g_global_settings_edits.pop_back();
+      root->from_string(previous);
+      return false;
+    }
   }
 
   // The overlays own live objects built from the config; they are not re-read
@@ -4455,6 +4525,18 @@ extern "C" bool emucorec_settingsSet(std::string_view path,
     rsx::overlays::reset_debug_overlay();
   }
   return true;
+}
+
+extern "C" bool emucorec_settingsSet(std::string_view path, std::string_view value) {
+  return settings_set(path, value, true);
+}
+
+extern "C" bool emucorec_settingsSetTransient(std::string_view path, std::string_view value) {
+  return settings_set(path, value, false);
+}
+
+extern "C" bool emucorec_queueGameSetting(std::string_view path, std::string_view value) {
+  return settings_set(path, value, false, true);
 }
 
 extern "C" std::string emucorec_getVersion() {

@@ -31,6 +31,57 @@
 
 LOG_CHANNEL(cellSaveData);
 
+// Copy a completed save without removing its working directory. The caller
+// removes the backup first, so an interrupted cleanup cannot replay a partial
+// working directory over the completed save.
+bool savedata_commit_by_copy(const std::string& from, const std::string& to)
+{
+	const std::string src = from.ends_with('/') ? from : from + '/';
+	const std::string dst = to.ends_with('/') ? to : to + '/';
+	const fs::dir source(src);
+	if (!source || (!fs::create_dir(dst) && !fs::is_dir(dst)))
+	{
+		return false;
+	}
+
+	std::vector<std::string> names;
+	std::array<u8, 65536> buffer{};
+	for (const auto& entry : source)
+	{
+		if (entry.name == "." || entry.name == "..") continue;
+		if (entry.is_directory) return false;
+		const fs::file input(src + entry.name);
+		if (!input) return false;
+		const u64 size = input.size();
+		if (size == umax) return false;
+		fs::file output(dst + entry.name, fs::rewrite);
+		if (!output) return false;
+		for (u64 remaining = size; remaining;)
+		{
+			const u64 count = std::min<u64>(remaining, buffer.size());
+			if (input.read(buffer.data(), count) != count || output.write(buffer.data(), count) != count) return false;
+			remaining -= count;
+		}
+		output.close();
+		fs::utime(dst + entry.name, entry.atime, entry.mtime);
+		names.emplace_back(entry.name);
+	}
+
+	const fs::dir destination(dst);
+	if (!destination) return false;
+	for (const auto& entry : destination)
+	{
+		if (entry.name == "." || entry.name == "..") continue;
+		if (std::find(names.begin(), names.end(), entry.name) == names.end() &&
+			(entry.is_directory || !fs::remove_file(dst + entry.name))) return false;
+	}
+	fs::sync(dst);
+#ifndef _WIN32
+	if (fs::g_tls_error != fs::error::ok) return false;
+#endif
+	return true;
+}
+
 template<>
 void fmt_class_string<CellSaveDataError>::format(std::string& out, u64 arg)
 {
@@ -717,6 +768,7 @@ static NEVER_INLINE error_code savedata_op(ppu_thread& ppu, u32 operation, u32 v
 	u32 errDialog, PSetList setList, PSetBuf setBuf, PFuncList funcList, PFuncFixed funcFixed, PFuncStat funcStat,
 	PFuncFile funcFile, u32 container, u32 unk_op_flags /*TODO*/, vm::ptr<void> userdata, u32 userId, PFuncDone funcDone)
 {
+	const u64 op_start_time = get_guest_system_time();
 	if (setList)
 	{
 		if (const auto& [ok, list] = setList.try_read(); ok)
@@ -1596,6 +1648,11 @@ static NEVER_INLINE error_code savedata_op(ppu_thread& ppu, u32 operation, u32 v
 		});
 		// clang-format on
 
+		if ((g_ps3_process_info.sdk_ver <= 0x26FFFF || !setBuf->fileListMax) && files_sorted.size() > setBuf->fileListMax)
+		{
+			files_sorted.erase(files_sorted.begin() + setBuf->fileListMax, files_sorted.end());
+		}
+
 		for (auto&& entry : files_sorted)
 		{
 			{
@@ -1863,6 +1920,8 @@ static NEVER_INLINE error_code savedata_op(ppu_thread& ppu, u32 operation, u32 v
 	error_code savedata_result = CELL_OK;
 
 	u64 delay_save_until = 0;
+	u64 file_ops = 0;
+	u64 secure_file_ops = 0;
 
 	while (funcFile)
 	{
@@ -1883,7 +1942,14 @@ static NEVER_INLINE error_code savedata_op(ppu_thread& ppu, u32 operation, u32 v
 
 				// Some games (Jak II [NPUA80707]) rely on this delay
 				lv2_obj::sleep(ppu);
-				delay_save_until = get_guest_system_time() + (has_modified ? 500'000 : 100'000);
+				if (operation <= SAVEDATA_OP_AUTO_LOAD)
+				{
+					delay_save_until = op_start_time + 630'000 + (has_modified ? 550'000 : 0) + file_ops * 50'000 + secure_file_ops * 280'000;
+				}
+				else
+				{
+					delay_save_until = get_guest_system_time() + (has_modified ? 500'000 : 100'000);
+				}
 				break;
 			}
 
@@ -1901,6 +1967,11 @@ static NEVER_INLINE error_code savedata_op(ppu_thread& ppu, u32 operation, u32 v
 		}
 
 		// TODO: Show progress if it's not an auto load/save
+		if (fileSet->fileOperation != CELL_SAVEDATA_FILEOP_DELETE)
+		{
+			file_ops++;
+			secure_file_ops += fileSet->fileType == CELL_SAVEDATA_FILETYPE_SECUREFILE;
+		}
 
 		std::string file_path;
 
@@ -2205,14 +2276,23 @@ static NEVER_INLINE error_code savedata_op(ppu_thread& ppu, u32 operation, u32 v
 		}
 
 		// Commit new savedata
+		bool copied_save = false;
 		if (!vfs::host::rename(new_path, dir_path, &g_mp_sys_dev_hdd0, false))
 		{
-			// TODO: handle the case when only commit failed at the next save load
-			fmt::throw_exception("Failed to move directory %s (%s)", new_path, fs::g_tls_error);
+			const fs::error rename_error = fs::g_tls_error;
+			if (!savedata_commit_by_copy(new_path, dir_path))
+			{
+				fmt::throw_exception("Failed to commit save directory %s (rename: %s, copy: %s)", new_path, rename_error, fs::g_tls_error);
+			}
+			copied_save = true;
+			cellSaveData.warning("savedata_op(): Copied %s after rename failed (%s)", new_path, rename_error);
 		}
 
 		// Remove backup again (TODO: may be changed to persistent backup implementation)
-		fs::remove_all(old_path);
+		if (fs::remove_all(old_path) && copied_save && !fs::remove_all(new_path))
+		{
+			cellSaveData.warning("savedata_op(): Failed to remove working directory %s (%s)", new_path, fs::g_tls_error);
+		}
 	}
 
 	if (show_auto_indicator)

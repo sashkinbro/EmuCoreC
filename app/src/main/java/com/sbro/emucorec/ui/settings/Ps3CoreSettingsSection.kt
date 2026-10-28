@@ -154,7 +154,13 @@ fun Ps3CoreSettingsSection(
     fun write(setting: Ps3CoreSetting, raw: String) {
         coroutineScope.launch(Dispatchers.IO) {
             val encoded = setting.encodedValue(raw)
-            val applied = runCatching { Ps3Core.instance.settingsSet(setting.path, encoded) }
+            val applied = runCatching {
+                if (scope == Ps3CoreSettingsScope.Game && !titleId.isNullOrBlank()) {
+                    Ps3Core.instance.settingsSetTransient(setting.path, encoded)
+                } else {
+                    Ps3Core.instance.settingsSet(setting.path, encoded)
+                }
+            }
                 .getOrDefault(false)
             withContext(Dispatchers.Main) {
                 if (applied) {

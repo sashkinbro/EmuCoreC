@@ -97,6 +97,9 @@ class Ps3Core {
     external fun overlayPadData(digital1: Int, digital2: Int, leftStickX: Int, leftStickY: Int, rightStickX: Int, rightStickY: Int): Boolean
     external fun settingsGet(path: String): String
     external fun settingsSet(path: String, value: String): Boolean
+    external fun settingsSetTransient(path: String, value: String): Boolean
+    external fun clearPendingGameSettings()
+    external fun queueGameSetting(path: String, value: String): Boolean
     external fun getState(): Int
     external fun kill()
     external fun pause()

@@ -454,6 +454,7 @@ public:
 	static bool IsValidSfb(const std::string& path);
 
 	static void SaveSettings(std::string_view settings, const std::string& title_id);
+	static bool SaveSettingsFile(std::string_view settings, const std::string& title_id);
 };
 
 extern Emulator Emu;

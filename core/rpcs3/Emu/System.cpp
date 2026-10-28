@@ -94,6 +94,10 @@ extern std::pair<shared_ptr<lv2_overlay>, CellError> ppu_load_overlay(const ppu_
 extern bool ppu_load_rel_exec(const ppu_rel_object&);
 
 extern void send_close_home_menu_cmds();
+extern bool savedata_commit_by_copy(const std::string& from, const std::string& to);
+#ifdef __ANDROID__
+extern "C" void emucorec_apply_pending_game_settings();
+#endif
 
 extern void signal_system_cache_can_stay();
 
@@ -776,13 +780,19 @@ void Emulator::Init()
 			const std::string desired = entry.name.substr(8);
 			const std::string pending = save_path + ".working_" + desired;
 
+			bool copied_save = false;
 			if (fs::is_dir(pending))
 			{
 				// Finalize interrupted saving
 				if (!fs::rename(pending, save_path + desired, false))
 				{
-					sys_log.fatal("Failed to fix save data: %s (%s)", pending, fs::g_tls_error);
-					continue;
+					const fs::error rename_error = fs::g_tls_error;
+					if (!savedata_commit_by_copy(pending, save_path + desired))
+					{
+						sys_log.error("Could not finish interrupted save %s (rename: %s, copy: %s); the newest copy remains in that directory", pending, rename_error, fs::g_tls_error);
+						continue;
+					}
+					copied_save = true;
 				}
 
 				sys_log.success("Fixed save data: %s", desired);
@@ -796,6 +806,10 @@ void Emulator::Init()
 			else
 			{
 				sys_log.success("Removed save data backup: %s%s", save_path, entry.name);
+				if (copied_save && !fs::remove_all(pending))
+				{
+					sys_log.warning("Failed to remove save data working directory: %s (%s)", pending, fs::g_tls_error);
+				}
 			}
 		}
 	}
@@ -1897,6 +1911,11 @@ game_boot_result Emulator::Load(const std::string& title_id, bool is_disc_patch,
 					sys_log.error("Failed to apply database config");
 				}
 			}
+
+			// Apply Android's explicit title overrides after the database settings.
+#ifdef __ANDROID__
+			emucorec_apply_pending_game_settings();
+#endif
 
 			// Disable incompatible settings
 			fixup_settings(&_psf);
@@ -5138,33 +5157,38 @@ bool Emulator::IsValidSfb(const std::string& path)
 	return false;
 }
 
-void Emulator::SaveSettings(std::string_view settings, const std::string& title_id)
+static std::string settings_file_path(const std::string& title_id)
 {
-	std::string config_name;
+	return title_id.empty() ? fs::get_config_dir(true) + "config.yml" : rpcs3::utils::get_custom_config_path(title_id);
+}
 
-	if (title_id.empty())
-	{
-		config_name = fs::get_config_dir(true) + "config.yml";
-	}
-	else
-	{
-		config_name = rpcs3::utils::get_custom_config_path(title_id);
-	}
-
+bool Emulator::SaveSettingsFile(std::string_view settings, const std::string& title_id)
+{
+	const std::string config_name = settings_file_path(title_id);
 	// Save config atomically
 	fs::pending_file temp(config_name);
 	if (!temp.file)
 	{
 		sys_log.error("Could not save config to %s (failed to create temporary file) (error=%s)", config_name, fs::g_tls_error);
+		return false;
 	}
-	else
+	if (temp.file.write(settings.data(), settings.size()) != settings.size())
 	{
-		temp.file.write(settings.data(), settings.size());
-		if (!temp.commit())
-		{
-			sys_log.error("Could not save config to %s (failed to commit) (error=%s)", config_name, fs::g_tls_error);
-		}
+		sys_log.error("Could not save config to %s (failed to write) (error=%s)", config_name, fs::g_tls_error);
+		return false;
 	}
+	if (!temp.commit())
+	{
+		sys_log.error("Could not save config to %s (failed to commit) (error=%s)", config_name, fs::g_tls_error);
+		return false;
+	}
+	return true;
+}
+
+void Emulator::SaveSettings(std::string_view settings, const std::string& title_id)
+{
+	const std::string config_name = settings_file_path(title_id);
+	SaveSettingsFile(settings, title_id);
 
 	// Check if the running config/title is the same as the edited config/title.
 	if (config_name == g_cfg.name || title_id == Emu.GetTitleID())

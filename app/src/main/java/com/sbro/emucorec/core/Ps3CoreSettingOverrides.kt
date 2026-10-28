@@ -168,7 +168,7 @@ object Ps3CoreSettingOverrides {
         val baseline = read(prefs.getString(KEY_BASELINE, null))
         val global = read(prefs.getString(KEY_GLOBAL, null))
         val restored = global[path] ?: baseline[path] ?: coreDefaultEncodedValue
-        val applied = runCatching { Ps3Core.instance.settingsSet(path, restored) }.getOrDefault(false)
+        val applied = runCatching { Ps3Core.instance.settingsSetTransient(path, restored) }.getOrDefault(false)
         if (applied) CoreSettingsTreeCache.invalidateTree()
         return applied
     }
@@ -199,6 +199,7 @@ object Ps3CoreSettingOverrides {
     /** Apply the global baseline and then the selected title's values before boot. */
     fun applyForGame(context: Context, titleId: String?) {
         if (!Ps3Core.initialized) return
+        Ps3Core.instance.clearPendingGameSettings()
         val prefs = prefs(context)
         val baseline = read(prefs.getString(KEY_BASELINE, null))
         val global = read(prefs.getString(KEY_GLOBAL, null))
@@ -212,11 +213,14 @@ object Ps3CoreSettingOverrides {
         if (resolvedBase.isEmpty() && game.isEmpty()) return
 
         resolvedBase.forEach { (path, value) -> set(path, value, "global") }
-        game.forEach { (path, value) -> set(path, value, "game:${titleId.orEmpty()}") }
+        game.forEach { (path, value) -> set(path, value, "game:${titleId.orEmpty()}", transient = true) }
     }
 
-    private fun set(path: String, value: String, tier: String) {
-        val applied = runCatching { Ps3Core.instance.settingsSet(path, value) }.getOrDefault(false)
+    private fun set(path: String, value: String, tier: String, transient: Boolean = false) {
+        val applied = runCatching {
+            if (transient) Ps3Core.instance.queueGameSetting(path, value)
+            else Ps3Core.instance.settingsSet(path, value)
+        }.getOrDefault(false)
         if (applied) CoreSettingsTreeCache.invalidateTree()
         if (!applied) Log.w(TAG, "RPCS3 rejected [$tier] $path")
     }
