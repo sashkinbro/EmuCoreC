@@ -178,20 +178,22 @@ lookup_title_ctx::lookup_title_ctx(vm::cptr<SceNpCommunicationId> communicationI
 }
 s32 create_lookup_title_context(vm::cptr<SceNpCommunicationId> communicationId)
 {
-	return static_cast<s32>(idm::make<lookup_title_ctx>(communicationId));
+	const s32 id = idm::make<lookup_title_ctx>(communicationId);
+	return id == id_manager::id_traits<lookup_title_ctx>::invalid ? SCE_NP_COMMUNITY_ERROR_TOO_MANY_OBJECTS : id;
 }
 bool destroy_lookup_title_context(s32 ctx_id)
 {
 	return idm::remove<lookup_title_ctx>(static_cast<u32>(ctx_id));
 }
 
-lookup_transaction_ctx::lookup_transaction_ctx(s32 lt_ctx)
+lookup_transaction_ctx::lookup_transaction_ctx(const shared_ptr<lookup_title_ctx>& lt_ctx)
+	: generic_async_transaction_context(lt_ctx->communicationId, {}, lt_ctx->timeout)
 {
-	this->lt_ctx = lt_ctx;
 }
-s32 create_lookup_transaction_context(s32 lt_ctx)
+s32 create_lookup_transaction_context(const shared_ptr<lookup_title_ctx>& lt_ctx)
 {
-	return static_cast<s32>(idm::make<lookup_transaction_ctx>(lt_ctx));
+	const s32 id = idm::make<lookup_transaction_ctx>(lt_ctx);
+	return id == id_manager::id_traits<lookup_transaction_ctx>::invalid ? SCE_NP_COMMUNITY_ERROR_TOO_MANY_OBJECTS : id;
 }
 bool destroy_lookup_transaction_context(s32 ctx_id)
 {

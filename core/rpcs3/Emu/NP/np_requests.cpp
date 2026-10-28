@@ -1966,4 +1966,85 @@ namespace np
 	{
 		return handle_tus_no_data(req_id, error);
 	}
+
+	void np_handler::tus_get_tss(shared_ptr<tus_transaction_ctx>& trans, SceNpTssSlotId slot, vm::ptr<SceNpTssDataStatus> status, vm::ptr<void> data, u32 size, vm::ptr<SceNpTssGetDataOptParam> option, bool async)
+	{
+		std::unique_lock lock(trans->mutex);
+		const u32 req = get_req_id(REQUEST_ID_HIGH::TUS);
+		trans->tdata = tdata_tss{.slot_id = slot, .data = data, .maxSize = size, .dataStatus = status, .option = option};
+		const u64 timestamp = option && option->ifParam && option->ifParam->ifType == SCE_NP_TSS_IFTYPE_IF_MODIFIED_SINCE
+			? static_cast<u64>(option->ifParam->lastModified.tick) : 0;
+		get_rpcn()->get_tss(req, trans->communicationId, slot, timestamp);
+		transaction_async_handler(std::move(lock), trans, req, async);
+	}
+
+	void np_handler::lookup_get_tss(shared_ptr<lookup_transaction_ctx>& trans, vm::ptr<void> data, u32 size, vm::ptr<u32> length, bool async)
+	{
+		std::unique_lock lock(trans->mutex);
+		const u32 req = get_req_id(REQUEST_ID_HIGH::LOOKUP);
+		trans->tdata = tdata_tss{.data = data, .contentLength = length, .maxSize = size};
+		get_rpcn()->get_tss(req, trans->communicationId, 0, 0);
+		transaction_async_handler(std::move(lock), trans, req, async);
+	}
+
+	void np_handler::reply_get_tss(u32 req, rpcn::ErrorType error, vec_stream& reply)
+	{
+		const auto type = static_cast<REQUEST_ID_HIGH>(req >> 16);
+		ensure(type == REQUEST_ID_HIGH::LOOKUP || type == REQUEST_ID_HIGH::TUS);
+		if (error != rpcn::ErrorType::NotFound && error != rpcn::ErrorType::NoError && error != rpcn::ErrorType::CondFail)
+			fmt::throw_exception("Unexpected error in GetTss reply: %s", error);
+		u64 timestamp = 0;
+		std::vector<u8> data;
+		if (error == rpcn::ErrorType::NoError)
+		{
+			timestamp = reply.get<u64>();
+			data = reply.get_rawdata();
+		}
+		if (type == REQUEST_ID_HIGH::LOOKUP)
+			handle_reply_get_tss<lookup_transaction_ctx>(req, data, timestamp, error == rpcn::ErrorType::CondFail);
+		else
+			handle_reply_get_tss<tus_transaction_ctx>(req, data, timestamp, error == rpcn::ErrorType::CondFail);
+	}
+
+	template <typename T>
+	void np_handler::handle_reply_get_tss(u32 req, const std::vector<u8>& data, u64 timestamp, bool cond_fail)
+	{
+		std::lock_guard lock_transactions(mutex_async_transactions);
+		if (!async_transactions.count(req))
+		{
+			rpcn_log.error("Couldn't find transaction(%d)", req);
+			return;
+		}
+		auto trans = idm::get_unlocked<T>(::at32(async_transactions, req)->idm_id);
+		ensure(trans);
+		std::lock_guard lock(trans->mutex);
+		const auto* info = std::get_if<tdata_tss>(&trans->tdata);
+		ensure(info);
+		u64 start = 0;
+		u64 end = data.size();
+		s32 status = SCE_NP_TSS_STATUS_TYPE_OK;
+		if (cond_fail)
+		{
+			status = SCE_NP_TSS_STATUS_TYPE_NOT_MODIFIED;
+			end = 0;
+			if (info->option && info->option->ifParam) timestamp = info->option->ifParam->lastModified.tick;
+		}
+		else if (info->option && (!info->option->ifParam ? (info->option->offset || info->option->lastByte) :
+			(info->option->ifParam->ifType == SCE_NP_TSS_IFTYPE_IF_RANGE && timestamp <= info->option->ifParam->lastModified.tick)))
+		{
+			status = SCE_NP_TSS_STATUS_TYPE_PARTIAL;
+			start = info->option->offset ? static_cast<u64>(*info->option->offset) : 0;
+			if (info->option->lastByte && !data.empty()) end = std::min<u64>(*info->option->lastByte, data.size() - 1) + 1;
+		}
+		const u32 count = ::narrow<u32>(std::min<u64>(end > start ? end - start : 0, info->maxSize));
+		if (info->contentLength) *info->contentLength = count;
+		if (info->dataStatus)
+		{
+			info->dataStatus->statusCodeType = status;
+			info->dataStatus->contentLength = count;
+			info->dataStatus->lastModified.tick = timestamp;
+		}
+		if (info->data && count) std::memcpy(info->data.get_ptr(), data.data() + start, count);
+		trans->set_result_and_wake(CELL_OK);
+	}
 } // namespace np

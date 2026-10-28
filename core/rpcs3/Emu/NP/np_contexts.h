@@ -115,6 +115,16 @@ struct tdata_tus_get_datastatus_generic
 	s32 arrayNum;
 };
 
+struct tdata_tss
+{
+	s32 slot_id = 0;
+	vm::ptr<void> data{};
+	vm::ptr<u32> contentLength{};
+	u32 maxSize = 0;
+	vm::ptr<SceNpTssDataStatus> dataStatus{};
+	vm::ptr<SceNpTssGetDataOptParam> option{};
+};
+
 // TUS related
 struct tus_ctx
 {
@@ -142,7 +152,7 @@ struct tus_transaction_ctx : public generic_async_transaction_context
 	static const u32 id_count = SCE_NP_TUS_MAX_CTX_NUM;
 	SAVESTATE_INIT_POS(51);
 
-	std::variant<tdata_invalid, tdata_tus_get_variables_generic, tdata_tus_get_variable_generic, tdata_tus_set_data, tdata_tus_get_data, tdata_tus_get_datastatus_generic> tdata;
+	std::variant<tdata_invalid, tdata_tus_get_variables_generic, tdata_tus_get_variable_generic, tdata_tus_set_data, tdata_tus_get_data, tdata_tus_get_datastatus_generic, tdata_tss> tdata;
 };
 
 s32 create_tus_transaction_context(const shared_ptr<tus_ctx>& tus);
@@ -222,24 +232,24 @@ struct lookup_title_ctx
 	static const u32 id_count = SCE_NP_LOOKUP_MAX_CTX_NUM;
 	SAVESTATE_INIT_POS(28);
 
+	u64 timeout = 60'000'000;
 	SceNpCommunicationId communicationId{};
-	SceNpCommunicationPassphrase passphrase{};
 };
 s32 create_lookup_title_context(vm::cptr<SceNpCommunicationId> communicationId);
 bool destroy_lookup_title_context(s32 ctx_id);
 
-struct lookup_transaction_ctx
+struct lookup_transaction_ctx : public generic_async_transaction_context
 {
-	lookup_transaction_ctx(s32 lt_ctx);
+	lookup_transaction_ctx(const shared_ptr<lookup_title_ctx>& lt_ctx);
 
 	static const u32 id_base  = 0x4001;
 	static const u32 id_step  = 1;
 	static const u32 id_count = SCE_NP_LOOKUP_MAX_CTX_NUM;
 	SAVESTATE_INIT_POS(29);
 
-	s32 lt_ctx = 0;
+	std::variant<tdata_invalid, tdata_tss> tdata;
 };
-s32 create_lookup_transaction_context(s32 lt_ctx);
+s32 create_lookup_transaction_context(const shared_ptr<lookup_title_ctx>& lt_ctx);
 bool destroy_lookup_transaction_context(s32 ctx_id);
 
 struct commerce2_ctx

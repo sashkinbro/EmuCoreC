@@ -3268,7 +3268,8 @@ error_code sceNpLookupCreateTitleCtx(vm::cptr<SceNpCommunicationId> communicatio
 		return SCE_NP_COMMUNITY_ERROR_INSUFFICIENT_ARGUMENT;
 	}
 
-	return not_an_error(create_lookup_title_context(communicationId));
+	const s32 id = create_lookup_title_context(communicationId);
+	return id > 0 ? not_an_error(id) : error_code(id);
 }
 
 error_code sceNpLookupDestroyTitleCtx(s32 titleCtxId)
@@ -3304,7 +3305,10 @@ error_code sceNpLookupCreateTransactionCtx(s32 titleCtxId)
 		return SCE_NP_COMMUNITY_ERROR_INVALID_ONLINE_ID;
 	}
 
-	return not_an_error(create_lookup_transaction_context(titleCtxId));
+	auto title = idm::get_unlocked<lookup_title_ctx>(titleCtxId);
+	if (!title) return SCE_NP_COMMUNITY_ERROR_INVALID_ID;
+	const s32 id = create_lookup_transaction_context(title);
+	return id > 0 ? not_an_error(id) : error_code(id);
 }
 
 error_code sceNpLookupDestroyTransactionCtx(s32 transId)
@@ -3341,6 +3345,9 @@ error_code sceNpLookupSetTimeout(s32 ctxId, usecond_t timeout)
 	{
 		return SCE_NP_COMMUNITY_ERROR_INVALID_ARGUMENT;
 	}
+	if (auto trans = idm::get_unlocked<lookup_transaction_ctx>(ctxId)) trans->timeout = timeout;
+	else if (auto title = idm::get_unlocked<lookup_title_ctx>(ctxId)) title->timeout = timeout;
+	else return SCE_NP_COMMUNITY_ERROR_INVALID_ID;
 
 	return CELL_OK;
 }
@@ -3355,6 +3362,9 @@ error_code sceNpLookupAbortTransaction(s32 transId)
 	{
 		return SCE_NP_COMMUNITY_ERROR_NOT_INITIALIZED;
 	}
+	auto trans = idm::get_unlocked<lookup_transaction_ctx>(transId);
+	if (!trans) return SCE_NP_COMMUNITY_ERROR_INVALID_ID;
+	trans->abort_transaction();
 
 	return CELL_OK;
 }
@@ -3369,6 +3379,10 @@ error_code sceNpLookupWaitAsync(s32 transId, vm::ptr<s32> result)
 	{
 		return SCE_NP_COMMUNITY_ERROR_NOT_INITIALIZED;
 	}
+	if (!result) return SCE_NP_COMMUNITY_ERROR_INSUFFICIENT_ARGUMENT;
+	auto trans = idm::get_unlocked<lookup_transaction_ctx>(transId);
+	if (!trans) return SCE_NP_COMMUNITY_ERROR_INVALID_ID;
+	*result = trans->wait_for_completion();
 
 	return CELL_OK;
 }
@@ -3384,7 +3398,12 @@ error_code sceNpLookupPollAsync(s32 transId, vm::ptr<s32> result)
 		return SCE_NP_COMMUNITY_ERROR_NOT_INITIALIZED;
 	}
 
-	*result = 0;
+	if (!result) return SCE_NP_COMMUNITY_ERROR_INSUFFICIENT_ARGUMENT;
+	auto trans = idm::get_unlocked<lookup_transaction_ctx>(transId);
+	if (!trans) return SCE_NP_COMMUNITY_ERROR_INVALID_ID;
+	const auto status = trans->get_transaction_status();
+	if (!status) return not_an_error(1);
+	*result = *status;
 
 	return CELL_OK;
 }
@@ -3668,76 +3687,30 @@ error_code sceNpLookupTitleStorageAsync()
 	return CELL_OK;
 }
 
+static error_code scenp_lookup_title_small_storage(s32 transId, vm::ptr<void> data, u32 maxSize, vm::ptr<u32> contentLength, vm::ptr<void> option, bool async)
+{
+	if (maxSize > 0x10000) return SCE_NP_COMMUNITY_ERROR_INVALID_ARGUMENT;
+	auto& nph = g_fxo->get<named_thread<np::np_handler>>();
+	if (!nph.is_NP_Lookup_init) return SCE_NP_COMMUNITY_ERROR_NOT_INITIALIZED;
+	if (!data || !contentLength) return SCE_NP_COMMUNITY_ERROR_INSUFFICIENT_ARGUMENT;
+	if (option) return SCE_NP_COMMUNITY_ERROR_INVALID_ARGUMENT;
+	if (nph.get_psn_status() != SCE_NP_MANAGER_STATUS_ONLINE) return SCE_NP_COMMUNITY_ERROR_INVALID_ONLINE_ID;
+	auto trans = idm::get_unlocked<lookup_transaction_ctx>(transId);
+	if (!trans) return SCE_NP_COMMUNITY_ERROR_INVALID_ID;
+	nph.lookup_get_tss(trans, data, maxSize, contentLength, async);
+	return CELL_OK;
+}
+
 error_code sceNpLookupTitleSmallStorage(s32 transId, vm::ptr<void> data, u32 maxSize, vm::ptr<u32> contentLength, vm::ptr<void> option)
 {
-	sceNp.todo("sceNpLookupTitleSmallStorage(transId=%d, data=*0x%x, maxSize=%d, contentLength=*0x%x, option=*0x%x)", transId, data, maxSize, contentLength, option);
-
-	auto& nph = g_fxo->get<named_thread<np::np_handler>>();
-
-	if (!nph.is_NP_Lookup_init)
-	{
-		return SCE_NP_COMMUNITY_ERROR_NOT_INITIALIZED;
-	}
-
-	if (!data)
-	{
-		return SCE_NP_COMMUNITY_ERROR_INSUFFICIENT_ARGUMENT;
-	}
-
-	if (option) // option check at least until fw 4.71
-	{
-		return SCE_NP_COMMUNITY_ERROR_INVALID_ARGUMENT;
-	}
-
-	//if (something > maxSize)
-	//{
-	//	return SCE_NP_COMMUNITY_ERROR_BODY_TOO_LARGE;
-	//}
-
-	if (nph.get_psn_status() != SCE_NP_MANAGER_STATUS_ONLINE)
-	{
-		return SCE_NP_COMMUNITY_ERROR_INVALID_ONLINE_ID;
-	}
-
-	return CELL_OK;
+	sceNp.warning("sceNpLookupTitleSmallStorage(transId=%d, maxSize=%d)", transId, maxSize);
+	return scenp_lookup_title_small_storage(transId, data, maxSize, contentLength, option, false);
 }
 
 error_code sceNpLookupTitleSmallStorageAsync(s32 transId, vm::ptr<void> data, u32 maxSize, vm::ptr<u32> contentLength, s32 prio, vm::ptr<void> option)
 {
-	sceNp.todo("sceNpLookupTitleSmallStorageAsync(transId=%d, data=*0x%x, maxSize=%d, contentLength=*0x%x, prio=%d, option=*0x%x)", transId, data, maxSize, contentLength, prio, option);
-
-	auto& nph = g_fxo->get<named_thread<np::np_handler>>();
-
-	if (!nph.is_NP_Lookup_init)
-	{
-		return SCE_NP_COMMUNITY_ERROR_NOT_INITIALIZED;
-	}
-
-	if (!data)
-	{
-		return SCE_NP_COMMUNITY_ERROR_INSUFFICIENT_ARGUMENT;
-	}
-
-	if (option) // option check at least until fw 4.71
-	{
-		return SCE_NP_COMMUNITY_ERROR_INVALID_ARGUMENT;
-	}
-
-	//if (something > maxSize)
-	//{
-	//	return SCE_NP_COMMUNITY_ERROR_BODY_TOO_LARGE;
-	//}
-
-	if (nph.get_psn_status() != SCE_NP_MANAGER_STATUS_ONLINE)
-	{
-		return SCE_NP_COMMUNITY_ERROR_INVALID_ONLINE_ID;
-	}
-
-	// TSS are game specific data we don't have access to, set buf to 0, return size 0
-	std::memset(data.get_ptr(), 0, maxSize);
-	*contentLength = 0;
-
-	return CELL_OK;
+	sceNp.warning("sceNpLookupTitleSmallStorageAsync(transId=%d, maxSize=%d, prio=%d)", transId, maxSize, prio);
+	return scenp_lookup_title_small_storage(transId, data, maxSize, contentLength, option, true);
 }
 
 error_code sceNpManagerRegisterCallback(vm::ptr<SceNpManagerCallback> callback, vm::ptr<void> arg)
