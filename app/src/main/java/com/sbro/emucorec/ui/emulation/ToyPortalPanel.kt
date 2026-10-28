@@ -56,9 +56,11 @@ private object PortalFigures {
         val rawName = context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
             if (it.moveToFirst()) it.getString(0) else null
         }.orEmpty()
-        if (!isFigureName(kind, rawName)) return null
+        val archive = rawName.substringAfterLast('.', "").equals("zip", ignoreCase = true)
+        if (!archive && !isFigureName(kind, rawName)) return null
         context.contentResolver.openInputStream(uri)?.use {
-            ToyPortalFiles.store(folder(context, kind), rawName, it, minimumSizes[kind])
+            if (archive) ToyPortalFiles.importArchive(folder(context, kind), it, minimumSizes[kind], extensions[kind]).firstOrNull()
+            else ToyPortalFiles.store(folder(context, kind), rawName, it, minimumSizes[kind])
         }
     }.getOrNull()
 }
