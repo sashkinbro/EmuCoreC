@@ -140,6 +140,7 @@ struct msg_dlg_thread_info
 					}
 
 					dlg->close(true, true);
+					continue;
 				}
 			}
 			else if (const auto dlg = g_fxo->get<msg_info>().get())
@@ -150,7 +151,10 @@ struct msg_dlg_thread_info
 				}
 
 				dlg->on_close(CELL_MSGDIALOG_BUTTON_NONE);
+				continue;
 			}
+			// The dialog associated with this deadline is already gone.
+			wait_until.compare_and_swap_test(new_value, 0);
 		}
 	}
 
@@ -186,6 +190,7 @@ error_code open_msg_dialog(bool is_blocking, u32 type, vm::cptr<char> msgString,
 			return CellSysutilError{ret + 0u};
 		}
 
+		g_fxo->get<msg_dlg_thread>().wait_until = 0;
 		const auto notify = std::make_shared<atomic_t<u32>>(0);
 
 		const auto res = manager->create<rsx::overlays::message_dialog>()->show(is_blocking, msgString.get_ptr(), _type, source, [callback, userData, &return_code, is_blocking, notify](s32 status)
@@ -195,6 +200,7 @@ error_code open_msg_dialog(bool is_blocking, u32 type, vm::cptr<char> msgString,
 				*return_code = status;
 			}
 
+			g_fxo->get<msg_dlg_thread>().wait_until = 0;
 			sysutil_send_system_cmd(CELL_SYSUTIL_DRAWING_END, 0);
 
 			if (callback)
