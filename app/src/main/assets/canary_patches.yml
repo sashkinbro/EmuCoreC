@@ -287,3 +287,49 @@ PPU-aa798f32a1fda1c23a20066edb1c623c486d53cc:
     Patch Version: 1.0
     Patch:
       - [ be32, 0x00304770, 0x38000001 ]
+
+PPU-56101fbdbac186fddef72207145015fd314a0be5:
+  "ARMSX3 Junkyard crash fix":
+    Games:
+      "Burnout Paradise":
+        BLUS30061: [ "01.00" ]
+    Author: jpolo1224
+    Notes: Fixes the crash at the junkyard in the intro.
+    Patch Version: 1.0
+    Patch:
+      - [ be32, 0x00459028, 0x38807fff ]
+      - [ be32, 0x0045e304, 0x41920164 ]
+      - [ be32, 0x00459040, 0x2f030000 ]
+      - [ be32, 0x0045904c, 0x419afbe0 ]
+      - [ be32, 0x00459054, 0x60000000 ]
+      - [ be32, 0x0045905c, 0x60000000 ]
+      - [ be32, 0x00459064, 0x90690010 ]
+
+PPU-30ce8c9f0a9552914275c90e2980749630f3ea18:
+  "ARMSX3 intro movie crash fix":
+    Games:
+      "NBA 08":
+        BCES00112: [ "01.00" ]
+    Author: jpolo1224
+    Notes: Fixes a crash during the intro movies on the first run.
+    Patch Version: 1.0
+    Patch:
+      - [ calloc, 0x003ead38, 0x04 ]
+      - [ be32, 0x00000000, 0x80810070 ]
+      - [ be32, 0x00000000, 0x2f040000 ]
+      - [ be32, 0x00000000, 0x409a0008 ]
+      - [ jump, 0x00000000, 0x003ead0c ]
+  "ARMSX3 quickplay loading fix":
+    Games:
+      "NBA 08":
+        BCES00112: [ "01.00" ]
+    Author: jpolo1224
+    Notes: Fixes the loading screen before a quickplay game.
+    Patch Version: 1.0
+    Patch:
+      - [ be32, 0x0002245c, 0x409e0144 ]
+      - [ be32, 0x000225a4, 0x60000000 ]
+      - [ be32, 0x000225dc, 0x4bfffe84 ]
+      - [ be32, 0x000225ec, 0x9b9f0037 ]
+      - [ be32, 0x000225f4, 0x9b9f0038 ]
+      - [ be32, 0x00022504, 0x9b9f0037 ]

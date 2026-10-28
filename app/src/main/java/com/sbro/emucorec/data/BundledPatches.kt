@@ -39,6 +39,9 @@ internal object BundledPatchInstaller {
         BundledPatch("PPU-1d9e99e1f091cfbdf1714d04e690d9cd816e2971", "Freeze Fix", "NPUA80145", "all"),
         BundledPatch("PPU-0997e35d2b6738f5cecfda1d76380acca0828365", "Freeze Fix", "BCUS98124", "01.00"),
         BundledPatch("PPU-aa798f32a1fda1c23a20066edb1c623c486d53cc", "Disable MLAA", "BLUS30736", "01.00"),
+        BundledPatch("PPU-56101fbdbac186fddef72207145015fd314a0be5", "ARMSX3 Junkyard crash fix", "BLUS30061", "01.00"),
+        BundledPatch("PPU-30ce8c9f0a9552914275c90e2980749630f3ea18", "ARMSX3 intro movie crash fix", "BCES00112", "01.00"),
+        BundledPatch("PPU-30ce8c9f0a9552914275c90e2980749630f3ea18", "ARMSX3 quickplay loading fix", "BCES00112", "01.00"),
     )
 
     fun enablePending(wasEnabled: (String) -> Boolean, enable: (BundledPatch) -> Boolean, markEnabled: (String) -> Unit) {
@@ -49,7 +52,7 @@ internal object BundledPatchInstaller {
 }
 
 internal object BundledPatches {
-    private const val REVISION = 2
+    private const val REVISION = 3
 
     fun ensureInstalled(context: Context, root: String) {
         // Each storage root has its own patch database and its own installation state.
