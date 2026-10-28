@@ -490,12 +490,6 @@ private:
 		// Write ELF header.
 		WriteEhdr(e, ehdr);
 
-		// Write program headers.
-		for (const PHdr& phdr : phdrs)
-		{
-			WritePhdr(e, phdr);
-		}
-
 		// Tmp buffer
 		std::vector<u8> decomp_buf;
 
@@ -565,6 +559,16 @@ private:
 			for (const SHdr& shdr : shdrs)
 			{
 				WriteShdr(e, shdr);
+			}
+		}
+
+		// Segment data may overlap a relocated program header table.
+		if (!phdrs.empty())
+		{
+			e.seek(ehdr.e_phoff);
+			for (const PHdr& phdr : phdrs)
+			{
+				WritePhdr(e, phdr);
 			}
 		}
 	}

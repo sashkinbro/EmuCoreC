@@ -1134,6 +1134,26 @@ const NPD_HEADER* SELFDecrypter::GetNPDHeader() const
 
 bool SELFDecrypter::LoadMetadata(const u8* klic_key)
 {
+	if ((sce_hdr.se_flags & 0x8000) == 0x8000)
+	{
+		meta_shdr.clear();
+		for (u32 i = 0; i < m_seg_ext_hdr.size(); ++i)
+		{
+			const auto& seg = m_seg_ext_hdr[i];
+			if (seg.size == 0 || seg.offset < sce_hdr.se_hsize) continue;
+			MetadataSectionHeader msh{};
+			msh.data_offset = seg.offset;
+			msh.data_size = seg.size;
+			msh.type = 2;
+			msh.program_idx = i;
+			msh.compressed = seg.compression;
+			msh.encrypted = 1;
+			meta_shdr.push_back(msh);
+		}
+		meta_hdr = {};
+		data_keys.clear();
+		return true;
+	}
 	aes_context aes;
 	std::vector<u8> metadata_info(sizeof(meta_info));
 	constexpr usz sizeof_meta_and_header = sizeof(meta_info) + sizeof(sce_hdr);
@@ -1229,6 +1249,25 @@ bool SELFDecrypter::LoadMetadata(const u8* klic_key)
 
 bool SELFDecrypter::DecryptData()
 {
+	if ((sce_hdr.se_flags & 0x8000) == 0x8000)
+	{
+		usz data_buf_length = 0;
+		for (const MetadataSectionHeader& hdr : meta_shdr)
+		{
+			const u32 size = ::narrow<u32>(hdr.data_size);
+			if (size > usz{umax} - data_buf_length) return false;
+			data_buf_length += size;
+		}
+		data_buf.resize(data_buf_length);
+		usz offset = 0;
+		for (const MetadataSectionHeader& hdr : meta_shdr)
+		{
+			self_f.seek(hdr.data_offset);
+			if (self_f.read(data_buf.data() + offset, hdr.data_size) != hdr.data_size) return false;
+			offset += ::narrow<u32>(hdr.data_size);
+		}
+		return true;
+	}
 	aes_context aes;
 	usz data_buf_length = 0;
 
@@ -1306,6 +1345,66 @@ fs::file SELFDecrypter::MakeElf(bool isElf32)
 		WriteElf(e, elf64_hdr, shdr64_arr, phdr64_arr);
 	}
 
+	if ((sce_hdr.se_flags & 0x8000) == 0x8000 && m_ext_hdr.shdr_offset != 0)
+	{
+		const auto write_gaps = [&](const auto& phdrs, const auto& shdrs, u64 shoff, u16 shnum, u16 shentsize)
+		{
+			struct region { u64 elf_off; u64 elf_end; u64 self_end; };
+			std::vector<region> regions;
+			for (u32 i = 0; i < m_seg_ext_hdr.size(); ++i)
+			{
+				const auto& seg = m_seg_ext_hdr[i];
+				if (seg.offset < sce_hdr.se_hsize) continue;
+				const auto& phdr = ::at32(phdrs, i);
+				regions.push_back({phdr.p_offset, phdr.p_offset + phdr.p_filesz, seg.offset + seg.size});
+			}
+			const u64 table_size = static_cast<u64>(shnum) * shentsize;
+			regions.push_back({shoff, shoff + table_size, m_ext_hdr.shdr_offset + table_size});
+			std::sort(regions.begin(), regions.end(), [](const region& a, const region& b) { return a.elf_off < b.elf_off; });
+			const u64 self_size = self_f.size();
+			u64 elf_cursor = 0, self_cursor = sce_hdr.se_hsize;
+			for (const auto& r : regions)
+			{
+				if (elf_cursor < r.elf_off && self_cursor < self_size)
+				{
+					const u64 size = std::min(r.elf_off - elf_cursor, self_size - self_cursor);
+					if (size)
+					{
+						std::vector<u8> buf(size);
+						self_f.seek(self_cursor);
+						self_f.read(buf.data(), buf.size());
+						e.seek(elf_cursor);
+						e.write(buf.data(), buf.size());
+					}
+				}
+				elf_cursor = r.elf_end;
+				self_cursor = r.self_end;
+			}
+			u64 elf_end = shoff + table_size;
+			for (const auto& shdr : shdrs)
+			{
+				if (shdr.sh_type != 8 && shdr.sh_size > 0)
+				{
+					elf_end = std::max<u64>(elf_end, shdr.sh_offset + shdr.sh_size);
+				}
+			}
+			if (self_cursor < self_size && elf_cursor < elf_end)
+			{
+				const u64 size = std::min(elf_end - elf_cursor, self_size - self_cursor);
+				if (size)
+				{
+					std::vector<u8> buf(size);
+					self_f.seek(self_cursor);
+					self_f.read(buf.data(), buf.size());
+					e.seek(elf_cursor);
+					e.write(buf.data(), buf.size());
+				}
+			}
+		};
+		if (isElf32) write_gaps(phdr32_arr, shdr32_arr, elf32_hdr.e_shoff, elf32_hdr.e_shnum, elf32_hdr.e_shentsize);
+		else write_gaps(phdr64_arr, shdr64_arr, elf64_hdr.e_shoff, elf64_hdr.e_shnum, elf64_hdr.e_shentsize);
+	}
+
 	return e;
 }
 
@@ -1362,69 +1461,6 @@ static bool IsSelfElf32(const fs::file& f)
 	return (elf_class[4] == 1);
 }
 
-static bool IsDebugSelf(const fs::file& f)
-{
-	if (f.size() < 0x18)
-	{
-		return false;
-	}
-
-	// Get the key version.
-	f.seek(0x08);
-
-	const u16 key_version = f.read<le_t<u16>>();
-
-	// Check for DEBUG version.
-	if (key_version == 0x80 || key_version == 0xc0)
-	{
-		return true;
-	}
-
-	return false;
-}
-
-static fs::file CheckDebugSelf(const fs::file& s)
-{
-	if (s.size() < 0x18)
-	{
-		return {};
-	}
-
-	// Get the key version.
-	s.seek(0x08);
-
-	const u16 key_version = s.read<le_t<u16>>();
-
-	// Check for DEBUG version.
-	if (key_version == 0x80 || key_version == 0xc0)
-	{
-		self_log.warning("Debug SELF detected! Removing fake header...");
-
-		// Get the real elf offset.
-		s.seek(0x10);
-
-		// Read the real elf offset.
-		usz read_pos = key_version == 0x80 ? +s.read<be_t<u64>>() : +s.read<le_t<u64>>();
-
-		// Write the real ELF file back.
-		fs::file e = fs::make_stream<std::vector<u8>>();
-
-		// Copy the data.
-		std::vector<u8> buf(std::min<usz>(s.size(), 4096));
-
-		while (const u64 size = s.read_at(read_pos, buf.data(), buf.size()))
-		{
-			e.write(buf.data(), size);
-			read_pos += size;
-		}
-
-		return e;
-	}
-
-	// Leave the file untouched.
-	return {};
-}
-
 fs::file decrypt_self(const fs::file& elf_or_self, const u8* klic_key, SelfAdditionalInfo* out_info)
 {
 	if (out_info)
@@ -1445,12 +1481,6 @@ fs::file decrypt_self(const fs::file& elf_or_self, const u8* klic_key, SelfAddit
 
 	if (file_type == "SCE\0"_u32)
 	{
-		if (fs::file res = CheckDebugSelf(elf_or_self))
-		{
-			// TODO: Decrypt
-			return res;
-		}
-
 		// Check the ELF file class (32 or 64 bit).
 		const bool isElf32 = IsSelfElf32(elf_or_self);
 
@@ -1509,7 +1539,7 @@ bool verify_npdrm_self_headers(const fs::file& self, u8* klic_key, NPD_HEADER* n
 
 	self.seek(0);
 
-	if (self.size() >= 4 && self.read<u32>() == "SCE\0"_u32 && !IsDebugSelf(self))
+	if (self.size() >= 4 && self.read<u32>() == "SCE\0"_u32)
 	{
 		// Check the ELF file class (32 or 64 bit).
 		const bool isElf32 = IsSelfElf32(self);
@@ -1550,7 +1580,7 @@ bool get_npdrm_self_header(const fs::file& self, NPD_HEADER &npd_out)
 
 	self.seek(0);
 
-	if (self.size() >= 4 && self.read<u32>() == "SCE\0"_u32 && !IsDebugSelf(self))
+	if (self.size() >= 4 && self.read<u32>() == "SCE\0"_u32)
 	{
 		// Check the ELF file class (32 or 64 bit).
 		const bool isElf32 = IsSelfElf32(self);

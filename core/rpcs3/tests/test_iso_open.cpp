@@ -23,6 +23,17 @@ TEST_F(iso_test, InvalidArchiveReturnsEmptyHandle)
 	EXPECT_FALSE(archive.open("TEST.BIN"));
 }
 
+TEST_F(iso_test, RepeatedPathDelimitersResolveToTheSameFile)
+{
+	iso_archive archive(m_path);
+	ASSERT_TRUE(archive.is_valid());
+	fs::file member(archive.open(".///TEST.BIN"));
+	ASSERT_TRUE(member);
+	std::array<char, 3> data{};
+	ASSERT_EQ(member.read(data.data(), data.size()), data.size());
+	EXPECT_EQ(std::string(data.data(), data.size()), "abc");
+}
+
 TEST_F(iso_test, TruncatedMetadataRejectsArchive)
 {
 	for (usz length : {16 * ISO_SECTOR_SIZE + 157, 18 * ISO_SECTOR_SIZE, 18 * ISO_SECTOR_SIZE + 10, 18 * ISO_SECTOR_SIZE + 33})

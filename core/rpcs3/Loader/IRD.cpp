@@ -15,6 +15,7 @@ static constexpr std::array<u8, 4> s_ird_magic = {'3', 'I', 'R', 'D'};
 
 static constexpr u8 s_ird_min_version = 6;
 static constexpr u8 s_ird_max_version = 9;
+static constexpr u64 s_ird_max_size = 256 * 1024 * 1024;
 
 namespace
 {
@@ -254,6 +255,13 @@ ird_file::ird_file(const std::string& path)
 	{
 		ird_log.error("ird_file: Failed to open file: '%s'", path);
 		m_status = ird_parse_status::ERROR_OPENING_FILE;
+		return;
+	}
+
+	if (file.size() > s_ird_max_size)
+	{
+		ird_log.error("ird_file: File too big to be an IRD: '%s' (size: %u)", path, file.size());
+		m_status = ird_parse_status::ERROR_NOT_AN_IRD;
 		return;
 	}
 
