@@ -5183,15 +5183,15 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 	// Difference between function name and current location
 	const u32 reloc = info.is_relocatable ? ::at32(info.segs, 0).addr : 0;
 
-	// Info sent to threads
-	std::vector<std::pair<std::string, ppu_module<lv2_obj>>> workload;
-
 	// Info to load to main JIT instance (true - compiled)
 	struct link_entry
 	{
 		std::string obj_name;
 		bool is_compiled = false;
+		bool drop = false;
+		bool processed = false;
 		std::unique_ptr<llvm::MemoryBuffer> object;
+		ppu_module<lv2_obj> part;
 	};
 	std::vector<link_entry> link_workload;
 
@@ -5834,45 +5834,72 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 
 		module_counter++;
 
-		if (!check_only)
+		link_workload.push_back({std::move(obj_name), false, false, false, nullptr, std::move(part)});
+	}
+
+	atomic_t<bool> needs_compilation = false;
+	const auto load_entry = [&](usz index)
+	{
+		if ((check_only && needs_compilation) || (cpu ? cpu->state.all_of(cpu_flag::exit) : Emu.IsStopped()))
 		{
-			link_workload.push_back({obj_name, false, nullptr});
+			return;
 		}
 
-		// Check object file
-		if (auto object = jit_compiler::load_object(cache_path + obj_name))
+		link_entry& entry = link_workload[index];
+		if (auto object = jit_compiler::load_object(cache_path + entry.obj_name))
 		{
 			if (!check_only && is_being_used_in_emulation)
 			{
-				link_workload.back().object = std::move(object);
+				entry.object = std::move(object);
 			}
 			else if (!check_only)
 			{
-				ppu_log.success("LLVM: Module exists: %s", obj_name);
-				link_workload.pop_back();
+				ppu_log.success("LLVM: Module exists: %s", entry.obj_name);
+				entry.drop = true;
 			}
-
-			continue;
 		}
-
-		if (check_only)
+		else if (check_only)
 		{
-			return true;
+			needs_compilation = true;
 		}
+		else
+		{
+			entry.is_compiled = true;
+		}
+		entry.processed = true;
+	};
 
-		// Remember, used in ppu_initialize(void)
-		compiled_new = true;
-
-		// Adjust information (is_compiled)
-		link_workload.back().is_compiled = true;
-
-		// Fill workload list for compilation
-		workload.emplace_back(std::move(obj_name), std::move(part));
+	if (!link_workload.empty())
+	{
+		const usz thread_count = std::max<usz>(1, std::min<usz>(link_workload.size(), rpcs3::utils::get_max_threads()));
+		const usz succeeded = map_workload("PPU Loader "sv, thread_count, link_workload.size(), load_entry);
+		if (succeeded != thread_count)
+		{
+			ppu_log.error("%u PPU Loader thread(s) failed; retrying unfinished modules", thread_count - succeeded);
+			for (usz index = 0; index < link_workload.size(); index++)
+			{
+				if (!link_workload[index].processed)
+				{
+					load_entry(index);
+				}
+			}
+		}
 	}
 
 	if (check_only)
 	{
-		return false;
+		return needs_compilation;
+	}
+
+	std::erase_if(link_workload, [](const link_entry& entry) { return entry.drop; });
+	std::vector<std::pair<std::string, ppu_module<lv2_obj>>> workload;
+	for (link_entry& entry : link_workload)
+	{
+		if (entry.is_compiled)
+		{
+			compiled_new = true;
+			workload.emplace_back(entry.obj_name, std::move(entry.part));
+		}
 	}
 
 	// Start the largest resolver-bearing jobs first to reduce the compilation tail.
