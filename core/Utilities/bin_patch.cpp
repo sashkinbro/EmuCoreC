@@ -7,6 +7,7 @@
 #include "Emu/Memory/vm.h"
 #include "Emu/emu_callbacks.h"
 #include "Emu/System.h"
+#include "Emu/system_config.h"
 #include "Emu/VFS.h"
 
 #include "util/types.hpp"
@@ -1606,6 +1607,20 @@ void patch_engine::apply(std::vector<u32>& applied_total, const std::string& nam
 				{
 					patch_log.success("Applied patch (hash='%s', description='%s', author='%s', patch_version='%s', file_version='%s') (<- %u)",
 						patch->hash, patch->description, patch->author, patch->patch_version, patch->version, applied_total.size() - old_size);
+
+					// GT6's MLAA patch removes the pass that requires these expensive buffers.
+					static constexpr std::string_view gt6_hashes[] = {
+						"PPU-42367707f4caac2668f10cb46498f64bde9db440", "PPU-4f1e9acd7d98961b4b742fb324a2faba6212ea67",
+						"PPU-6ac472e1f334f54ec4753cde9e8e1515bfab4d17", "PPU-638ef307e2b35d593f599efec0dc0c37059a984b",
+						"PPU-80f0d67b29d3d17ac885a309a3fc4cd8dcf50658", "PPU-4213aba5ed17f7e3cd3f299fa44d9d9acef0ba18",
+						"PPU-6a7de7fdfd7e7cbd1031bf28a7104b29c308136c", "PPU-43e618448eed82aa96856338d072f1e4978c36a8"
+					};
+					if (patch->description == "Disable MLAA" && std::find(std::begin(gt6_hashes), std::end(gt6_hashes), patch->hash) != std::end(gt6_hashes))
+					{
+						g_cfg.video.write_color_buffers.set(false);
+						g_cfg.video.read_color_buffers.set(false);
+						patch_log.notice("Disabled GT6 color buffer transfers for the patched MLAA pass");
+					}
 				}
 			}
 		}

@@ -42,7 +42,18 @@ internal object BundledPatchInstaller {
         BundledPatch("PPU-56101fbdbac186fddef72207145015fd314a0be5", "ARMSX3 Junkyard crash fix", "BLUS30061", "01.00"),
         BundledPatch("PPU-30ce8c9f0a9552914275c90e2980749630f3ea18", "ARMSX3 intro movie crash fix", "BCES00112", "01.00"),
         BundledPatch("PPU-30ce8c9f0a9552914275c90e2980749630f3ea18", "ARMSX3 quickplay loading fix", "BCES00112", "01.00"),
-    )
+    ) + listOf(
+        "PPU-42367707f4caac2668f10cb46498f64bde9db440" to "BCUS99247",
+        "PPU-4f1e9acd7d98961b4b742fb324a2faba6212ea67" to "BCUS98296",
+        "PPU-6ac472e1f334f54ec4753cde9e8e1515bfab4d17" to "BCUS98296",
+        "PPU-638ef307e2b35d593f599efec0dc0c37059a984b" to "BCES01893",
+        "PPU-80f0d67b29d3d17ac885a309a3fc4cd8dcf50658" to "NPEA00502",
+        "PPU-4213aba5ed17f7e3cd3f299fa44d9d9acef0ba18" to "NPUA81049",
+        "PPU-6a7de7fdfd7e7cbd1031bf28a7104b29c308136c" to "NPHA80269",
+        "PPU-43e618448eed82aa96856338d072f1e4978c36a8" to "NPJA00113",
+    ).flatMap { (hash, serial) ->
+        listOf("Disable MLAA", "Disable Motion Blur").map { BundledPatch(hash, it, serial, "01.22") }
+    }
 
     fun enablePending(wasEnabled: (String) -> Boolean, enable: (BundledPatch) -> Boolean, markEnabled: (String) -> Unit) {
         for (patch in defaults) {
@@ -52,7 +63,7 @@ internal object BundledPatchInstaller {
 }
 
 internal object BundledPatches {
-    private const val REVISION = 3
+    private const val REVISION = 4
 
     fun ensureInstalled(context: Context, root: String) {
         // Each storage root has its own patch database and its own installation state.
