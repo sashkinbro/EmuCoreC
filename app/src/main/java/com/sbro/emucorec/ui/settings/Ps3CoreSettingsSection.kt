@@ -151,6 +151,11 @@ fun Ps3CoreSettingsSection(
     var revision by remember { mutableIntStateOf(0) }
     var restarting by remember { mutableStateOf(false) }
 
+    fun settingTitle(setting: Ps3CoreSetting): String {
+        val titleId = resources.getIdentifier(coreLabelResourceName(setting.name), "string", context.packageName)
+        return resources.getString(if (titleId != 0) titleId else R.string.core_label_unknown)
+    }
+
     LaunchedEffect(scope, titleId, revision) {
         val result = withContext(Dispatchers.IO) {
             runCatching {
@@ -233,7 +238,7 @@ fun Ps3CoreSettingsSection(
                     onOverridesChanged()
                     revision++
                 } else {
-                    error = resources.getString(R.string.ps3_core_setting_rejected, setting.name)
+                    error = resources.getString(R.string.ps3_core_setting_rejected, settingTitle(setting))
                 }
             }
         }
@@ -243,7 +248,7 @@ fun Ps3CoreSettingsSection(
     val microphonePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         pendingMicrophoneChange?.let { (setting, value) ->
             if (granted) write(setting, value)
-            else error = resources.getString(R.string.ps3_core_setting_rejected, setting.name)
+            else error = resources.getString(R.string.ps3_core_setting_rejected, settingTitle(setting))
         }
         pendingMicrophoneChange = null
     }
@@ -273,7 +278,7 @@ fun Ps3CoreSettingsSection(
                     onOverridesChanged()
                     revision++
                 }
-                else error = resources.getString(R.string.ps3_core_setting_rejected, setting.name)
+                else error = resources.getString(R.string.ps3_core_setting_rejected, settingTitle(setting))
             }
         }
     }
@@ -281,9 +286,7 @@ fun Ps3CoreSettingsSection(
     val filtered = remember(settings, category, additionalCategories, surface) {
         val accepted = additionalCategories + category
         settings.filter {
-            (coreSettingsCategory(it.path) in accepted ||
-                (surface == Ps3CoreSettingsSurface.InGame && category == Ps3CoreSettingsCategory.Graphics &&
-                    it.path.startsWith("Core@@"))) &&
+            coreSettingsCategory(it.path) in accepted &&
                 isCoreSettingVisibleOnSurface(it.path, surface)
         }
     }
@@ -440,6 +443,7 @@ private fun InGameSettingsCard(title: String, content: @Composable () -> Unit) {
         modifier = Modifier.fillMaxWidth(),
         shape = neonShape(16.dp),
         color = if (dark) Color(0xF01A1F2A) else Color(0xFFFFFFFF),
+        contentColor = if (dark) Color.White else scheme.onSurface,
         border = BorderStroke(1.dp, if (dark) Color.White.copy(alpha = 0.12f) else Color(0xFFD6DDE8)),
     ) {
         Column(
@@ -599,7 +603,7 @@ private fun Ps3CoreSettingRow(
                     mutableFloatStateOf(value.toFloat())
                 }
                 val displayValue = if (setting.path == "Core@@Max LLVM Compile Threads" && sliderValue.toInt() == 0) {
-                    "0 (Auto)"
+                    "0 (${localizedCoreLabel("Automatic")})"
                 } else {
                     formatCoreNumber(setting.type, sliderValue)
                 }
@@ -699,6 +703,14 @@ internal fun userFacingCoreVariants(path: String, variants: List<String>): List<
 }
 
 @Composable
+private fun localizedCoreTextValue(path: String, value: String): String = when {
+    value.isBlank() -> stringResource(R.string.core_setting_edit)
+    (path == "Audio@@Audio Device" && value == "@@@default@@@") ||
+        (path == "Input/Output@@Camera ID" && value == "Default") -> localizedCoreLabel("Automatic")
+    else -> value
+}
+
+@Composable
 private fun CoreTextRow(
     setting: Ps3CoreSetting,
     title: String,
@@ -719,7 +731,7 @@ private fun CoreTextRow(
             colors = coreFilterChipColors(),
             label = {
                 Text(
-                    text = text.ifBlank { stringResource(R.string.core_setting_edit) },
+                    text = localizedCoreTextValue(setting.path, text),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -736,7 +748,7 @@ private fun CoreTextRow(
                     onValueChange = { text = it },
                     label = { Text(stringResource(R.string.core_setting_value)) },
                     supportingText = {
-                        Text(stringResource(R.string.core_setting_default_value, setting.default))
+                        Text(stringResource(R.string.core_setting_default_value, localizedCoreTextValue(setting.path, setting.default)))
                     },
                     singleLine = true,
                     shape = neonShape(18.dp),
@@ -777,7 +789,7 @@ private fun localizedCoreLabel(raw: String): String {
             resources.getIdentifier(resourceName, "string", context.packageName)
         }
     }
-    if (resourceId == 0) return raw.replaceFirstChar { if (it.isLowerCase()) it.titlecase(locale) else it.toString() }
+    if (resourceId == 0) return stringResource(R.string.core_label_unknown)
     val localized = stringResource(resourceId)
     return remember(localized, locale) {
         localized.replaceFirstChar { if (it.isLowerCase()) it.titlecase(locale) else it.toString() }

@@ -58,7 +58,8 @@ public:
     /// `image` / `storage_view` / `extent` describe that presented image; `guest_extent` is the
     /// size the game was actually rendered at, upscale included — the flow-scale heuristic
     /// compares the two. Must be called outside a render pass.
-    void Process(const Device& device, vk::CommandBuffer cmdbuf, VkImage image,
+    // False means chain allocation failed; no work from this call may be submitted.
+    bool Process(const Device& device, vk::CommandBuffer cmdbuf, VkImage image,
                  VkImageView storage_view, VkExtent2D extent, VkFormat format,
                  VkExtent2D guest_extent);
 

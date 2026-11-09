@@ -770,8 +770,8 @@
     <string name="core_label_center_horizontally">Horizontal zentrieren</string>
     <string name="core_label_center_vertically">Vertikal zentrieren</string>
     <string name="core_label_clans_enabled">Clans aktiviert</string>
-    <string name="core_label_clock12">Uhr12</string>
-    <string name="core_label_clock24">Uhr24</string>
+    <string name="core_label_clock12">12-Stunden-Format</string>
+    <string name="core_label_clock24">24-Stunden-Format</string>
     <string name="core_label_clocks_scale">Uhrenskala</string>
     <string name="core_label_compatible_savestate_mode">Kompatibler Savestate-Modus</string>
     <string name="core_label_connected">Verbunden</string>
@@ -785,7 +785,7 @@
     <string name="core_label_custom_anaglyph_matrices">Benutzerdefinierte Anaglyphenmatrizen</string>
     <string name="core_label_darkening_effect_strength">Stärke des Verdunkelungseffekts</string>
     <string name="core_label_date_format">Datumsformat</string>
-    <string name="core_label_ddmmyyyy">TTMMJJJJ</string>
+    <string name="core_label_ddmmyyyy">Tag–Monat–Jahr</string>
     <string name="core_label_debug_console_mode">Debug-Konsolenmodus</string>
     <string name="core_label_debug_output">Debug-Ausgabe</string>
     <string name="core_label_debug_overlay">Debug-Overlay</string>
@@ -873,7 +873,7 @@
     <string name="core_label_initialize_directories">Verzeichnisse initialisieren</string>
     <string name="core_label_input_output">Eingabe/Ausgabe</string>
     <string name="core_label_inspection_mode_savestates">Speicherstatus des Inspektionsmodus</string>
-    <string name="core_label_interlaced">Interlaced</string>
+    <string name="core_label_interlaced">Zeilensprungverfahren</string>
     <string name="core_label_internet_enabled">Internet aktiviert</string>
     <string name="core_label_interpreter_dynamic">Dolmetscher (dynamisch)</string>
     <string name="core_label_interpreter_static">Dolmetscher (statisch)</string>
@@ -900,7 +900,7 @@
     <string name="core_label_matrix_right">Matrix richtig</string>
     <string name="core_label_max_cpu_preempt_count">Maximale CPU-Preempt-Anzahl</string>
     <string name="core_label_max_llvm_compile_threads">Max. LLVM-Kompilierungsthreads</string>
-    <string name="core_label_max_spurs_threads">Max SPURS Threads</string>
+    <string name="core_label_max_spurs_threads">Maximale Anzahl an SPURS-Threads</string>
     <string name="core_label_maximum_savestate_files">Maximum SaveState Files</string>
     <string name="core_label_maximum_savestate_files_space_mib">Maximaler Speicherplatz für SaveState-Dateien (MiB)</string>
     <string name="core_label_medium">Mittel</string>
@@ -916,24 +916,24 @@
     <string name="core_label_minimal">Minimal</string>
     <string name="core_label_minimum_scalable_dimension">Minimale skalierbare Dimension</string>
     <string name="core_label_miscellaneous">Verschiedenes</string>
-    <string name="core_label_mmddyyyy">MMTTJJJJ</string>
+    <string name="core_label_mmddyyyy">Monat–Tag–Jahr</string>
     <string name="core_label_mono">Mono</string>
     <string name="core_label_mouse">Maus</string>
     <string name="core_label_mouse_debug_overlay">Maus-Debug-Overlay</string>
     <string name="core_label_mouse_based_gyro_enabled">Mausbasierter Kreisel aktiviert</string>
     <string name="core_label_move">Bewegen</string>
     <string name="core_label_msaa">MSAA</string>
-    <string name="core_label_multi_threaded">Multi-threaded</string>
+    <string name="core_label_multi_threaded">Mehrere Threads</string>
     <string name="core_label_multithreaded_rsx">Multithread-RSX</string>
     <string name="core_label_music_handler">Musikhandler</string>
     <string name="core_label_nearest">Am nächsten</string>
-    <string name="core_label_net">Netto</string>
+    <string name="core_label_net">Netzwerk</string>
     <string name="core_label_none">Keine</string>
-    <string name="core_label_null">Null</string>
+    <string name="core_label_null">Deaktiviert</string>
     <string name="core_label_off">Aus</string>
     <string name="core_label_opacity" formatted="false">Deckkraft (%)</string>
     <string name="core_label_opengl">OpenGL</string>
-    <string name="core_label_operating_system">Operating System</string>
+    <string name="core_label_operating_system">Betriebssystem</string>
     <string name="core_label_ordered_atomic">Geordnet und atomar</string>
     <string name="core_label_output_scaling_mode">Ausgabeskalierungsmodus</string>
     <string name="core_label_over_under">Über-Unter</string>
@@ -970,13 +970,13 @@
     <string name="core_label_psn_status">PSN-Status</string>
     <string name="core_label_qt">Qt</string>
     <string name="core_label_quadraphonic">Quadraphonisch</string>
-    <string name="core_label_quadraphonic_lfe">Quadraphonic LFE</string>
+    <string name="core_label_quadraphonic_lfe">Vierkanalton mit LFE</string>
     <string name="core_label_raw">Roh</string>
     <string name="core_label_raw_mouse">Rohe Maus</string>
     <string name="core_label_read_color_buffers">Lesen Sie Farbpuffer</string>
     <string name="core_label_read_depth_buffer">Tiefenpuffer lesen</string>
     <string name="core_label_real">Echt</string>
-    <string name="core_label_real_singstar">Echter SingStar</string>
+    <string name="core_label_real_singstar">Physischer SingStar</string>
     <string name="core_label_recompiler_asmjit">Recompiler (ASMJIT)</string>
     <string name="core_label_recompiler_llvm">Recompiler (LLVM)</string>
     <string name="core_label_record_with_overlays">Mit Overlays aufnehmen</string>
@@ -1062,7 +1062,7 @@
     <string name="core_label_suspend_emulation_savestate_mode">Emulations-Savestate-Modus unterbrechen</string>
     <string name="core_label_system">System</string>
     <string name="core_label_system_name">Systemname</string>
-    <string name="core_label_texture_lod_bias_addend">Texture LOD Bias Addend</string>
+    <string name="core_label_texture_lod_bias_addend">Zusätzlicher Textur-LOD-Versatz</string>
     <string name="core_label_thread_scheduler_mode">Thread-Planer-Modus</string>
     <string name="core_label_time_format">Zeitformat</string>
     <string name="core_label_time_stretching_threshold">Time-Stretching-Schwellenwert</string>
@@ -1098,7 +1098,7 @@
     <string name="core_label_write_color_buffers">Schreiben Sie Farbpuffer</string>
     <string name="core_label_write_depth_buffer">Schreibtiefenpuffer</string>
     <string name="core_label_xaudio2">XAudio2</string>
-    <string name="core_label_yyyymmdd">Jjjjmmtt</string>
+    <string name="core_label_yyyymmdd">Jahr–Monat–Tag</string>
     <string name="core_help_core_accurate_cache_line_stores" formatted="false">Verarbeitet den PPU-DCBZ-Befehl präzise.
 Darüber hinaus werden in Kombination mit Accurate SPU DMA SPU PUT-Cache-Zeilenzugriffe atomar verarbeitet.</string>
     <string name="core_help_core_use_accurate_dfma" formatted="false">Verwenden Sie genaue FMA-Anweisungen mit doppelter Genauigkeit in PPU- und SPU-Backends.
@@ -1560,7 +1560,7 @@ Diese Einstellung wird nur angewendet, wenn der SPU-Decoder auf „Dynamisch“ 
     <string name="core_label_italian_keyboard">Italienische Tastatur</string>
     <string name="core_label_japanese">Japanisch</string>
     <string name="core_label_japanese_keyboard">Japanische Tastatur</string>
-    <string name="core_label_japanese_keyboard_kana_state">Japanische Tastatur (Kana-Staat)</string>
+    <string name="core_label_japanese_keyboard_kana_state">Japanische Tastatur (Kana-Modus)</string>
     <string name="core_label_korean">Koreanisch</string>
     <string name="core_label_korean_keyboard">Koreanische Tastatur</string>
     <string name="core_label_norwegian">Norwegisch</string>
@@ -2069,4 +2069,45 @@ Diese Einstellung wird nur angewendet, wenn der SPU-Decoder auf „Dynamisch“ 
     <string name="core_help_video_vr_height" formatted="false">Höhere Werte verschieben beide Bilder nach oben, niedrigere nach unten, um sie an den Linsen der Brille auszurichten.</string>
     <string name="core_label_show_spu_compilation_hint" formatted="false">Hinweis zur SPU-Kompilierung anzeigen</string>
     <string name="core_help_miscellaneous_show_spu_compilation_hint" formatted="false">Zeigt den Hinweis „SPU-Module kompilieren“ mit dem nativen Overlay an.</string>
+    <string name="settings_show_quick_bar">Schnellaktionsleiste anzeigen</string>
+    <string name="settings_help_show_quick_bar">Tippe zweimal auf den Spielbildschirm, um die Schnellaktionsleiste anzuzeigen. Mit Zurück öffnest du das Spielmenü auch bei ausgeblendeter Leiste.</string>
+    <string name="emulation_portal_description">Verwalte virtuelle Spielfiguren für unterstützte Spiele. Importiere eine Figurendatei in einen Platz oder erstelle eine Figur aus der Charakterliste. Angeschlossene USB-Portale haben Vorrang.</string>
+    <string name="settings_mouse_button_left">Linksklick</string>
+    <string name="settings_mouse_button_right">Rechtsklick</string>
+    <string name="settings_mouse_button_middle">Mittelklick</string>
+    <string name="settings_mouse_button_back">Zurück-Taste</string>
+    <string name="settings_mouse_button_forward">Vorwärts-Taste</string>
+    <string name="settings_mouse_button_number">Maustaste %1$d</string>
+    <string name="settings_keyboard_key_enter">Eingabe</string>
+    <string name="settings_keyboard_key_backspace">Rücktaste</string>
+    <string name="settings_keyboard_key_space">Leertaste</string>
+    <string name="settings_keyboard_key_tab">Tabulator</string>
+    <string name="settings_keyboard_key_escape">Esc</string>
+    <string name="settings_keyboard_key_shift">Umschalt</string>
+    <string name="settings_keyboard_key_control">Strg</string>
+    <string name="settings_keyboard_key_alt">Alt</string>
+    <string name="settings_keyboard_key_meta">Meta</string>
+    <string name="settings_keyboard_key_home">Pos1</string>
+    <string name="settings_keyboard_key_end">Ende</string>
+    <string name="settings_keyboard_key_page_up">Bild auf</string>
+    <string name="settings_keyboard_key_page_down">Bild ab</string>
+    <string name="settings_keyboard_key_insert">Einfügen</string>
+    <string name="settings_keyboard_key_delete">Entfernen</string>
+    <string name="settings_keyboard_key_caps_lock">Feststelltaste</string>
+    <string name="settings_keyboard_key_num_lock">Num-Feststelltaste</string>
+    <string name="settings_keyboard_key_scroll_lock">Rollen</string>
+    <string name="settings_keyboard_key_pause">Pause</string>
+    <string name="settings_keyboard_key_print_screen">Druck</string>
+    <string name="settings_keyboard_key_number">Taste %1$d</string>
+    <string name="settings_keyboard_mouse_milliseconds_value">%1$d ms</string>
+    <string name="settings_mouse_wheel_desc" formatted="false">Wähle die Controller-Aktionen für das Scrollen nach oben und unten. Deaktiviere diese Option, um das Mausrad ohne Belegung zu lassen.</string>
+    <string name="settings_mouse_wheel_pulse_desc" formatted="false">Dauer, für die jeder Mausradschritt die zugewiesene Controller-Aktion hält. Erhöhe sie, wenn ein Spiel kurze Scroll-Eingaben übersieht.</string>
+    <string name="settings_mouse_vertical_sensitivity_desc" formatted="false">Passe vertikales Zielen im Verhältnis zum horizontalen Zielen an. Bei 100% haben beide Achsen dieselbe Empfindlichkeit.</string>
+    <string name="settings_mouse_deadzone_desc" formatted="false">Ignoriert kleine Mausbewegungen nahe der Mitte, um ungewolltes Abdriften beim Zielen zu verringern. Höhere Werte erfordern mehr Bewegung, bevor das Zielen beginnt.</string>
+    <string name="customization_theme_help" formatted="false">Wähle die App-Farben. System folgt dem Gerätedesign; die anderen Optionen behalten ein festes Aussehen.</string>
+    <string name="customization_background_help" formatted="false">Wähle ein Bild oder Video als Hintergrund der Startseite. Setze die Anpassungen zurück, um den Standardhintergrund wiederherzustellen.</string>
+    <string name="customization_cover_size_help" formatted="false">Ändere die Größe der Spielecover in der Bibliothek. Größere Cover zeigen weniger Spiele pro Zeile.</string>
+    <string name="customization_font_help" formatted="false">Wähle die App-Schrift oder importiere eine TTF- oder OTF-Datei. System verwendet die Geräteschrift.</string>
+    <string name="customization_text_size_help" formatted="false">Skaliere den Text in der gesamten App. Größerer Text kann einige Beschriftungen auf mehrere Zeilen umbrechen.</string>
+    <string name="settings_customization_drawer_help" formatted="false">Wähle das Aussehen der Navigationsleiste. Die Vorschau zeigt jeden Stil vor der Auswahl.</string>
 </resources>

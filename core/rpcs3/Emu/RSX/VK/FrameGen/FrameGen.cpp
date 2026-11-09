@@ -170,7 +170,7 @@ FrameGen::~FrameGen() {
     }
 }
 
-void FrameGen::Process(const Device& device, vk::CommandBuffer cmdbuf, VkImage image,
+bool FrameGen::Process(const Device& device, vk::CommandBuffer cmdbuf, VkImage image,
                        VkImageView storage_view, VkExtent2D extent, VkFormat format,
                        VkExtent2D guest_extent) {
     generated = false;
@@ -183,19 +183,19 @@ void FrameGen::Process(const Device& device, vk::CommandBuffer cmdbuf, VkImage i
             chain.reset();
         }
         warm_streak = 0;
-        return;
+        return true;
     }
 
     if (storage_view == VK_NULL_HANDLE) {
         unavailable = true;
-        return;
+        return true;
     }
 
     if (!shaders) {
         shaders.emplace(device);
         if (!shaders->IsValid()) {
             unavailable = true;
-            return;
+            return true;
         }
     }
 
@@ -206,6 +206,12 @@ void FrameGen::Process(const Device& device, vk::CommandBuffer cmdbuf, VkImage i
     if (!chain || built_extent.width != extent.width || built_extent.height != extent.height ||
         built_format != format || built_flow_scale != flow_scale) {
         Rebuild(device, extent, format, flow_scale);
+        if (memory_allocator.GetLastError() != VK_SUCCESS) {
+            // Rebuild waited for idle before creating these partial resources.
+            unavailable = true;
+            chain.reset();
+            return false;
+        }
     }
 
     const u64 count = frame_count++;
@@ -223,6 +229,7 @@ void FrameGen::Process(const Device& device, vk::CommandBuffer cmdbuf, VkImage i
     if (warm) {
         chain->DispatchShared(cmdbuf, count);
     }
+    return true;
 }
 
 size_t FrameGen::WantedGenerations(size_t capacity) {

@@ -774,8 +774,8 @@
     <string name="core_label_center_horizontally">مركز أفقيا</string>
     <string name="core_label_center_vertically">مركز عموديا</string>
     <string name="core_label_clans_enabled">تم تمكين العشائر</string>
-    <string name="core_label_clock12">Clock12</string>
-    <string name="core_label_clock24">Clock24</string>
+    <string name="core_label_clock12">تنسيق 12 ساعة</string>
+    <string name="core_label_clock24">تنسيق 24 ساعة</string>
     <string name="core_label_clocks_scale">مقياس الساعات</string>
     <string name="core_label_compatible_savestate_mode">وضع Savestate المتوافق</string>
     <string name="core_label_connected">متصل</string>
@@ -789,7 +789,7 @@
     <string name="core_label_custom_anaglyph_matrices">مصفوفات النقش المخصصة</string>
     <string name="core_label_darkening_effect_strength">قوة تأثير سواد</string>
     <string name="core_label_date_format">تنسيق التاريخ</string>
-    <string name="core_label_ddmmyyyy">Ddmmyyyy</string>
+    <string name="core_label_ddmmyyyy">اليوم–الشهر–السنة</string>
     <string name="core_label_debug_console_mode">وضع وحدة التحكم التصحيح</string>
     <string name="core_label_debug_output">إخراج التصحيح</string>
     <string name="core_label_debug_overlay">تراكب التصحيح</string>
@@ -904,7 +904,7 @@
     <string name="core_label_matrix_right">مصفوفة الحق</string>
     <string name="core_label_max_cpu_preempt_count">الحد الأقصى لعدد الإجراءات الوقائية لوحدة المعالجة المركزية</string>
     <string name="core_label_max_llvm_compile_threads">ماكس LLVM تجميع المواضيع</string>
-    <string name="core_label_max_spurs_threads">خيوط ماكس سبيرز</string>
+    <string name="core_label_max_spurs_threads">الحد الأقصى لخيوط SPURS</string>
     <string name="core_label_maximum_savestate_files">الحد الأقصى لملفات SaveState</string>
     <string name="core_label_maximum_savestate_files_space_mib">الحد الأقصى لمساحة ملفات SaveState (MiB)</string>
     <string name="core_label_medium">متوسط</string>
@@ -920,7 +920,7 @@
     <string name="core_label_minimal">الحد الأدنى</string>
     <string name="core_label_minimum_scalable_dimension">الحد الأدنى للبعد القابل للتطوير</string>
     <string name="core_label_miscellaneous">متنوعة</string>
-    <string name="core_label_mmddyyyy">Mmddyyyy</string>
+    <string name="core_label_mmddyyyy">الشهر–اليوم–السنة</string>
     <string name="core_label_mono">أحادية</string>
     <string name="core_label_mouse">الفأر</string>
     <string name="core_label_mouse_debug_overlay">تراكب تصحيح أخطاء الماوس</string>
@@ -931,9 +931,9 @@
     <string name="core_label_multithreaded_rsx">متعدد الخيوط RSX</string>
     <string name="core_label_music_handler">معالج الموسيقى</string>
     <string name="core_label_nearest">الأقرب</string>
-    <string name="core_label_net">صافي</string>
+    <string name="core_label_net">الشبكة</string>
     <string name="core_label_none">لا شيء</string>
-    <string name="core_label_null">لاغية</string>
+    <string name="core_label_null">معطّل</string>
     <string name="core_label_off">إيقاف</string>
     <string name="core_label_opacity">العتامة (٪)</string>
     <string name="core_label_opengl">برنامج OpenGL</string>
@@ -980,7 +980,7 @@
     <string name="core_label_read_color_buffers">قراءة مخازن الألوان</string>
     <string name="core_label_read_depth_buffer">قراءة عمق المخزن المؤقت</string>
     <string name="core_label_real">حقيقي</string>
-    <string name="core_label_real_singstar">سينغ ستار الحقيقي</string>
+    <string name="core_label_real_singstar">جهاز SingStar فعلي</string>
     <string name="core_label_recompiler_asmjit">معيد الترجمة (ASMJIT)</string>
     <string name="core_label_recompiler_llvm">معيد الترجمة (LLVM)</string>
     <string name="core_label_record_with_overlays">سجل مع التراكبات</string>
@@ -1102,7 +1102,7 @@
     <string name="core_label_write_color_buffers">كتابة مخازن الألوان</string>
     <string name="core_label_write_depth_buffer">كتابة مخزن العمق</string>
     <string name="core_label_xaudio2">XAudio2</string>
-    <string name="core_label_yyyymmdd">Yyymmdd</string>
+    <string name="core_label_yyyymmdd">السنة–الشهر–اليوم</string>
     <string name="core_help_core_accurate_cache_line_stores" formatted="false">يعالج بدقة تعليمات PPU DCBZ.
 بالإضافة إلى ذلك، عند دمجه مع Accurate SPU DMA، ستتم معالجة عمليات الوصول إلى خط ذاكرة التخزين المؤقت SPU PUT تلقائيًا.</string>
     <string name="core_help_core_use_accurate_dfma" formatted="false">استخدم تعليمات FMA دقيقة ومزدوجة الدقة في الواجهات الخلفية لـ PPU وSPU.
@@ -1564,7 +1564,7 @@
     <string name="core_label_italian_keyboard">لوحة المفاتيح الإيطالية</string>
     <string name="core_label_japanese">اليابانية</string>
     <string name="core_label_japanese_keyboard">لوحة المفاتيح اليابانية</string>
-    <string name="core_label_japanese_keyboard_kana_state">لوحة المفاتيح اليابانية (ولاية كانا)</string>
+    <string name="core_label_japanese_keyboard_kana_state">لوحة مفاتيح يابانية (وضع كانا)</string>
     <string name="core_label_korean">الكورية</string>
     <string name="core_label_korean_keyboard">لوحة المفاتيح الكورية</string>
     <string name="core_label_norwegian">النرويجية</string>
@@ -2079,4 +2079,45 @@
     <string name="core_help_video_vr_height" formatted="false">القيم الأعلى ترفع الصورتين، والقيم الأقل تخفضهما، لمحاذاتهما مع عدستي النظارة.</string>
     <string name="core_label_show_spu_compilation_hint" formatted="false">إظهار تلميح تجميع SPU</string>
     <string name="core_help_miscellaneous_show_spu_compilation_hint" formatted="false">يعرض تلميح &quot;تجميع وحدات SPU&quot; باستخدام التراكب الأصلي.</string>
+    <string name="settings_show_quick_bar">إظهار شريط الإجراءات السريعة</string>
+    <string name="settings_help_show_quick_bar">انقر مرتين على شاشة اللعبة لإظهار شريط الإجراءات السريعة. استخدم زر الرجوع لفتح قائمة اللعبة حتى عندما يكون الشريط مخفيًا.</string>
+    <string name="emulation_portal_description">أدِر مجسمات الألعاب الافتراضية للألعاب المدعومة. استورد ملف مجسم إلى خانة أو أنشئ مجسمًا من قائمة الشخصيات. تكون الأولوية لبوابات USB المتصلة.</string>
+    <string name="settings_mouse_button_left">نقرة يسار</string>
+    <string name="settings_mouse_button_right">نقرة يمين</string>
+    <string name="settings_mouse_button_middle">نقرة وسطى</string>
+    <string name="settings_mouse_button_back">زر الرجوع</string>
+    <string name="settings_mouse_button_forward">زر التقدم</string>
+    <string name="settings_mouse_button_number">زر الفأرة %1$d</string>
+    <string name="settings_keyboard_key_enter">إدخال</string>
+    <string name="settings_keyboard_key_backspace">مسافة للخلف</string>
+    <string name="settings_keyboard_key_space">مسافة</string>
+    <string name="settings_keyboard_key_tab">جدولة</string>
+    <string name="settings_keyboard_key_escape">هروب</string>
+    <string name="settings_keyboard_key_shift">تبديل</string>
+    <string name="settings_keyboard_key_control">تحكم</string>
+    <string name="settings_keyboard_key_alt">Alt</string>
+    <string name="settings_keyboard_key_meta">Meta</string>
+    <string name="settings_keyboard_key_home">البداية</string>
+    <string name="settings_keyboard_key_end">النهاية</string>
+    <string name="settings_keyboard_key_page_up">صفحة لأعلى</string>
+    <string name="settings_keyboard_key_page_down">صفحة لأسفل</string>
+    <string name="settings_keyboard_key_insert">إدراج</string>
+    <string name="settings_keyboard_key_delete">حذف</string>
+    <string name="settings_keyboard_key_caps_lock">قفل الأحرف الكبيرة</string>
+    <string name="settings_keyboard_key_num_lock">قفل الأرقام</string>
+    <string name="settings_keyboard_key_scroll_lock">قفل التمرير</string>
+    <string name="settings_keyboard_key_pause">إيقاف مؤقت</string>
+    <string name="settings_keyboard_key_print_screen">طباعة الشاشة</string>
+    <string name="settings_keyboard_key_number">مفتاح %1$d</string>
+    <string name="settings_keyboard_mouse_milliseconds_value">%1$d مللي ثانية</string>
+    <string name="settings_mouse_wheel_desc" formatted="false">اختر إجراءات وحدة التحكم التي تُفعّل عند التمرير لأعلى ولأسفل. عطّل هذا الخيار لترك العجلة دون تعيين.</string>
+    <string name="settings_mouse_wheel_pulse_desc" formatted="false">مدة استمرار إجراء وحدة التحكم المعيّن لكل خطوة من العجلة. زِدها إذا كانت اللعبة لا تلتقط إدخالات التمرير القصيرة.</string>
+    <string name="settings_mouse_vertical_sensitivity_desc" formatted="false">اضبط التصويب العمودي نسبةً إلى الأفقي. عند 100% تكون حساسية المحورين متساوية.</string>
+    <string name="settings_mouse_deadzone_desc" formatted="false">يتجاهل حركات الفأرة الصغيرة قرب المركز لتقليل انجراف التصويب غير المرغوب. تتطلب القيم الأعلى حركة أكبر لبدء التصويب.</string>
+    <string name="customization_theme_help" formatted="false">اختر ألوان التطبيق. يتبع خيار النظام سمة الجهاز، بينما تحافظ الخيارات الأخرى على مظهر ثابت.</string>
+    <string name="customization_background_help" formatted="false">اختر صورة أو فيديو لخلفية الشاشة الرئيسية. أعد ضبط التخصيص لاستعادة الخلفية الافتراضية.</string>
+    <string name="customization_cover_size_help" formatted="false">غيّر حجم أغلفة الألعاب في المكتبة. تعرض الأغلفة الأكبر عددًا أقل من الألعاب في كل صف.</string>
+    <string name="customization_font_help" formatted="false">اختر خط التطبيق أو استورد ملف خط TTF أو OTF. يستخدم خيار النظام خط الجهاز.</string>
+    <string name="customization_text_size_help" formatted="false">غيّر حجم النص في التطبيق كله. قد يجعل النص الأكبر بعض التسميات تمتد إلى أسطر أكثر.</string>
+    <string name="settings_customization_drawer_help" formatted="false">اختر مظهر درج التنقل. تُظهر المعاينات كل نمط قبل اختياره.</string>
 </resources>

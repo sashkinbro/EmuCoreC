@@ -1239,17 +1239,22 @@ u64 utils::get_total_memory()
 u64 utils::get_avail_memory()
 {
 #ifdef __linux__
-	if (fs::file meminfo{"/proc/meminfo"})
+	// procfs exposes content despite reporting st_size=0, so read until EOF
+	// instead of using fs::file::to_string(), which sizes its buffer from stat.
+	std::ifstream meminfo{"/proc/meminfo"};
+	std::string line;
+	while (std::getline(meminfo, line))
 	{
-		const std::string data = meminfo.to_string();
-
-		if (const usz pos = data.find("MemAvailable:"); pos != umax)
+		if (line.starts_with("MemAvailable:"))
 		{
 			u64 kb = 0;
-			if (std::sscanf(data.c_str() + pos, "MemAvailable: %llu kB", reinterpret_cast<unsigned long long*>(&kb)) == 1)
+			char unit[3]{};
+			if (std::sscanf(line.c_str(), "MemAvailable: %llu %2s", reinterpret_cast<unsigned long long*>(&kb), unit) == 2 &&
+				std::string_view(unit) == "kB" && kb <= std::numeric_limits<u64>::max() / 1024)
 			{
 				return kb * 1024;
 			}
+			break;
 		}
 	}
 #elif defined(__APPLE__) && TARGET_OS_IPHONE

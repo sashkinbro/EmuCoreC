@@ -106,6 +106,7 @@ fun CustomizationTab(
             title = stringResource(R.string.settings_theme),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(14.dp)
         ) {
+            CustomizationHelpText(stringResource(R.string.customization_theme_help))
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -155,6 +156,7 @@ fun CustomizationTab(
                 selected = settings.backgroundPath != null,
                 onClick = { backgroundPicker.launch(arrayOf("image/*", "video/*")) }
             )
+            CustomizationHelpText(stringResource(R.string.customization_background_help))
         }
 
         SectionCard(
@@ -172,6 +174,7 @@ fun CustomizationTab(
                     CustomizationSettings.MAX_COVER_SIZE_PERCENT,
                 onValueChange = viewModel::updateCoverSizePercent
             )
+            CustomizationHelpText(stringResource(R.string.customization_cover_size_help))
         }
 
         TouchControlStyleSection(
@@ -194,6 +197,7 @@ fun CustomizationTab(
             title = stringResource(R.string.customization_text_and_fonts),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(14.dp)
         ) {
+            CustomizationHelpText(stringResource(R.string.customization_font_help))
             Text(
                 text = stringResource(R.string.customization_app_font),
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
@@ -242,6 +246,7 @@ fun CustomizationTab(
                     CustomizationSettings.MAX_TEXT_SIZE_PERCENT,
                 onValueChange = viewModel::updateTextSizePercent
             )
+            CustomizationHelpText(stringResource(R.string.customization_text_size_help))
         }
 
         SectionCard(
@@ -279,6 +284,15 @@ fun CustomizationTab(
             }
         )
     }
+}
+
+@Composable
+private fun CustomizationHelpText(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
 }
 
 @Composable

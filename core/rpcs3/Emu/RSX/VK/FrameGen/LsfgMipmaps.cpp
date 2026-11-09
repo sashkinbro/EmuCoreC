@@ -64,11 +64,14 @@ LsfgMipmaps::LsfgMipmaps(const Device& device, MemoryAllocator& memory_allocator
         out_images[i] = LsfgImage(device, memory_allocator, level_extent, LSFG_FLOW_FORMAT);
     }
 
+    if (memory_allocator.GetLastError() != VK_SUCCESS) return;
+
     const std::vector<VkDescriptorSetLayout> layouts(descriptor_sets.size(), pass.SetLayout());
     owned_sets = CreateWrappedDescriptorSets(descriptor_pool, layouts);
 
     const VkSampler sampler = resources.GetSampler();
     const VkBuffer buffer = resources.GetBuffer();
+    if (!buffer) return;
 
     for (size_t i = 0; i < descriptor_sets.size(); ++i) {
         descriptor_sets[i] = owned_sets[i];

@@ -3230,7 +3230,7 @@ std::unique_ptr<VKGSRender::remote_capture_hardware> VKGSRender::remote_capture_
 	allocate.allocationSize = properties.allocationSize;
 	allocate.memoryTypeIndex = static_cast<u32>(std::countr_zero(properties.memoryTypeBits));
 
-	if (vkAllocateMemory(hardware->device, &allocate, nullptr, &hardware->memory) != VK_SUCCESS)
+	if (vk::allocate_device_memory(hardware->device, &allocate, nullptr, &hardware->memory) != VK_SUCCESS)
 	{
 		hardware->memory = VK_NULL_HANDLE;
 		return {};
@@ -3261,7 +3261,7 @@ VKGSRender::remote_capture_hardware::~remote_capture_hardware()
 
 	if (memory)
 	{
-		vkFreeMemory(device, memory, nullptr);
+		vk::free_device_memory(device, memory, nullptr);
 	}
 
 #ifdef __ANDROID__

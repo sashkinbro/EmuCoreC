@@ -75,6 +75,8 @@ LsfgGamma::LsfgGamma(const Device& device, MemoryAllocator& memory_allocator,
     }
     out_image = LsfgImage(device, memory_allocator, extent, LSFG_MOTION_FORMAT);
 
+    if (memory_allocator.GetLastError() != VK_SUCCESS) return;
+
     std::vector<VkDescriptorSetLayout> layouts;
     for (size_t slot = 0; slot < LSFG_GENERATION_SLOTS; ++slot) {
         for (size_t i = 0; i < LSFG_HISTORY_SLOTS; ++i) {
@@ -97,6 +99,7 @@ LsfgGamma::LsfgGamma(const Device& device, MemoryAllocator& memory_allocator,
         Generation& pass = generations[slot];
         const VkBuffer buffer =
             resources.GetBuffer(LsfgSlotTimestamp(slot), previous == nullptr);
+        if (!buffer) return;
 
         for (size_t i = 0; i < LSFG_HISTORY_SLOTS; ++i) {
             pass.first_descriptor_sets[i] = owned_sets[next++];

@@ -107,6 +107,7 @@ LsfgImage::LsfgImage(const Device& device, MemoryAllocator& memory_allocator, Vk
                      VkFormat format_)
     : extent{std::max(1u, extent_.width), std::max(1u, extent_.height)}, format{format_} {
     image = CreateChainImage(memory_allocator, extent, format);
+    if (!image) return;
     view = CreateWrappedImageView(device, image, format);
 }
 
@@ -186,6 +187,7 @@ VkBuffer LsfgResources::GetBuffer(f32 timestamp, bool first_iter, bool first_ite
     }
 
     vk::Buffer buffer = CreateUniformBuffer(*memory_allocator, sizeof(LsfgConstants));
+    if (!buffer) return VK_NULL_HANDLE;
 
     const LsfgConstants constants{
         .input_offset = {0, 0},

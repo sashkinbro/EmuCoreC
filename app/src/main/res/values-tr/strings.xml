@@ -770,8 +770,8 @@
     <string name="core_label_center_horizontally">Yatay Olarak Ortala</string>
     <string name="core_label_center_vertically">Dikey Olarak Ortala</string>
     <string name="core_label_clans_enabled">Klanlar Etkinleştirildi</string>
-    <string name="core_label_clock12">Saat12</string>
-    <string name="core_label_clock24">Saat24</string>
+    <string name="core_label_clock12">12 saat biçimi</string>
+    <string name="core_label_clock24">24 saat biçimi</string>
     <string name="core_label_clocks_scale">Saat ölçeği</string>
     <string name="core_label_compatible_savestate_mode">Uyumlu Kaydetme Modu</string>
     <string name="core_label_connected">Bağlı</string>
@@ -785,7 +785,7 @@
     <string name="core_label_custom_anaglyph_matrices">Özel Anaglif Matrisleri</string>
     <string name="core_label_darkening_effect_strength">Karartma efekti gücü</string>
     <string name="core_label_date_format">Tarih Formatı</string>
-    <string name="core_label_ddmmyyyy">Ddmmyyyy</string>
+    <string name="core_label_ddmmyyyy">Gün–ay–yıl</string>
     <string name="core_label_debug_console_mode">Konsol Modunda Hata Ayıklama</string>
     <string name="core_label_debug_output">Hata ayıklama çıkışı</string>
     <string name="core_label_debug_overlay">Yer paylaşımında hata ayıklama</string>
@@ -900,7 +900,7 @@
     <string name="core_label_matrix_right">Matris Sağ</string>
     <string name="core_label_max_cpu_preempt_count">Maksimum CPU Önleme Sayısı</string>
     <string name="core_label_max_llvm_compile_threads">Maksimum LLVM Derleme Konuları</string>
-    <string name="core_label_max_spurs_threads">Maksimum Spurs Konuları</string>
+    <string name="core_label_max_spurs_threads">En fazla SPURS iş parçacığı</string>
     <string name="core_label_maximum_savestate_files">Maksimum SaveState Dosyaları</string>
     <string name="core_label_maximum_savestate_files_space_mib">Maksimum SaveState Dosya Alanı (MiB)</string>
     <string name="core_label_medium">Orta</string>
@@ -916,7 +916,7 @@
     <string name="core_label_minimal">Asgari</string>
     <string name="core_label_minimum_scalable_dimension">Minimum Ölçeklenebilir Boyut</string>
     <string name="core_label_miscellaneous">Çeşitli</string>
-    <string name="core_label_mmddyyyy">Mmddyyyy</string>
+    <string name="core_label_mmddyyyy">Ay–gün–yıl</string>
     <string name="core_label_mono">Mono</string>
     <string name="core_label_mouse">Fare</string>
     <string name="core_label_mouse_debug_overlay">Fare Hata Ayıklama katmanı</string>
@@ -929,7 +929,7 @@
     <string name="core_label_nearest">En yakın</string>
     <string name="core_label_net">Ağ</string>
     <string name="core_label_none">Yok</string>
-    <string name="core_label_null">Boş</string>
+    <string name="core_label_null">Devre dışı</string>
     <string name="core_label_off">Kapalı</string>
     <string name="core_label_opacity" formatted="false">Opaklık (%)</string>
     <string name="core_label_opengl">OpenGL</string>
@@ -976,7 +976,7 @@
     <string name="core_label_read_color_buffers">Renk Tamponlarını Oku</string>
     <string name="core_label_read_depth_buffer">Derinlik Arabelleğini Oku</string>
     <string name="core_label_real">Gerçek</string>
-    <string name="core_label_real_singstar">Gerçek Şarkıcı Yıldız</string>
+    <string name="core_label_real_singstar">Fiziksel SingStar</string>
     <string name="core_label_recompiler_asmjit">Yeniden derleyici (ASMJIT)</string>
     <string name="core_label_recompiler_llvm">Yeniden derleyici (LLVM)</string>
     <string name="core_label_record_with_overlays">Kaplamalarla Kaydet</string>
@@ -1098,7 +1098,7 @@
     <string name="core_label_write_color_buffers">Renk Tamponlarını Yaz</string>
     <string name="core_label_write_depth_buffer">Derinlik Arabelleği Yaz</string>
     <string name="core_label_xaudio2">XAudio2</string>
-    <string name="core_label_yyyymmdd">Yyyyammdd</string>
+    <string name="core_label_yyyymmdd">Yıl–ay–gün</string>
     <string name="core_help_core_accurate_cache_line_stores" formatted="false">PPU DCBZ komutunu doğru bir şekilde işler.
 Ayrıca Accurate SPU DMA ile birleştirildiğinde SPU PUT önbellek hattı erişimleri atomik olarak işlenecektir.</string>
     <string name="core_help_core_use_accurate_dfma" formatted="false">PPU ve SPU arka uçlarında doğru çift duyarlıklı FMA talimatlarını kullanın.
@@ -1560,7 +1560,7 @@ Bu ayar yalnızca SPU Kod Çözücü Dinamik veya LLVM olarak ayarlandığında 
     <string name="core_label_italian_keyboard">İtalyanca klavye</string>
     <string name="core_label_japanese">Japonca</string>
     <string name="core_label_japanese_keyboard">Japonca klavye</string>
-    <string name="core_label_japanese_keyboard_kana_state">Japonca klavye (Kana eyaleti)</string>
+    <string name="core_label_japanese_keyboard_kana_state">Japonca klavye (Kana modu)</string>
     <string name="core_label_korean">Korece</string>
     <string name="core_label_korean_keyboard">Korece klavye</string>
     <string name="core_label_norwegian">Norveççe</string>
@@ -2069,4 +2069,45 @@ Bu ayar yalnızca SPU Kod Çözücü Dinamik veya LLVM olarak ayarlandığında 
     <string name="core_help_video_vr_height" formatted="false">Yüksek değerler iki görüntüyü yukarı, düşük değerler aşağı taşır; böylece gözlüğün lensleriyle hizalanırlar.</string>
     <string name="core_label_show_spu_compilation_hint" formatted="false">SPU derleme ipucunu göster</string>
     <string name="core_help_miscellaneous_show_spu_compilation_hint" formatted="false">Yerel kaplamayı kullanarak \'SPU modüllerinin derlenmesi\' ipucunu gösterir.</string>
+    <string name="settings_show_quick_bar">Hızlı işlem çubuğunu göster</string>
+    <string name="settings_help_show_quick_bar">Hızlı işlem çubuğunu göstermek için oyun ekranına iki kez dokunun. Çubuk gizliyken bile oyun menüsünü açmak için Geri düğmesini kullanın.</string>
+    <string name="emulation_portal_description">Desteklenen oyunlar için sanal figürleri yönetin. Bir yuvaya figür dosyası aktarın veya karakter listesinden yeni bir figür oluşturun. Bağlı USB portalları önceliklidir.</string>
+    <string name="settings_mouse_button_left">Sol tıklama</string>
+    <string name="settings_mouse_button_right">Sağ tıklama</string>
+    <string name="settings_mouse_button_middle">Orta tıklama</string>
+    <string name="settings_mouse_button_back">Geri düğmesi</string>
+    <string name="settings_mouse_button_forward">İleri düğmesi</string>
+    <string name="settings_mouse_button_number">Fare düğmesi %1$d</string>
+    <string name="settings_keyboard_key_enter">Enter</string>
+    <string name="settings_keyboard_key_backspace">Geri silme</string>
+    <string name="settings_keyboard_key_space">Boşluk</string>
+    <string name="settings_keyboard_key_tab">Sekme</string>
+    <string name="settings_keyboard_key_escape">Çıkış</string>
+    <string name="settings_keyboard_key_shift">Üst karakter</string>
+    <string name="settings_keyboard_key_control">Kontrol</string>
+    <string name="settings_keyboard_key_alt">Alt</string>
+    <string name="settings_keyboard_key_meta">Meta</string>
+    <string name="settings_keyboard_key_home">Başa git</string>
+    <string name="settings_keyboard_key_end">Sona git</string>
+    <string name="settings_keyboard_key_page_up">Sayfa yukarı</string>
+    <string name="settings_keyboard_key_page_down">Sayfa aşağı</string>
+    <string name="settings_keyboard_key_insert">Ekle</string>
+    <string name="settings_keyboard_key_delete">Sil</string>
+    <string name="settings_keyboard_key_caps_lock">Büyük harf kilidi</string>
+    <string name="settings_keyboard_key_num_lock">Sayı kilidi</string>
+    <string name="settings_keyboard_key_scroll_lock">Kaydırma kilidi</string>
+    <string name="settings_keyboard_key_pause">Duraklat</string>
+    <string name="settings_keyboard_key_print_screen">Ekran görüntüsü</string>
+    <string name="settings_keyboard_key_number">Tuş %1$d</string>
+    <string name="settings_keyboard_mouse_milliseconds_value">%1$d ms</string>
+    <string name="settings_mouse_wheel_desc" formatted="false">Yukarı ve aşağı kaydırırken tetiklenecek kontrolcü eylemlerini seçin. Tekerleği atamasız bırakmak için bunu kapatın.</string>
+    <string name="settings_mouse_wheel_pulse_desc" formatted="false">Her tekerlek adımının atanan kontrolcü eylemini basılı tutma süresi. Oyun kısa kaydırma girişlerini algılamıyorsa artırın.</string>
+    <string name="settings_mouse_vertical_sensitivity_desc" formatted="false">Dikey nişan almayı yataya göre ayarlayın. %100 değerinde her iki eksenin hassasiyeti aynıdır.</string>
+    <string name="settings_mouse_deadzone_desc" formatted="false">İstenmeyen nişan kaymasını azaltmak için merkeze yakın küçük fare hareketlerini yok sayar. Yüksek değerler nişan almaya başlamak için daha fazla hareket gerektirir.</string>
+    <string name="customization_theme_help" formatted="false">Uygulama renklerini seçin. Sistem, cihaz temasını izler; diğer seçenekler sabit bir görünüm sağlar.</string>
+    <string name="customization_background_help" formatted="false">Ana ekran arka planı için bir resim veya video seçin. Varsayılan arka plana dönmek için kişiselleştirmeyi sıfırlayın.</string>
+    <string name="customization_cover_size_help" formatted="false">Kitaplıktaki oyun kapaklarının boyutunu değiştirin. Büyük kapaklar her satırda daha az oyun gösterir.</string>
+    <string name="customization_font_help" formatted="false">Uygulama yazı tipini seçin veya bir TTF ya da OTF dosyası içe aktarın. Sistem, cihaz yazı tipini kullanır.</string>
+    <string name="customization_text_size_help" formatted="false">Uygulamadaki tüm metinleri ölçekleyin. Büyük metinler bazı etiketlerin daha fazla satıra yayılmasına neden olabilir.</string>
+    <string name="settings_customization_drawer_help" formatted="false">Gezinme çekmecesinin görünümünü seçin. Önizlemeler, seçmeden önce her stili gösterir.</string>
 </resources>

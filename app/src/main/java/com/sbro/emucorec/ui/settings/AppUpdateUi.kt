@@ -42,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -54,7 +55,7 @@ import com.sbro.emucorec.ui.theme.ScreenHorizontalPadding
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.util.Locale
+import java.time.format.FormatStyle
 import com.sbro.emucorec.ui.theme.neon.neonShape
 import com.sbro.emucorec.ui.theme.neon.neonButtonShape
 
@@ -128,7 +129,7 @@ fun AppUpdateTab(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(Icons.Rounded.ErrorOutline, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                    Text(state.historyErrorMessage, color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.achievements_assist_error), color = MaterialTheme.colorScheme.error)
                 }
                 state.releaseHistory.isEmpty() -> Text(
                     stringResource(R.string.settings_updates_history_empty),
@@ -413,7 +414,9 @@ private fun UpdateDialogSection(
     }
 }
 
+@Composable
 private fun formatBytes(bytes: Long?): String {
+    val locale = LocalConfiguration.current.locales[0]
     bytes ?: return "-"
     if (bytes < 1024L) return "$bytes B"
     val units = listOf("KB", "MB", "GB")
@@ -423,21 +426,24 @@ private fun formatBytes(bytes: Long?): String {
         value /= 1024.0
         unitIndex++
     }
-    return String.format(Locale.US, "%.1f %s", value, units[unitIndex])
+    return String.format(locale, "%.1f %s", value, units[unitIndex])
 }
 
+@Composable
 private fun releaseHistorySummary(release: AppUpdateRelease): String = listOfNotNull(
     release.tagName.takeIf(String::isNotBlank),
     formatReleaseDate(release.publishedAt).takeIf { it != "-" },
     formatBytes(release.parallelApkSizeBytes).takeIf { release.hasParallelApk && it != "-" }
 ).joinToString(" • ")
 
+@Composable
 private fun formatReleaseDate(value: String): String {
+    val locale = LocalConfiguration.current.locales[0]
     if (value.isBlank()) return "-"
     return runCatching {
         Instant.parse(value)
             .atZone(ZoneId.systemDefault())
-            .format(DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.getDefault()))
+            .format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale))
     }.getOrDefault(value.substringBefore('T').ifBlank { "-" })
 }
 

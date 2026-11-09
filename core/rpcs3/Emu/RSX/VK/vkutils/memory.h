@@ -16,6 +16,11 @@
 
 namespace vk
 {
+	// New backing allocations share the Android pool even when they bypass VMA.
+	VKAPI_ATTR VkResult VKAPI_CALL allocate_device_memory(VkDevice device, const VkMemoryAllocateInfo* info,
+		const VkAllocationCallbacks* callbacks, VkDeviceMemory* memory);
+	VKAPI_ATTR void VKAPI_CALL free_device_memory(VkDevice device, VkDeviceMemory memory, const VkAllocationCallbacks* callbacks);
+
 	namespace vmm_allocation_pool_ // Workaround for clang < 13 not supporting enum imports
 	{
 		enum vmm_allocation_pool
@@ -86,7 +91,7 @@ namespace vk
 		using mem_handle_t = void*;
 
 		mem_allocator_base(const vk::render_device& dev, VkPhysicalDevice pdev);
-		virtual ~mem_allocator_base() = default;
+		virtual ~mem_allocator_base();
 
 		virtual void destroy() = 0;
 

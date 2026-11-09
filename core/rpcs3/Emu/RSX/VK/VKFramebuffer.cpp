@@ -1,6 +1,7 @@
 #include "stdafx.h"
 
 #include "VKFramebuffer.h"
+#include "VKResourceManager.h"
 #include "vkutils/image.h"
 #include "vkutils/image_helpers.h"
 
@@ -118,7 +119,7 @@ namespace vk
 		{
 			It->second.erase(
 #if defined(__APPLE__) || defined(__ANDROID__)
-				std::remove_if(It->second.begin(), It->second.end(), [&](const auto& fbo)
+				std::remove_if(It->second.begin(), It->second.end(), [&](auto& fbo)
 				{
 					if (!criteria(fbo))
 					{
@@ -133,6 +134,10 @@ namespace vk
 						return false;
 					}
 
+					// Recording references end on the CPU, before the submitted graphics
+					// work completes. Keep the framebuffer and its views through the
+					// current event, just like the images and buffers used by that work.
+					get_resource_manager()->dispose(fbo);
 					return true;
 				}),
 #else

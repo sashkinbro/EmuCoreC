@@ -289,6 +289,7 @@ namespace Vulkan
 
 	vk::Image MemoryAllocator::CreateImage(const VkImageCreateInfo& ci) const
 	{
+		if (m_last_error != VK_SUCCESS) return {};
 		// Same idiom as GSTextureVK: value-init then assign, rather than a positional aggregate
 		// whose meaning silently changes if VMA reorders the struct.
 		VmaAllocationCreateInfo aci = {};
@@ -302,6 +303,7 @@ namespace Vulkan
 		if (res != VK_SUCCESS)
 		{
 			framegen_log.error("LSFG: vmaCreateImage() failed: %d", static_cast<int>(res));
+			m_last_error = res;
 			return {};
 		}
 		return vk::Image(m_allocator, image, allocation);
@@ -309,6 +311,7 @@ namespace Vulkan
 
 	vk::Buffer MemoryAllocator::CreateBuffer(const VkBufferCreateInfo& ci, MemoryUsage usage) const
 	{
+		if (m_last_error != VK_SUCCESS) return {};
 		// Both usages are CPU-visible and touched every frame, so they are persistently mapped
 		// (VMA_ALLOCATION_CREATE_MAPPED_BIT) — the uniform is rewritten per generated frame and
 		// must not pay a map/unmap each time. Using the older CPU_TO_GPU / GPU_TO_CPU spelling
@@ -324,6 +327,7 @@ namespace Vulkan
 		if (res != VK_SUCCESS)
 		{
 			framegen_log.error("LSFG: vmaCreateBuffer() failed: %d", static_cast<int>(res));
+			m_last_error = res;
 			return {};
 		}
 		return vk::Buffer(m_allocator, buffer, allocation, ai.pMappedData, ci.size);

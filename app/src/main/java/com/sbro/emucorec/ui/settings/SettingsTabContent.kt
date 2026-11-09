@@ -166,6 +166,13 @@ private fun GeneralTab(
             keepScreenOn = uiState.keepScreenOn,
             onCheckedChange = viewModel::updateKeepScreenOn
         )
+        Toggle(
+            title = stringResource(R.string.settings_show_quick_bar),
+            description = stringResource(R.string.settings_help_show_quick_bar),
+            checked = uiState.showEmulationQuickBar,
+            onCheckedChange = viewModel::updateShowEmulationQuickBar,
+            onResetDefault = { viewModel.updateShowEmulationQuickBar(false) }
+        )
     }
 
 }
@@ -784,15 +791,13 @@ private fun StorageMigrationDialog(
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                     color = if (hasError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
                 )
-                Text(
-                    text = if (hasError) {
-                        state.errorMessage.orEmpty()
-                    } else {
-                        stringResource(R.string.settings_storage_migration_body)
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                if (!hasError) {
+                    Text(
+                        text = stringResource(R.string.settings_storage_migration_body),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 LinearProgressIndicator(
                     progress = { animatedProgress },
                     modifier = Modifier.fillMaxWidth(),

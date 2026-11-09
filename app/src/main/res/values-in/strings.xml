@@ -784,7 +784,7 @@
     <string name="core_label_custom_anaglyph_matrices">Matriks anaglif khusus</string>
     <string name="core_label_darkening_effect_strength">Intensitas efek penggelapan</string>
     <string name="core_label_date_format">Format Tanggal</string>
-    <string name="core_label_ddmmyyyy">HHBBTTTT</string>
+    <string name="core_label_ddmmyyyy">Hari–bulan–tahun</string>
     <string name="core_label_debug_console_mode">Mode konsol debug</string>
     <string name="core_label_debug_output">Keluaran debug</string>
     <string name="core_label_debug_overlay">Overlay debug</string>
@@ -872,7 +872,7 @@
     <string name="core_label_initialize_directories">Inisialisasi Direktori</string>
     <string name="core_label_input_output">Input/output</string>
     <string name="core_label_inspection_mode_savestates">State dalam mode inspeksi</string>
-    <string name="core_label_interlaced">Interlaced</string>
+    <string name="core_label_interlaced">Pindai berselang</string>
     <string name="core_label_internet_enabled">Internet diaktifkan</string>
     <string name="core_label_interpreter_dynamic">Interpreter (dinamis)</string>
     <string name="core_label_interpreter_static">Interpreter (statis)</string>
@@ -899,7 +899,7 @@
     <string name="core_label_matrix_right">Matriks kanan</string>
     <string name="core_label_max_cpu_preempt_count">Jumlah preempsi CPU maksimum</string>
     <string name="core_label_max_llvm_compile_threads">Utas kompilasi LLVM maksimum</string>
-    <string name="core_label_max_spurs_threads">Utas SPURS maksimum</string>
+    <string name="core_label_max_spurs_threads">Jumlah maksimum utas SPURS</string>
     <string name="core_label_maximum_savestate_files">Jumlah berkas state maksimum</string>
     <string name="core_label_maximum_savestate_files_space_mib">Ruang maksimum berkas state (MiB)</string>
     <string name="core_label_medium">Sedang</string>
@@ -915,7 +915,7 @@
     <string name="core_label_minimal">Minimal</string>
     <string name="core_label_minimum_scalable_dimension">Dimensi minimum yang dapat diskalakan</string>
     <string name="core_label_miscellaneous">Lainnya</string>
-    <string name="core_label_mmddyyyy">BBHHTTTT</string>
+    <string name="core_label_mmddyyyy">Bulan–hari–tahun</string>
     <string name="core_label_mono">Mono</string>
     <string name="core_label_mouse">Mouse</string>
     <string name="core_label_mouse_debug_overlay">Overlay debug mouse</string>
@@ -928,7 +928,7 @@
     <string name="core_label_nearest">Terdekat</string>
     <string name="core_label_net">Jaringan</string>
     <string name="core_label_none">Tidak ada</string>
-    <string name="core_label_null">Tidak ada</string>
+    <string name="core_label_null">Dinonaktifkan</string>
     <string name="core_label_off">Nonaktif</string>
     <string name="core_label_opacity" formatted="false">Opasitas (%)</string>
     <string name="core_label_opengl">OpenGL</string>
@@ -1097,7 +1097,7 @@
     <string name="core_label_write_color_buffers">Tulis buffer warna</string>
     <string name="core_label_write_depth_buffer">Tulis buffer kedalaman</string>
     <string name="core_label_xaudio2">XAudio2</string>
-    <string name="core_label_yyyymmdd">TTTTBBHH</string>
+    <string name="core_label_yyyymmdd">Tahun–bulan–hari</string>
     <string name="core_help_core_accurate_cache_line_stores" formatted="false">Memproses instruksi PPU DCBZ secara akurat. Jika digabungkan dengan DMA SPU yang akurat, akses SPU PUT ke baris cache juga diproses secara atomik.</string>
     <string name="core_help_core_use_accurate_dfma" formatted="false">Gunakan instruksi FMA presisi ganda yang akurat di backend PPU dan SPU. Meskipun menonaktifkannya mungkin memberikan peningkatan kinerja yang layak jika CPU Anda tidak mendukung FMA, hal ini juga dapat menimbulkan bug halus yang tidak akan terjadi jika tidak. Anda tidak boleh menonaktifkannya jika CPU Anda mendukung FMA.</string>
     <string name="core_help_core_accurate_ppu_128_byte_reservation_op_max_length" formatted="false">Saat aktif, operasi atomik PPU bekerja pada seluruh data baris cache; saat nonaktif, hanya pada satu blok memori 64 bit. Nilai numerik menentukan apakah versi akurat digunakan berdasarkan panjang operasi atomik.</string>
@@ -1826,4 +1826,45 @@
     <string name="core_help_video_vr_height" formatted="false">Nilai lebih tinggi menaikkan kedua gambar, nilai lebih rendah menurunkannya, agar sejajar dengan lensa viewer.</string>
     <string name="core_label_show_spu_compilation_hint" formatted="false">Tampilkan petunjuk kompilasi SPU</string>
     <string name="core_help_miscellaneous_show_spu_compilation_hint" formatted="false">Menampilkan petunjuk \'Mengkompilasi modul SPU\' menggunakan overlay asli.</string>
+    <string name="settings_show_quick_bar">Tampilkan bilah tindakan cepat</string>
+    <string name="settings_help_show_quick_bar">Ketuk layar game dua kali untuk menampilkan bilah tindakan cepat. Gunakan Kembali untuk membuka menu game meskipun bilah disembunyikan.</string>
+    <string name="emulation_portal_description">Kelola figur virtual untuk game yang didukung. Impor berkas figur ke slot atau buat figur dari daftar karakter. Portal USB yang terhubung diprioritaskan.</string>
+    <string name="settings_mouse_button_left">Klik kiri</string>
+    <string name="settings_mouse_button_right">Klik kanan</string>
+    <string name="settings_mouse_button_middle">Klik tengah</string>
+    <string name="settings_mouse_button_back">Tombol Kembali</string>
+    <string name="settings_mouse_button_forward">Tombol Maju</string>
+    <string name="settings_mouse_button_number">Tombol mouse %1$d</string>
+    <string name="settings_keyboard_key_enter">Enter</string>
+    <string name="settings_keyboard_key_backspace">Hapus mundur</string>
+    <string name="settings_keyboard_key_space">Spasi</string>
+    <string name="settings_keyboard_key_tab">Tab</string>
+    <string name="settings_keyboard_key_escape">Escape</string>
+    <string name="settings_keyboard_key_shift">Shift</string>
+    <string name="settings_keyboard_key_control">Kontrol</string>
+    <string name="settings_keyboard_key_alt">Alt</string>
+    <string name="settings_keyboard_key_meta">Meta</string>
+    <string name="settings_keyboard_key_home">Awal</string>
+    <string name="settings_keyboard_key_end">Akhir</string>
+    <string name="settings_keyboard_key_page_up">Halaman naik</string>
+    <string name="settings_keyboard_key_page_down">Halaman turun</string>
+    <string name="settings_keyboard_key_insert">Sisipkan</string>
+    <string name="settings_keyboard_key_delete">Hapus</string>
+    <string name="settings_keyboard_key_caps_lock">Kunci huruf besar</string>
+    <string name="settings_keyboard_key_num_lock">Kunci angka</string>
+    <string name="settings_keyboard_key_scroll_lock">Kunci gulir</string>
+    <string name="settings_keyboard_key_pause">Jeda</string>
+    <string name="settings_keyboard_key_print_screen">Cetak layar</string>
+    <string name="settings_keyboard_key_number">Tombol %1$d</string>
+    <string name="settings_keyboard_mouse_milliseconds_value">%1$d md</string>
+    <string name="settings_mouse_wheel_desc" formatted="false">Pilih tindakan pengontrol yang dipicu saat menggulir ke atas dan ke bawah. Nonaktifkan untuk membiarkan roda tanpa pemetaan.</string>
+    <string name="settings_mouse_wheel_pulse_desc" formatted="false">Lama setiap langkah roda menahan tindakan pengontrol yang dipetakan. Tingkatkan jika game melewatkan input gulir singkat.</string>
+    <string name="settings_mouse_vertical_sensitivity_desc" formatted="false">Sesuaikan bidikan vertikal terhadap bidikan horizontal. Pada 100%, kedua sumbu memiliki sensitivitas yang sama.</string>
+    <string name="settings_mouse_deadzone_desc" formatted="false">Mengabaikan gerakan kecil mouse di dekat tengah untuk mengurangi pergeseran bidikan yang tidak diinginkan. Nilai lebih tinggi memerlukan gerakan lebih besar sebelum mulai membidik.</string>
+    <string name="customization_theme_help" formatted="false">Pilih warna aplikasi. Sistem mengikuti tema perangkat; opsi lainnya mempertahankan tampilan tetap.</string>
+    <string name="customization_background_help" formatted="false">Pilih gambar atau video untuk latar belakang layar utama. Atur ulang penyesuaian untuk memulihkan latar belakang bawaan.</string>
+    <string name="customization_cover_size_help" formatted="false">Ubah ukuran sampul game di pustaka. Sampul lebih besar menampilkan lebih sedikit game per baris.</string>
+    <string name="customization_font_help" formatted="false">Pilih jenis huruf aplikasi atau impor berkas font TTF atau OTF. Sistem menggunakan font perangkat.</string>
+    <string name="customization_text_size_help" formatted="false">Sesuaikan ukuran teks di seluruh aplikasi. Teks lebih besar dapat membuat beberapa label terbagi ke lebih banyak baris.</string>
+    <string name="settings_customization_drawer_help" formatted="false">Pilih tampilan panel navigasi. Pratinjau menampilkan setiap gaya sebelum dipilih.</string>
 </resources>

@@ -784,7 +784,7 @@
     <string name="core_label_custom_anaglyph_matrices">カスタム アナグリフ マトリックス</string>
     <string name="core_label_darkening_effect_strength">暗くする効果の強さ</string>
     <string name="core_label_date_format">日付形式</string>
-    <string name="core_label_ddmmyyyy">日月年（DDMMYYYY）</string>
+    <string name="core_label_ddmmyyyy">日–月–年</string>
     <string name="core_label_debug_console_mode">デバッグコンソールモード</string>
     <string name="core_label_debug_output">デバッグ出力</string>
     <string name="core_label_debug_overlay">デバッグオーバーレイ</string>
@@ -915,7 +915,7 @@
     <string name="core_label_minimal">ミニマル</string>
     <string name="core_label_minimum_scalable_dimension">スケーリングする最小寸法</string>
     <string name="core_label_miscellaneous">その他</string>
-    <string name="core_label_mmddyyyy">月日年（MMDDYYYY）</string>
+    <string name="core_label_mmddyyyy">月–日–年</string>
     <string name="core_label_mono">モノラル</string>
     <string name="core_label_mouse">マウス</string>
     <string name="core_label_mouse_debug_overlay">マウスデバッグオーバーレイ</string>
@@ -928,7 +928,7 @@
     <string name="core_label_nearest">ニアレスト</string>
     <string name="core_label_net">ネットワーク</string>
     <string name="core_label_none">なし</string>
-    <string name="core_label_null">なし</string>
+    <string name="core_label_null">無効</string>
     <string name="core_label_off">オフ</string>
     <string name="core_label_opacity" formatted="false">不透明度 (%)</string>
     <string name="core_label_opengl">OpenGL</string>
@@ -1097,7 +1097,7 @@
     <string name="core_label_write_color_buffers">カラーバッファの書き込み</string>
     <string name="core_label_write_depth_buffer">深度バッファに書き込む</string>
     <string name="core_label_xaudio2">XAudio2</string>
-    <string name="core_label_yyyymmdd">年月日（YYYYMMDD）</string>
+    <string name="core_label_yyyymmdd">年–月–日</string>
     <string name="core_help_core_accurate_cache_line_stores" formatted="false">PPUのDCBZ命令を正確に処理します。\n「高精度SPU DMA」と併用すると、SPU PUTによるキャッシュラインへのアクセスもアトミックに処理されます。</string>
     <string name="core_help_core_use_accurate_dfma" formatted="false">PPUおよびSPUバックエンドで、正確な倍精度FMA命令を使用します。\nFMAに非対応のCPUでは無効にすると性能が向上する場合がありますが、通常は発生しない微妙な不具合を引き起こすことがあります。\nFMA対応のCPUでは無効にしないでください。</string>
     <string name="core_help_core_accurate_ppu_128_byte_reservation_op_max_length" formatted="false">有効にすると、PPUのアトミック操作をキャッシュライン全体に対して行います。無効の場合は64ビットのメモリブロック1個に対して行います。\n数値を指定すると、アトミック操作の長さに応じて高精度処理を使用するかどうかが決まります。</string>
@@ -1926,4 +1926,45 @@ OpenGL を使用する場合、これは必要ありません。</string>
     <string name="core_help_video_vr_height" formatted="false">値を上げると両方の映像が上に、下げると下に移動します。ビューアーのレンズに合わせて調整します。</string>
     <string name="core_label_show_spu_compilation_hint" formatted="false">SPU コンパイルのヒントを表示する</string>
     <string name="core_help_miscellaneous_show_spu_compilation_hint" formatted="false">ネイティブオーバーレイに「SPUモジュールをコンパイル中」の案内を表示します。</string>
+    <string name="settings_show_quick_bar">クイックアクションバーを表示</string>
+    <string name="settings_help_show_quick_bar">ゲーム画面をダブルタップするとクイックアクションバーを表示します。バーが非表示でも、戻る操作でゲームメニューを開けます。</string>
+    <string name="emulation_portal_description">対応ゲームの仮想フィギュアを管理します。フィギュアファイルをスロットに読み込むか、キャラクター一覧から作成できます。接続されたUSBポータルが優先されます。</string>
+    <string name="settings_mouse_button_left">左クリック</string>
+    <string name="settings_mouse_button_right">右クリック</string>
+    <string name="settings_mouse_button_middle">中クリック</string>
+    <string name="settings_mouse_button_back">戻るボタン</string>
+    <string name="settings_mouse_button_forward">進むボタン</string>
+    <string name="settings_mouse_button_number">マウスボタン %1$d</string>
+    <string name="settings_keyboard_key_enter">エンター</string>
+    <string name="settings_keyboard_key_backspace">バックスペース</string>
+    <string name="settings_keyboard_key_space">スペース</string>
+    <string name="settings_keyboard_key_tab">タブ</string>
+    <string name="settings_keyboard_key_escape">エスケープ</string>
+    <string name="settings_keyboard_key_shift">シフト</string>
+    <string name="settings_keyboard_key_control">コントロール</string>
+    <string name="settings_keyboard_key_alt">Alt</string>
+    <string name="settings_keyboard_key_meta">メタ</string>
+    <string name="settings_keyboard_key_home">ホーム</string>
+    <string name="settings_keyboard_key_end">エンド</string>
+    <string name="settings_keyboard_key_page_up">ページアップ</string>
+    <string name="settings_keyboard_key_page_down">ページダウン</string>
+    <string name="settings_keyboard_key_insert">挿入</string>
+    <string name="settings_keyboard_key_delete">削除</string>
+    <string name="settings_keyboard_key_caps_lock">大文字ロック</string>
+    <string name="settings_keyboard_key_num_lock">数字ロック</string>
+    <string name="settings_keyboard_key_scroll_lock">スクロールロック</string>
+    <string name="settings_keyboard_key_pause">一時停止</string>
+    <string name="settings_keyboard_key_print_screen">画面印刷</string>
+    <string name="settings_keyboard_key_number">キー %1$d</string>
+    <string name="settings_keyboard_mouse_milliseconds_value">%1$d ミリ秒</string>
+    <string name="settings_mouse_wheel_desc" formatted="false">上下にスクロールしたときに実行するコントローラー操作を選びます。オフにするとホイールへの割り当てを解除します。</string>
+    <string name="settings_mouse_wheel_pulse_desc" formatted="false">ホイールを1段回すごとに、割り当てたコントローラー操作を押し続ける時間です。短いスクロール入力をゲームが認識しない場合は増やしてください。</string>
+    <string name="settings_mouse_vertical_sensitivity_desc" formatted="false">水平方向に対する垂直方向の照準感度を調整します。100% では両軸の感度が同じになります。</string>
+    <string name="settings_mouse_deadzone_desc" formatted="false">中央付近の小さなマウス移動を無視して、照準の意図しないずれを抑えます。値を上げると、照準が動き始めるまでに必要な移動量が増えます。</string>
+    <string name="customization_theme_help" formatted="false">アプリの配色を選びます。「システム」は端末のテーマに従い、その他の選択肢は外観を固定します。</string>
+    <string name="customization_background_help" formatted="false">ホーム画面の背景に使う画像や動画を選びます。カスタマイズをリセットすると標準の背景に戻ります。</string>
+    <string name="customization_cover_size_help" formatted="false">ライブラリのゲームカバーの大きさを変更します。カバーを大きくすると、1行に表示されるゲーム数が減ります。</string>
+    <string name="customization_font_help" formatted="false">アプリの書体を選ぶか、TTF または OTF のフォントファイルを読み込みます。「システム」は端末のフォントを使います。</string>
+    <string name="customization_text_size_help" formatted="false">アプリ全体の文字サイズを調整します。文字を大きくすると、一部のラベルの行数が増える場合があります。</string>
+    <string name="settings_customization_drawer_help" formatted="false">ナビゲーションドロワーの外観を選びます。選択前に各スタイルをプレビューで確認できます。</string>
 </resources>

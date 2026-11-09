@@ -774,8 +774,8 @@
     <string name="core_label_center_horizontally">По центру по горизонталі</string>
     <string name="core_label_center_vertically">По центру по вертикалі</string>
     <string name="core_label_clans_enabled">Клани ввімкнено</string>
-    <string name="core_label_clock12">Годинник12</string>
-    <string name="core_label_clock24">Годинник24</string>
+    <string name="core_label_clock12">12-годинний формат</string>
+    <string name="core_label_clock24">24-годинний формат</string>
     <string name="core_label_clocks_scale">Шкала годинника</string>
     <string name="core_label_compatible_savestate_mode">Сумісний режим Savestate</string>
     <string name="core_label_connected">Підключено</string>
@@ -789,7 +789,7 @@
     <string name="core_label_custom_anaglyph_matrices">Спеціальні анагліфні матриці</string>
     <string name="core_label_darkening_effect_strength">Сила ефекту затемнення</string>
     <string name="core_label_date_format">Формат дати</string>
-    <string name="core_label_ddmmyyyy">Ддмміррр</string>
+    <string name="core_label_ddmmyyyy">День–місяць–рік</string>
     <string name="core_label_debug_console_mode">Режим консолі налагодження</string>
     <string name="core_label_debug_output">Вихід налагодження</string>
     <string name="core_label_debug_overlay">Налагодження накладання</string>
@@ -920,7 +920,7 @@
     <string name="core_label_minimal">Мінімальний</string>
     <string name="core_label_minimum_scalable_dimension">Мінімальний масштабований розмір</string>
     <string name="core_label_miscellaneous">Різне</string>
-    <string name="core_label_mmddyyyy">Mmddyyyy</string>
+    <string name="core_label_mmddyyyy">Місяць–день–рік</string>
     <string name="core_label_mono">Моно</string>
     <string name="core_label_mouse">Миша</string>
     <string name="core_label_mouse_debug_overlay">Накладення налагодження миші</string>
@@ -931,9 +931,9 @@
     <string name="core_label_multithreaded_rsx">Багатопотоковий RSX</string>
     <string name="core_label_music_handler">Обробник музики</string>
     <string name="core_label_nearest">Найближчий</string>
-    <string name="core_label_net">Чистий</string>
+    <string name="core_label_net">Мережа</string>
     <string name="core_label_none">Жодного</string>
-    <string name="core_label_null">Null</string>
+    <string name="core_label_null">Вимкнено</string>
     <string name="core_label_off">Вимкнено</string>
     <string name="core_label_opacity" formatted="false">Непрозорість (%)</string>
     <string name="core_label_opengl">OpenGL</string>
@@ -980,7 +980,7 @@
     <string name="core_label_read_color_buffers">Читайте буфери кольорів</string>
     <string name="core_label_read_depth_buffer">Буфер глибини читання</string>
     <string name="core_label_real">Справжня</string>
-    <string name="core_label_real_singstar">Справжня SingStar</string>
+    <string name="core_label_real_singstar">Фізичний SingStar</string>
     <string name="core_label_recompiler_asmjit">Рекомпілятор (ASMJIT)</string>
     <string name="core_label_recompiler_llvm">Рекомпілятор (LLVM)</string>
     <string name="core_label_record_with_overlays">Запис із накладаннями</string>
@@ -1102,7 +1102,7 @@
     <string name="core_label_write_color_buffers">Напишіть буфери кольорів</string>
     <string name="core_label_write_depth_buffer">Буфер глибини запису</string>
     <string name="core_label_xaudio2">XAudio2</string>
-    <string name="core_label_yyyymmdd">Ррррммдд</string>
+    <string name="core_label_yyyymmdd">Рік–місяць–день</string>
     <string name="core_help_core_accurate_cache_line_stores" formatted="false">Акуратно опрацьовує інструкцію ППУ ДКБЗ.
 Крім того, у поєднанні з Accurate SPU DMA доступи до лінії кешу SPU PUT оброблятимуться атомарно.</string>
     <string name="core_help_core_use_accurate_dfma" formatted="false">Використовуйте точні інструкції FMA подвійної точності в PPU та SPU.
@@ -1564,7 +1564,7 @@ Over-Under ближче до рідного стереовиходу, але п�
     <string name="core_label_italian_keyboard">Італійська клавіатура</string>
     <string name="core_label_japanese">Японський</string>
     <string name="core_label_japanese_keyboard">Японська клавіатура</string>
-    <string name="core_label_japanese_keyboard_kana_state">Японська клавіатура (штат Кана)</string>
+    <string name="core_label_japanese_keyboard_kana_state">Японська клавіатура (режим кана)</string>
     <string name="core_label_korean">Корейська</string>
     <string name="core_label_korean_keyboard">Корейська клавіатура</string>
     <string name="core_label_norwegian">Норвезька</string>
@@ -2074,4 +2074,45 @@ Over-Under ближче до рідного стереовиходу, але п�
     <string name="core_help_video_vr_height" formatted="false">Більші значення піднімають обидва зображення, менші опускають їх, щоб вирівняти з лінзами окулярів.</string>
     <string name="core_label_show_spu_compilation_hint" formatted="false">Показати підказку щодо компіляції SPU</string>
     <string name="core_help_miscellaneous_show_spu_compilation_hint" formatted="false">Показує підказку «Компіляція модулів SPU» за допомогою власного накладання.</string>
+    <string name="settings_show_quick_bar">Показувати панель швидких дій</string>
+    <string name="settings_help_show_quick_bar">Двічі торкніться екрана гри, щоб показати панель швидких дій. Кнопка «Назад» відкриває ігрове меню, навіть коли панель прихована.</string>
+    <string name="emulation_portal_description">Керуйте віртуальними фігурками для підтримуваних ігор. Імпортуйте файл фігурки в слот або створіть її зі списку персонажів. Підключені USB-портали мають пріоритет.</string>
+    <string name="settings_mouse_button_left">Лівий клік</string>
+    <string name="settings_mouse_button_right">Правий клік</string>
+    <string name="settings_mouse_button_middle">Середній клік</string>
+    <string name="settings_mouse_button_back">Кнопка назад</string>
+    <string name="settings_mouse_button_forward">Кнопка вперед</string>
+    <string name="settings_mouse_button_number">Кнопка миші %1$d</string>
+    <string name="settings_keyboard_key_enter">Ввід</string>
+    <string name="settings_keyboard_key_backspace">Назад на символ</string>
+    <string name="settings_keyboard_key_space">Пробіл</string>
+    <string name="settings_keyboard_key_tab">Табуляція</string>
+    <string name="settings_keyboard_key_escape">Вихід</string>
+    <string name="settings_keyboard_key_shift">Зсув</string>
+    <string name="settings_keyboard_key_control">Керування</string>
+    <string name="settings_keyboard_key_alt">Alt</string>
+    <string name="settings_keyboard_key_meta">Meta</string>
+    <string name="settings_keyboard_key_home">На початок</string>
+    <string name="settings_keyboard_key_end">У кінець</string>
+    <string name="settings_keyboard_key_page_up">Сторінка вгору</string>
+    <string name="settings_keyboard_key_page_down">Сторінка вниз</string>
+    <string name="settings_keyboard_key_insert">Вставка</string>
+    <string name="settings_keyboard_key_delete">Видалення</string>
+    <string name="settings_keyboard_key_caps_lock">Фіксація великих літер</string>
+    <string name="settings_keyboard_key_num_lock">Фіксація цифр</string>
+    <string name="settings_keyboard_key_scroll_lock">Фіксація прокрутки</string>
+    <string name="settings_keyboard_key_pause">Пауза</string>
+    <string name="settings_keyboard_key_print_screen">Знімок екрана</string>
+    <string name="settings_keyboard_key_number">Клавіша %1$d</string>
+    <string name="settings_keyboard_mouse_milliseconds_value">%1$d мс</string>
+    <string name="settings_mouse_wheel_desc" formatted="false">Виберіть дії контролера для прокручування вгору та вниз. Вимкніть цей параметр, щоб не призначати дії колесу.</string>
+    <string name="settings_mouse_wheel_pulse_desc" formatted="false">Тривалість утримання призначеної дії для кожного кроку колеса. Збільште її, якщо гра пропускає короткі сигнали прокручування.</string>
+    <string name="settings_mouse_vertical_sensitivity_desc" formatted="false">Налаштуйте вертикальне прицілювання відносно горизонтального. За 100% чутливість обох осей однакова.</string>
+    <string name="settings_mouse_deadzone_desc" formatted="false">Ігнорує дрібні рухи миші біля центра, щоб зменшити небажаний дрейф прицілу. Вищі значення потребують більшого руху для початку прицілювання.</string>
+    <string name="customization_theme_help" formatted="false">Виберіть кольори застосунку. Системна тема відповідає темі пристрою; інші варіанти зберігають сталий вигляд.</string>
+    <string name="customization_background_help" formatted="false">Виберіть зображення або відео для тла головного екрана. Скиньте персоналізацію, щоб відновити стандартне тло.</string>
+    <string name="customization_cover_size_help" formatted="false">Змінюйте розмір обкладинок ігор у бібліотеці. Більші обкладинки зменшують кількість ігор у рядку.</string>
+    <string name="customization_font_help" formatted="false">Виберіть шрифт застосунку або імпортуйте файл TTF чи OTF. Системний варіант використовує шрифт пристрою.</string>
+    <string name="customization_text_size_help" formatted="false">Змінюйте масштаб тексту в усьому застосунку. Більший текст може переносити деякі написи на кілька рядків.</string>
+    <string name="settings_customization_drawer_help" formatted="false">Виберіть вигляд панелі навігації. Попередній перегляд показує кожен стиль до вибору.</string>
 </resources>

@@ -112,6 +112,12 @@ internal fun DrawerStyleSection(
         contentPadding = PaddingValues(vertical = 14.dp)
     ) {
         Text(
+            text = stringResource(R.string.settings_customization_drawer_help),
+            modifier = Modifier.padding(horizontal = 14.dp),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
             text = stringResource(R.string.settings_customization_drawer_style),
             modifier = Modifier.padding(horizontal = 14.dp),
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)

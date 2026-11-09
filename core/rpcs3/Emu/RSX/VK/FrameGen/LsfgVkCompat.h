@@ -283,8 +283,11 @@ namespace Vulkan
 
 		[[nodiscard]] vk::Image CreateImage(const VkImageCreateInfo& ci) const;
 		[[nodiscard]] vk::Buffer CreateBuffer(const VkBufferCreateInfo& ci, MemoryUsage usage) const;
+		[[nodiscard]] VkResult GetLastError() const { return m_last_error; }
 
 	private:
 		VmaAllocator m_allocator = VK_NULL_HANDLE;
+		// Sticky until this allocator is destroyed; a partial chain cannot be used.
+		mutable VkResult m_last_error = VK_SUCCESS;
 	};
 } // namespace Vulkan

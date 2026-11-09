@@ -42,19 +42,23 @@ LsfgChain::LsfgChain(const Device& device, MemoryAllocator& memory_allocator,
                       DESCRIPTOR_SETS_PER_SLOT * static_cast<u32>(LSFG_GENERATION_SLOTS))} {
     for (auto& image : frames) {
         image = LsfgImage(device, memory_allocator, extent, format);
+        if (memory_allocator.GetLastError() != VK_SUCCESS) return;
     }
 
     mipmaps = LsfgMipmaps(device, memory_allocator, shaders, resources, descriptor_pool, frames,
                           flow_scale);
+    if (memory_allocator.GetLastError() != VK_SUCCESS) return;
 
     alpha_passes = LsfgAlphaPasses(device, shaders);
     for (size_t i = 0; i < LSFG_MIP_LEVELS; ++i) {
         alpha[i] = LsfgAlpha(device, memory_allocator, alpha_passes, resources, descriptor_pool,
                              mipmaps.Output(i));
+        if (memory_allocator.GetLastError() != VK_SUCCESS) return;
     }
 
     beta = LsfgBeta(device, memory_allocator, shaders, resources, descriptor_pool,
                     alpha[0].Outputs());
+    if (memory_allocator.GetLastError() != VK_SUCCESS) return;
 
     for (size_t i = 0; i < LSFG_MIP_LEVELS; ++i) {
         const size_t level = LSFG_MIP_LEVELS - 1 - i;
@@ -62,6 +66,7 @@ LsfgChain::LsfgChain(const Device& device, MemoryAllocator& memory_allocator,
                              alpha[level].Outputs(),
                              beta.Output(std::min(level, LSFG_BETA_OUTPUTS - 1)),
                              i == 0 ? nullptr : &gamma[i - 1].Output());
+        if (memory_allocator.GetLastError() != VK_SUCCESS) return;
 
         if (i < FIRST_DELTA_LEVEL) {
             continue;
@@ -73,6 +78,7 @@ LsfgChain::LsfgChain(const Device& device, MemoryAllocator& memory_allocator,
             beta.Output(level), i == FIRST_DELTA_LEVEL ? nullptr : &gamma[i - 1].Output(),
             i == FIRST_DELTA_LEVEL ? nullptr : &delta[index - 1].Output1(),
             i == FIRST_DELTA_LEVEL ? nullptr : &delta[index - 1].Output2());
+        if (memory_allocator.GetLastError() != VK_SUCCESS) return;
     }
 
     generate = LsfgGenerate(device, shaders, resources, descriptor_pool, frames,

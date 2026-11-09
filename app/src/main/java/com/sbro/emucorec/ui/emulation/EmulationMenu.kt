@@ -62,8 +62,10 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material.icons.rounded.SportsEsports
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.SettingsSuggest
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.material.icons.rounded.Usb
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -88,6 +90,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -175,6 +178,7 @@ fun EmulationQuickBar(
         modifier = modifier.padding(top = 12.dp),
         shape = neonShape(28.dp),
         color = palette.panel,
+        contentColor = palette.textPrimary,
         border = BorderStroke(1.dp, palette.border),
         tonalElevation = 4.dp,
         shadowElevation = 12.dp
@@ -316,6 +320,7 @@ fun EmulationGameMenu(
                     .widthIn(min = 300.dp, max = 420.dp),
                 shape = neonShape(if (LocalNeonTheme.current) 28.dp else 24.dp),
                 color = palette.panel,
+                contentColor = palette.textPrimary,
                 border = BorderStroke(1.dp, palette.border),
                 tonalElevation = if (LocalNeonTheme.current) 0.dp else 6.dp,
                 shadowElevation = if (LocalNeonTheme.current) 0.dp else 18.dp
@@ -353,6 +358,7 @@ fun EmulationGameMenu(
                 } else {
                     palette.panel
                 },
+                contentColor = palette.textPrimary,
                 border = BorderStroke(
                     1.dp,
                     if (LocalNeonTheme.current) {
@@ -410,6 +416,7 @@ fun EmulationGameMenu(
             ),
         shape = shape,
         color = palette.panel,
+        contentColor = palette.textPrimary,
         border = BorderStroke(1.dp, palette.border),
         tonalElevation = 6.dp,
         shadowElevation = 18.dp
@@ -561,6 +568,8 @@ private fun MenuSelectedContent(
                 )
             }
             EmulationMenuTab.Audio -> InGameCoreSettings(Ps3CoreSettingsCategory.Audio, gameId)
+            EmulationMenuTab.Overlay -> InGameCoreSettings(Ps3CoreSettingsCategory.Overlay, gameId)
+            EmulationMenuTab.Advanced -> InGameCoreSettings(Ps3CoreSettingsCategory.Advanced, gameId)
             EmulationMenuTab.Portals -> ToyPortalPanel()
             EmulationMenuTab.Controls -> {
                 ControlsTab(config = config, callbacks = callbacks)
@@ -580,7 +589,9 @@ private enum class EmulationMenuTab {
     Game,
     SaveStates,
     Graphics,
+    Overlay,
     Audio,
+    Advanced,
     Portals,
     Controls,
     Achievements,
@@ -659,16 +670,15 @@ private fun MenuInfoRow(
     }
 }
 
+@Composable
 private fun formatPlayDuration(durationMs: Long): String {
     val totalSeconds = (durationMs / 1_000L).coerceAtLeast(0L)
     val hours = totalSeconds / 3_600L
     val minutes = (totalSeconds % 3_600L) / 60L
     val seconds = totalSeconds % 60L
-    return when {
-        hours > 0L -> "${hours}h ${minutes.toString().padStart(2, '0')}m"
-        minutes > 0L -> "${minutes}m ${seconds.toString().padStart(2, '0')}s"
-        else -> "${seconds}s"
-    }
+    val locale = LocalConfiguration.current.locales[0]
+    return if (hours > 0L) String.format(locale, "%d:%02d:%02d", hours, minutes, seconds)
+    else String.format(locale, "%d:%02d", minutes, seconds)
 }
 
 @Composable
@@ -714,6 +724,7 @@ private fun ControlsTab(config: Ps3CoreConfig, callbacks: EmulationMenuCallbacks
         )
         MenuSliderRow(
             label = stringResource(R.string.settings_core_overlay_scale_label),
+            description = stringResource(R.string.settings_help_overlay_scale),
             value = config.overlayScale,
             valueText = stringResource(R.string.settings_core_overlay_scale_value, config.overlayScale),
             valueRange = 0.5f..2f,
@@ -722,6 +733,7 @@ private fun ControlsTab(config: Ps3CoreConfig, callbacks: EmulationMenuCallbacks
         )
         MenuSliderRow(
             label = stringResource(R.string.settings_core_overlay_opacity_label),
+            description = stringResource(R.string.settings_help_overlay_opacity),
             value = config.overlayOpacity.toFloat(),
             valueText = stringResource(R.string.settings_core_overlay_opacity_value, config.overlayOpacity),
             valueRange = 10f..100f,
@@ -736,11 +748,13 @@ private fun ControlsTab(config: Ps3CoreConfig, callbacks: EmulationMenuCallbacks
     ) {
         MenuToggleRow(
             label = stringResource(R.string.settings_touch_haptics),
+            subtitle = stringResource(R.string.settings_help_touch_haptics),
             checked = config.touchHaptics,
             onCheckedChange = callbacks.onTouchHaptics
         )
         MenuChipRow(
             label = stringResource(R.string.settings_touch_haptics_preset),
+            description = stringResource(R.string.settings_help_touch_haptics_preset),
             selected = config.touchHapticsPreset,
             options = listOf(
                 Ps3CoreConfig.TOUCH_HAPTICS_PRESET_SOFT to stringResource(R.string.settings_touch_haptics_preset_soft),
@@ -753,6 +767,7 @@ private fun ControlsTab(config: Ps3CoreConfig, callbacks: EmulationMenuCallbacks
         )
         MenuSliderRow(
             label = stringResource(R.string.settings_touch_haptics_strength),
+            description = stringResource(R.string.settings_help_touch_haptics_strength),
             value = config.touchHapticsStrength.toFloat(),
             valueText = stringResource(R.string.settings_gamepad_percent_value, config.touchHapticsStrength),
             valueRange = 10f..100f,
@@ -768,6 +783,7 @@ private fun ControlsTab(config: Ps3CoreConfig, callbacks: EmulationMenuCallbacks
     ) {
         MenuChipRow(
             label = stringResource(R.string.settings_gyro_mode),
+            description = stringResource(R.string.settings_help_gyro_mode),
             selected = config.gyroMode,
             options = listOf(
                 Ps3CoreConfig.GYRO_MODE_OFF to stringResource(R.string.settings_gyro_off),
@@ -788,6 +804,7 @@ private fun ControlsTab(config: Ps3CoreConfig, callbacks: EmulationMenuCallbacks
         if (config.gyroMode != Ps3CoreConfig.GYRO_MODE_OFF) {
             MenuSliderRow(
                 label = stringResource(R.string.settings_gyro_sensitivity),
+                description = stringResource(R.string.settings_help_gyro_sensitivity),
                 value = config.gyroSensitivity.toFloat(),
                 valueText = stringResource(R.string.settings_gamepad_percent_value, config.gyroSensitivity),
                 valueRange = 25f..300f,
@@ -796,6 +813,7 @@ private fun ControlsTab(config: Ps3CoreConfig, callbacks: EmulationMenuCallbacks
             )
             MenuSliderRow(
                 label = stringResource(R.string.settings_gyro_smoothing),
+                description = stringResource(R.string.settings_help_gyro_smoothing),
                 value = config.gyroSmoothing.toFloat(),
                 valueText = stringResource(R.string.settings_gamepad_percent_value, config.gyroSmoothing),
                 valueRange = 0f..90f,
@@ -804,12 +822,14 @@ private fun ControlsTab(config: Ps3CoreConfig, callbacks: EmulationMenuCallbacks
             )
             MenuToggleRow(
                 label = stringResource(R.string.settings_gyro_invert_x),
+                subtitle = stringResource(R.string.settings_gyro_invert_x_desc),
                 checked = config.gyroInvertX,
                 onCheckedChange = callbacks.onGyroInvertX
             )
             if (config.gyroMode == Ps3CoreConfig.GYRO_MODE_AIM) {
                 MenuToggleRow(
                     label = stringResource(R.string.settings_gyro_invert_y),
+                    subtitle = stringResource(R.string.settings_gyro_invert_y_desc),
                     checked = config.gyroInvertY,
                     onCheckedChange = callbacks.onGyroInvertY
                 )
@@ -1005,9 +1025,12 @@ private fun saveStateSlotLabel(slot: Int): String =
         stringResource(R.string.emulation_savestate_slot_label, slot)
     }
 
+@Composable
 private fun formatSaveStateDate(timestamp: Long): String {
     if (timestamp <= 0L) return ""
-    return java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
+    return java.text.DateFormat.getDateTimeInstance(
+        java.text.DateFormat.SHORT, java.text.DateFormat.SHORT, LocalConfiguration.current.locales[0],
+    )
         .format(java.util.Date(timestamp))
 }
 
@@ -1028,6 +1051,7 @@ private fun GamepadTab(
     ) {
         MenuSliderRow(
             label = stringResource(R.string.settings_gamepad_deadzone),
+            description = stringResource(R.string.settings_help_gamepad_deadzone),
             value = config.gamepadDeadzone,
             valueText = stringResource(R.string.settings_gamepad_percent_value, (config.gamepadDeadzone * 100f).roundToInt()),
             valueRange = 0f..0.45f,
@@ -1037,6 +1061,7 @@ private fun GamepadTab(
         )
         MenuSliderRow(
             label = stringResource(R.string.settings_core_analog_multiplier_label),
+            description = stringResource(R.string.settings_help_analog_multiplier),
             value = config.analogMultiplier,
             valueText = stringResource(R.string.settings_core_analog_multiplier_value, config.analogMultiplier),
             valueRange = 0.5f..2f,
@@ -1046,6 +1071,7 @@ private fun GamepadTab(
         )
         MenuSliderRow(
             label = stringResource(R.string.settings_gamepad_trigger_threshold),
+            description = stringResource(R.string.settings_help_gamepad_trigger_threshold),
             value = config.gamepadTriggerThreshold,
             valueText = stringResource(R.string.settings_gamepad_percent_value, (config.gamepadTriggerThreshold * 100f).roundToInt()),
             valueRange = 0f..0.9f,
@@ -1055,6 +1081,7 @@ private fun GamepadTab(
         )
         MenuChipRow(
             label = stringResource(R.string.settings_gamepad_button_profile),
+            description = stringResource(R.string.settings_help_gamepad_button_profile),
             selected = when (config.gamepadButtonProfile) {
                 Ps3CoreConfig.GAMEPAD_PROFILE_SWAP_CROSS_CIRCLE -> 1
                 Ps3CoreConfig.GAMEPAD_PROFILE_NINTENDO_FACE -> 2
@@ -1078,11 +1105,13 @@ private fun GamepadTab(
         )
         MenuToggleRow(
             label = stringResource(R.string.settings_vibration_enable),
+            subtitle = stringResource(R.string.settings_help_vibration_enable),
             checked = config.gamepadVibration,
             onCheckedChange = callbacks.onGamepadVibration
         )
         MenuSliderRow(
             label = stringResource(R.string.settings_vibration_strength),
+            description = stringResource(R.string.settings_help_vibration_strength),
             value = config.gamepadVibrationStrength.toFloat(),
             valueText = stringResource(R.string.settings_gamepad_percent_value, config.gamepadVibrationStrength),
             valueRange = 0f..100f,
@@ -1092,36 +1121,42 @@ private fun GamepadTab(
         )
         MenuToggleRow(
             label = stringResource(R.string.settings_device_vibration_fallback),
+            subtitle = stringResource(R.string.settings_help_device_vibration_fallback),
             checked = config.deviceVibrationFallback,
             enabled = config.gamepadVibration,
             onCheckedChange = callbacks.onDeviceVibrationFallback
         )
         MenuToggleRow(
             label = stringResource(R.string.settings_gamepad_swap_sticks),
+            subtitle = stringResource(R.string.settings_help_gamepad_swap_sticks),
             checked = config.gamepadSwapSticks,
             enabled = physicalGamepadConnected,
             onCheckedChange = callbacks.onGamepadSwapSticks
         )
         MenuToggleRow(
             label = stringResource(R.string.game_manager_invert_left_x),
+            subtitle = stringResource(R.string.settings_help_gamepad_invert_x),
             checked = config.gamepadInvertLeftX,
             enabled = physicalGamepadConnected,
             onCheckedChange = callbacks.onGamepadInvertLeftX
         )
         MenuToggleRow(
             label = stringResource(R.string.settings_gamepad_invert_left_y),
+            subtitle = stringResource(R.string.settings_help_gamepad_invert_y),
             checked = config.gamepadInvertLeftY,
             enabled = physicalGamepadConnected,
             onCheckedChange = callbacks.onGamepadInvertLeftY
         )
         MenuToggleRow(
             label = stringResource(R.string.game_manager_invert_right_x),
+            subtitle = stringResource(R.string.settings_help_gamepad_invert_x),
             checked = config.gamepadInvertRightX,
             enabled = physicalGamepadConnected,
             onCheckedChange = callbacks.onGamepadInvertRightX
         )
         MenuToggleRow(
             label = stringResource(R.string.settings_gamepad_invert_right_y),
+            subtitle = stringResource(R.string.settings_help_gamepad_invert_y),
             checked = config.gamepadInvertRightY,
             enabled = physicalGamepadConnected,
             onCheckedChange = callbacks.onGamepadInvertRightY
@@ -1639,8 +1674,10 @@ private fun emulationMenuTabs(): List<EmulationMenuTabItem> = listOf(
     EmulationMenuTabItem(EmulationMenuTab.Game, stringResource(R.string.emulation_tab_game), Icons.Rounded.PlayArrow),
     EmulationMenuTabItem(EmulationMenuTab.SaveStates, stringResource(R.string.emulation_tab_savestates), Icons.Rounded.Save),
     EmulationMenuTabItem(EmulationMenuTab.Graphics, stringResource(R.string.settings_tab_graphics), Icons.Rounded.GraphicEq),
+    EmulationMenuTabItem(EmulationMenuTab.Overlay, stringResource(R.string.settings_tab_overlay), Icons.Rounded.Visibility),
     EmulationMenuTabItem(EmulationMenuTab.Audio, stringResource(R.string.settings_tab_audio), Icons.AutoMirrored.Rounded.VolumeUp),
-    EmulationMenuTabItem(EmulationMenuTab.Portals, stringResource(R.string.emulation_tab_portals), Icons.Rounded.SportsEsports),
+    EmulationMenuTabItem(EmulationMenuTab.Advanced, stringResource(R.string.settings_tab_advanced), Icons.Rounded.SettingsSuggest),
+    EmulationMenuTabItem(EmulationMenuTab.Portals, stringResource(R.string.emulation_tab_portals), Icons.Rounded.Usb),
     EmulationMenuTabItem(EmulationMenuTab.Controls, stringResource(R.string.emulation_tab_controls), Icons.Rounded.Tune),
     EmulationMenuTabItem(
         EmulationMenuTab.Achievements,
@@ -1906,7 +1943,7 @@ private fun MenuToggleRow(
                 style = MaterialTheme.typography.bodyMedium,
                 color = palette.textPrimary.copy(alpha = if (enabled) 1f else 0.48f)
             )
-            if (subtitle != null) Text(text = subtitle, style = MaterialTheme.typography.bodySmall,
+            if (subtitle != null) Text(text = subtitle.substringBefore("\n\n"), style = MaterialTheme.typography.bodySmall,
                 color = palette.textSecondary.copy(alpha = if (enabled) 1f else 0.48f))
             RowBadge(badge)
         }
@@ -1923,6 +1960,7 @@ private fun MenuSliderRow(
     steps: Int,
     enabled: Boolean = true,
     badge: MenuBadge? = null,
+    description: String? = null,
     onValueChange: (Float) -> Unit
 ) {
     val palette = emulationMenuPalette()
@@ -1951,6 +1989,11 @@ private fun MenuSliderRow(
                     text = label,
                     style = MaterialTheme.typography.bodyMedium,
                     color = palette.textPrimary.copy(alpha = if (enabled) 1f else 0.48f)
+                )
+                if (description != null) Text(
+                    text = description.substringBefore("\n\n"),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = palette.textSecondary,
                 )
                 RowBadge(badge)
             }
@@ -1997,6 +2040,7 @@ private fun MenuChipRow(
     selected: Int,
     options: List<Pair<Int, String>>,
     enabled: Boolean = true,
+    description: String? = null,
     onSelected: (Int) -> Unit
 ) {
     val palette = emulationMenuPalette()
@@ -2005,6 +2049,11 @@ private fun MenuChipRow(
             text = label,
             style = MaterialTheme.typography.labelLarge,
             color = palette.textSecondary
+        )
+        if (description != null) Text(
+            text = description.substringBefore("\n\n"),
+            style = MaterialTheme.typography.bodySmall,
+            color = palette.textSecondary,
         )
         Row(
             modifier = Modifier

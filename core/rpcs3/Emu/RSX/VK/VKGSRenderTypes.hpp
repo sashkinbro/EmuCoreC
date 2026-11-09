@@ -23,8 +23,9 @@
 #define VK_FRAGMENT_CONSTANTS_BUFFER_SIZE_M 16
 #define VK_INDEX_RING_BUFFER_SIZE_M 16
 
-#ifdef __APPLE__
-// MoltenVK keeps a command buffer's commands until it is reset, so a 512-entry ring holds hundreds of frames
+#if defined(__APPLE__) || defined(__ANDROID__)
+// Mobile drivers retain recorded command storage until reset. A desktop-sized ring
+// can pin gigabytes of shared RAM before it wraps, independently of the VMA budget.
 #define VK_MAX_ASYNC_CB_COUNT 32
 #else
 #define VK_MAX_ASYNC_CB_COUNT 512
@@ -73,11 +74,13 @@ namespace vk
 		// everything recorded into it, whether or not anything was ever presented.
 		data_heap_manager::managed_heap_snapshot_t heap_snapshot;
 		u64 heap_snapshot_id = 0;
+		bool has_retained_storage = false;
 
 		command_buffer_chunk() = default;
 
 		inline void tag()
 		{
+			has_retained_storage = true;
 			eid_tag = vk::get_event_id();
 
 			// Taken at submit: it records where each ring's put pointer stands now, so when this
@@ -86,7 +89,7 @@ namespace vk
 			heap_snapshot_id = data_heap_manager::next_snapshot_id();
 		}
 
-		void reset()
+		void reset(bool release_resources = false)
 		{
 			if (is_pending && !poke())
 			{
@@ -94,7 +97,15 @@ namespace vk
 			}
 
 			++reset_id;
-			vk::command_buffer::reset();
+			vk::command_buffer::reset(release_resources);
+			if (release_resources) has_retained_storage = false;
+		}
+
+		bool release_completed_storage()
+		{
+			if (!has_retained_storage || is_recording() || !poke()) return false;
+			reset(true);
+			return true;
 		}
 
 		bool poke()
@@ -405,6 +416,17 @@ namespace vk
 			{
 				cb.wait();
 			}
+		}
+
+		bool release_completed_storage()
+		{
+			bool released = false;
+			for (auto& cb : m_cb_list)
+			{
+				// The selected buffer may still belong to the current frame, even if closed.
+				if (&cb != get()) released |= cb.release_completed_storage();
+			}
+			return released;
 		}
 
 		inline command_buffer_chunk* next()

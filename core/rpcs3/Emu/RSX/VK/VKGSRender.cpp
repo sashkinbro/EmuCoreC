@@ -1331,6 +1331,15 @@ static bool s_texture_quota_eviction = false;
 bool VKGSRender::on_vram_exhausted(rsx::problem_severity severity)
 {
 	ensure(rsx::get_current_renderer()->is_current_thread());
+	bool command_storage_relieved = false;
+#ifdef __ANDROID__
+	if (severity >= rsx::problem_severity::severe)
+	{
+		// Driver-owned command storage is outside VMA. Release only retired buffers;
+		// the active recording and work whose fence has not signalled remain intact.
+		command_storage_relieved = m_primary_cb_list.release_completed_storage();
+	}
+#endif
 
 	// Decline rather than abort when the renderer cannot be interrupted.
 	//
@@ -1367,7 +1376,7 @@ bool VKGSRender::on_vram_exhausted(rsx::problem_severity severity)
 		rsx_log.warning("Video memory pressure while uninterruptible: %s without a hard sync.",
 			relieved ? "released some resources" : "found nothing to release");
 
-		return relieved;
+		return command_storage_relieved || relieved;
 	}
 
 	const auto resources = res();
@@ -1397,6 +1406,11 @@ bool VKGSRender::on_vram_exhausted(rsx::problem_severity severity)
 		// As a bonus, we also get a free gc pass
 		if (rsx::prof::enabled()) [[unlikely]] rsx::prof::g_flush_sites[1]++; flush_command_queue(true, true);
 		g_fxo->get<vk::driver_manager_thread>().drain();
+
+#ifdef __ANDROID__
+		// The hard sync also retires buffers that were still pending on entry.
+		command_storage_relieved |= m_primary_cb_list.release_completed_storage();
+#endif
 
 #ifdef __APPLE__
 		if (resources && (severe_eviction || resources->texture_cache.is_overallocated()))
@@ -1447,7 +1461,7 @@ bool VKGSRender::on_vram_exhausted(rsx::problem_severity severity)
 	if (severity == rsx::problem_severity::low)
 	{
 		// Low severity only handles invalidating unused textures
-		return texture_cache_relieved;
+		return command_storage_relieved || texture_cache_relieved;
 	}
 
 	bool surface_cache_relieved = false;
@@ -1496,13 +1510,13 @@ bool VKGSRender::on_vram_exhausted(rsx::problem_severity severity)
 		}
 	}
 
-	const bool any_cache_relieved = (texture_cache_relieved || surface_cache_relieved);
+	const bool any_cache_relieved = (command_storage_relieved || texture_cache_relieved || surface_cache_relieved);
 	if (severity < rsx::problem_severity::fatal)
 	{
 		return any_cache_relieved;
 	}
 #else
-	const bool any_cache_relieved = (texture_cache_relieved || surface_cache_relieved);
+	const bool any_cache_relieved = (command_storage_relieved || texture_cache_relieved || surface_cache_relieved);
 	if (severity < rsx::problem_severity::fatal)
 	{
 		return any_cache_relieved;

@@ -786,7 +786,7 @@
     <string name="core_label_custom_anaglyph_matrices">Niestandardowe macierze anaglifu</string>
     <string name="core_label_darkening_effect_strength">Siła przyciemnienia</string>
     <string name="core_label_date_format">Format daty</string>
-    <string name="core_label_ddmmyyyy">DDMMRRRR</string>
+    <string name="core_label_ddmmyyyy">Dzień–miesiąc–rok</string>
     <string name="core_label_debug_console_mode">Tryb konsoli deweloperskiej</string>
     <string name="core_label_debug_output">Dane diagnostyczne</string>
     <string name="core_label_debug_overlay">Nakładka diagnostyczna</string>
@@ -901,7 +901,7 @@
     <string name="core_label_matrix_right">Macierz prawego oka</string>
     <string name="core_label_max_cpu_preempt_count">Maks. liczba wywłaszczeń CPU</string>
     <string name="core_label_max_llvm_compile_threads">Maks. liczba wątków kompilacji LLVM</string>
-    <string name="core_label_max_spurs_threads">Maks. liczba wątków SPURS</string>
+    <string name="core_label_max_spurs_threads">Maksymalna liczba wątków SPURS</string>
     <string name="core_label_maximum_savestate_files">Maks. liczba plików zapisów stanu</string>
     <string name="core_label_maximum_savestate_files_space_mib">Maks. miejsce na zapisy stanu (MiB)</string>
     <string name="core_label_medium">Średnie</string>
@@ -917,7 +917,7 @@
     <string name="core_label_minimal">Minimalny</string>
     <string name="core_label_minimum_scalable_dimension">Minimalny wymiar podlegający skalowaniu</string>
     <string name="core_label_miscellaneous">Różne</string>
-    <string name="core_label_mmddyyyy">MMDDRRRR</string>
+    <string name="core_label_mmddyyyy">Miesiąc–dzień–rok</string>
     <string name="core_label_mono">Mono</string>
     <string name="core_label_mouse">Mysz</string>
     <string name="core_label_mouse_debug_overlay">Nakładka diagnostyczna myszy</string>
@@ -930,7 +930,7 @@
     <string name="core_label_nearest">Najbliższy sąsiad</string>
     <string name="core_label_net">Sieć</string>
     <string name="core_label_none">Brak</string>
-    <string name="core_label_null">Brak</string>
+    <string name="core_label_null">Wyłączone</string>
     <string name="core_label_off">Wyłączony</string>
     <string name="core_label_opacity" formatted="false">Nieprzezroczystość (%)</string>
     <string name="core_label_opengl">OpenGL</string>
@@ -1099,7 +1099,7 @@
     <string name="core_label_write_color_buffers">Zapisuj bufory kolorów</string>
     <string name="core_label_write_depth_buffer">Zapisuj bufor głębi</string>
     <string name="core_label_xaudio2">XAudio2</string>
-    <string name="core_label_yyyymmdd">RRRRMMDD</string>
+    <string name="core_label_yyyymmdd">Rok–miesiąc–dzień</string>
     <string name="core_help_core_accurate_cache_line_stores" formatted="false">Dokładnie przetwarza instrukcję PPU DCBZ.\nW połączeniu z dokładnymi operacjami DMA SPU zapewnia również atomowy dostęp do linii pamięci podręcznej podczas operacji SPU PUT.</string>
     <string name="core_help_core_use_accurate_dfma" formatted="false">Używa dokładnych instrukcji FMA o podwójnej precyzji w modułach PPU i SPU.\nWyłączenie tej opcji może znacznie poprawić wydajność na procesorach bez obsługi FMA, ale może też powodować trudne do zauważenia błędy.\nNie wyłączaj jej, jeśli procesor obsługuje FMA.</string>
     <string name="core_help_core_accurate_ppu_128_byte_reservation_op_max_length" formatted="false">Po włączeniu operacje atomowe PPU obejmują całą linię pamięci podręcznej, a nie pojedynczy blok 64-bitowy, jak przy wyłączonej opcji.\nWartości liczbowe określają próg długości operacji atomowej, przy którym używany jest dokładny wariant.</string>
@@ -1327,7 +1327,7 @@
     <string name="core_label_italian_keyboard">Włoski</string>
     <string name="core_label_japanese">Japoński</string>
     <string name="core_label_japanese_keyboard">Japoński</string>
-    <string name="core_label_japanese_keyboard_kana_state">Japoński (stan Kana)</string>
+    <string name="core_label_japanese_keyboard_kana_state">Japońska klawiatura (tryb kana)</string>
     <string name="core_label_korean">Koreański</string>
     <string name="core_label_korean_keyboard">Koreański</string>
     <string name="core_label_norwegian">Norweski</string>
@@ -1834,4 +1834,45 @@
     <string name="core_help_video_vr_height" formatted="false">Wyższe wartości przesuwają oba obrazy w górę, niższe w dół, aby wyrównać je z soczewkami gogli.</string>
     <string name="core_label_show_spu_compilation_hint" formatted="false">Pokaż powiadomienie o kompilacji SPU</string>
     <string name="core_help_miscellaneous_show_spu_compilation_hint" formatted="false">Wyświetla wskazówkę \'Kompilowanie modułów SPU\' za pomocą natywnej nakładki.</string>
+    <string name="settings_show_quick_bar">Pokazuj pasek szybkich akcji</string>
+    <string name="settings_help_show_quick_bar">Dotknij dwukrotnie ekranu gry, aby wyświetlić pasek szybkich akcji. Użyj przycisku Wstecz, aby otworzyć menu gry, nawet gdy pasek jest ukryty.</string>
+    <string name="emulation_portal_description">Zarządzaj wirtualnymi figurkami w obsługiwanych grach. Importuj plik figurki do gniazda lub utwórz ją z listy postaci. Podłączone portale USB mają pierwszeństwo.</string>
+    <string name="settings_mouse_button_left">Lewy przycisk</string>
+    <string name="settings_mouse_button_right">Prawy przycisk</string>
+    <string name="settings_mouse_button_middle">Środkowy przycisk</string>
+    <string name="settings_mouse_button_back">Przycisk Wstecz</string>
+    <string name="settings_mouse_button_forward">Przycisk Dalej</string>
+    <string name="settings_mouse_button_number">Przycisk myszy %1$d</string>
+    <string name="settings_keyboard_key_enter">Enter</string>
+    <string name="settings_keyboard_key_backspace">Backspace</string>
+    <string name="settings_keyboard_key_space">Spacja</string>
+    <string name="settings_keyboard_key_tab">Tabulator</string>
+    <string name="settings_keyboard_key_escape">Escape</string>
+    <string name="settings_keyboard_key_shift">Shift</string>
+    <string name="settings_keyboard_key_control">Ctrl</string>
+    <string name="settings_keyboard_key_alt">Alt</string>
+    <string name="settings_keyboard_key_meta">Meta</string>
+    <string name="settings_keyboard_key_home">Początek</string>
+    <string name="settings_keyboard_key_end">Koniec</string>
+    <string name="settings_keyboard_key_page_up">Strona w górę</string>
+    <string name="settings_keyboard_key_page_down">Strona w dół</string>
+    <string name="settings_keyboard_key_insert">Wstaw</string>
+    <string name="settings_keyboard_key_delete">Usuń</string>
+    <string name="settings_keyboard_key_caps_lock">Blokada wielkich liter</string>
+    <string name="settings_keyboard_key_num_lock">Blokada cyfr</string>
+    <string name="settings_keyboard_key_scroll_lock">Blokada przewijania</string>
+    <string name="settings_keyboard_key_pause">Pauza</string>
+    <string name="settings_keyboard_key_print_screen">Zrzut ekranu</string>
+    <string name="settings_keyboard_key_number">Klawisz %1$d</string>
+    <string name="settings_keyboard_mouse_milliseconds_value">%1$d ms</string>
+    <string name="settings_mouse_wheel_desc" formatted="false">Wybierz działania kontrolera wywoływane przez przewijanie w górę i w dół. Wyłącz tę opcję, aby pozostawić kółko bez przypisania.</string>
+    <string name="settings_mouse_wheel_pulse_desc" formatted="false">Czas przytrzymania przypisanego działania kontrolera po każdym skoku kółka. Zwiększ go, jeśli gra pomija krótkie przewinięcia.</string>
+    <string name="settings_mouse_vertical_sensitivity_desc" formatted="false">Dostosuj celowanie w pionie względem celowania w poziomie. Przy 100% obie osie mają taką samą czułość.</string>
+    <string name="settings_mouse_deadzone_desc" formatted="false">Ignoruje małe ruchy myszy blisko środka, ograniczając niepożądany dryf celownika. Wyższe wartości wymagają większego ruchu przed rozpoczęciem celowania.</string>
+    <string name="customization_theme_help" formatted="false">Wybierz kolory aplikacji. System podąża za motywem urządzenia; inne opcje zachowują stały wygląd.</string>
+    <string name="customization_background_help" formatted="false">Wybierz obraz lub film jako tło ekranu głównego. Zresetuj personalizację, aby przywrócić domyślne tło.</string>
+    <string name="customization_cover_size_help" formatted="false">Zmień rozmiar okładek gier w bibliotece. Większe okładki oznaczają mniej gier w każdym rzędzie.</string>
+    <string name="customization_font_help" formatted="false">Wybierz krój pisma aplikacji lub zaimportuj plik TTF albo OTF. System używa czcionki urządzenia.</string>
+    <string name="customization_text_size_help" formatted="false">Skaluj tekst w całej aplikacji. Większy tekst może rozłożyć niektóre etykiety na więcej wierszy.</string>
+    <string name="settings_customization_drawer_help" formatted="false">Wybierz wygląd panelu nawigacji. Podglądy pokazują każdy styl przed jego wybraniem.</string>
 </resources>

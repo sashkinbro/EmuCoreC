@@ -53,7 +53,11 @@ class SettingsTabsUiContractTest {
         assertFalse("Raw core tab must not return to game manager", "GameManagerTab.Core" in manager)
         assertFalse("Raw core tab must not return to in-game menu", "EmulationMenuTab.Core" in menu)
         assertFalse("Global network settings do not belong in the live game menu", "EmulationMenuTab.Network" in menu)
-        assertFalse("Advanced filesystem and debug settings do not belong in the live game menu", "EmulationMenuTab.Advanced" in menu)
+        assertTrue("CPU settings need their own Advanced category", "EmulationMenuTab.Advanced" in menu)
+        for (path in listOf("VFS@@$(EmulatorDir)", "Miscellaneous@@GDB Server")) {
+            assertFalse("Filesystem and debug settings must stay outside the live menu: $path",
+                isCoreSettingVisibleOnSurface(path, Ps3CoreSettingsSurface.InGame))
+        }
         assertTrue("In-game core controls must use an explicit audited allowlist", "Ps3CoreSettingsSurface.InGame" in menu)
         assertFalse("Legacy Vita touch switch must not return", "touchSwitch" in manager || "Vita" in manager)
     }

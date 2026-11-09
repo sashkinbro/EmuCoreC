@@ -94,6 +94,8 @@ LsfgDelta::LsfgDelta(const Device& device, MemoryAllocator& memory_allocator,
     out_image1 = LsfgImage(device, memory_allocator, extent, LSFG_MOTION_FORMAT);
     out_image2 = LsfgImage(device, memory_allocator, extent, LSFG_MOTION_FORMAT);
 
+    if (memory_allocator.GetLastError() != VK_SUCCESS) return;
+
     std::vector<VkDescriptorSetLayout> layouts;
     for (size_t slot = 0; slot < LSFG_GENERATION_SLOTS; ++slot) {
         for (size_t i = 0; i < LSFG_HISTORY_SLOTS; ++i) {
@@ -121,6 +123,7 @@ LsfgDelta::LsfgDelta(const Device& device, MemoryAllocator& memory_allocator,
         Generation& pass = generations[slot];
         const VkBuffer buffer =
             resources.GetBuffer(LsfgSlotTimestamp(slot), false, previous_gamma == nullptr);
+        if (!buffer) return;
 
         for (size_t i = 0; i < LSFG_HISTORY_SLOTS; ++i) {
             pass.first_descriptor_sets[i] = owned_sets[next++];

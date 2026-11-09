@@ -770,8 +770,8 @@
     <string name="core_label_center_horizontally">क्षैतिज रूप से केन्द्रित करें</string>
     <string name="core_label_center_vertically">लंबवत केंद्र</string>
     <string name="core_label_clans_enabled">कबीले सक्षम</string>
-    <string name="core_label_clock12">घड़ी12</string>
-    <string name="core_label_clock24">घड़ी24</string>
+    <string name="core_label_clock12">12 घंटे का प्रारूप</string>
+    <string name="core_label_clock24">24 घंटे का प्रारूप</string>
     <string name="core_label_clocks_scale">घड़ियों का पैमाना</string>
     <string name="core_label_compatible_savestate_mode">संगत सेवस्टेट मोड</string>
     <string name="core_label_connected">जुड़ा हुआ</string>
@@ -785,7 +785,7 @@
     <string name="core_label_custom_anaglyph_matrices">कस्टम एनाग्लिफ़ मैट्रिसेस</string>
     <string name="core_label_darkening_effect_strength">अंधेरा प्रभाव शक्ति</string>
     <string name="core_label_date_format">दिनांक प्रारूप</string>
-    <string name="core_label_ddmmyyyy">Ddmmyyy</string>
+    <string name="core_label_ddmmyyyy">दिन–महीना–वर्ष</string>
     <string name="core_label_debug_console_mode">डिबग कंसोल मोड</string>
     <string name="core_label_debug_output">डिबग आउटपुट</string>
     <string name="core_label_debug_overlay">डिबग ओवरले</string>
@@ -900,7 +900,7 @@
     <string name="core_label_matrix_right">मैट्रिक्स सही</string>
     <string name="core_label_max_cpu_preempt_count">अधिकतम सीपीयू प्रीमेप्ट गणना</string>
     <string name="core_label_max_llvm_compile_threads">मैक्स एलएलवीएम कंपाइल थ्रेड्स</string>
-    <string name="core_label_max_spurs_threads">मैक्स स्पर्स थ्रेड्स</string>
+    <string name="core_label_max_spurs_threads">SPURS थ्रेड की अधिकतम संख्या</string>
     <string name="core_label_maximum_savestate_files">अधिकतम सेवस्टेट फ़ाइलें</string>
     <string name="core_label_maximum_savestate_files_space_mib">अधिकतम सेवस्टेट फ़ाइल स्थान (MiB)</string>
     <string name="core_label_medium">मध्यम</string>
@@ -916,7 +916,7 @@
     <string name="core_label_minimal">न्यूनतम</string>
     <string name="core_label_minimum_scalable_dimension">न्यूनतम स्केलेबल आयाम</string>
     <string name="core_label_miscellaneous">विविध</string>
-    <string name="core_label_mmddyyyy">Mmddyyyy</string>
+    <string name="core_label_mmddyyyy">महीना–दिन–वर्ष</string>
     <string name="core_label_mono">मोनो</string>
     <string name="core_label_mouse">चूहा</string>
     <string name="core_label_mouse_debug_overlay">माउस डिबग ओवरले</string>
@@ -927,9 +927,9 @@
     <string name="core_label_multithreaded_rsx">मल्टीथ्रेडेड आरएसएक्स</string>
     <string name="core_label_music_handler">संगीत संचालक</string>
     <string name="core_label_nearest">निकटतम</string>
-    <string name="core_label_net">नेट</string>
+    <string name="core_label_net">नेटवर्क</string>
     <string name="core_label_none">कोई नहीं</string>
-    <string name="core_label_null">शून्य</string>
+    <string name="core_label_null">अक्षम</string>
     <string name="core_label_off">बंद</string>
     <string name="core_label_opacity" formatted="false">अपारदर्शिता (%)</string>
     <string name="core_label_opengl">ओपनजीएल</string>
@@ -976,7 +976,7 @@
     <string name="core_label_read_color_buffers">कलर बफ़र्स पढ़ें</string>
     <string name="core_label_read_depth_buffer">गहराई बफ़र पढ़ें</string>
     <string name="core_label_real">असली</string>
-    <string name="core_label_real_singstar">रियल सिंगस्टार</string>
+    <string name="core_label_real_singstar">भौतिक SingStar</string>
     <string name="core_label_recompiler_asmjit">पुनः कंपाइलर (एएसएमजेआईटी)</string>
     <string name="core_label_recompiler_llvm">पुनः कंपाइलर (एलएलवीएम)</string>
     <string name="core_label_record_with_overlays">ओवरले के साथ रिकॉर्ड करें</string>
@@ -1098,7 +1098,7 @@
     <string name="core_label_write_color_buffers">कलर बफ़र्स लिखें</string>
     <string name="core_label_write_depth_buffer">गहराई बफ़र लिखें</string>
     <string name="core_label_xaudio2">XAudio2</string>
-    <string name="core_label_yyyymmdd">Yyyymmdd</string>
+    <string name="core_label_yyyymmdd">वर्ष–महीना–दिन</string>
     <string name="core_help_core_accurate_cache_line_stores" formatted="false">पीपीयू डीसीबीजेड निर्देश को सटीक रूप से संसाधित करता है।
 इसके अलावा, सटीक एसपीयू डीएमए के साथ संयुक्त होने पर, एसपीयू पुट कैश लाइन एक्सेस को परमाणु रूप से संसाधित किया जाएगा।</string>
     <string name="core_help_core_use_accurate_dfma" formatted="false">पीपीयू और एसपीयू बैकएंड में सटीक डबल-प्रिसिजन एफएमए निर्देशों का उपयोग करें।
@@ -1560,7 +1560,7 @@ PS3 नेटिव का उपयोग केवल तभी किया �
     <string name="core_label_italian_keyboard">इतालवी कीबोर्ड</string>
     <string name="core_label_japanese">जापानी</string>
     <string name="core_label_japanese_keyboard">जापानी कीबोर्ड</string>
-    <string name="core_label_japanese_keyboard_kana_state">जापानी कीबोर्ड (काना राज्य)</string>
+    <string name="core_label_japanese_keyboard_kana_state">जापानी कीबोर्ड (काना मोड)</string>
     <string name="core_label_korean">कोरियाई</string>
     <string name="core_label_korean_keyboard">कोरियाई कीबोर्ड</string>
     <string name="core_label_norwegian">नॉर्वेजियन</string>
@@ -2069,4 +2069,45 @@ PS3 नेटिव का उपयोग केवल तभी किया �
     <string name="core_help_video_vr_height" formatted="false">धनात्मक मान चित्र ऊपर और ऋणात्मक मान नीचे ले जाते हैं।</string>
     <string name="core_label_show_spu_compilation_hint" formatted="false">पीपीयू संकलन संकेत दिखाएँ</string>
     <string name="core_help_miscellaneous_show_spu_compilation_hint" formatted="false">देशी ओवरले का उपयोग करके \'पीपीयू मॉड्यूल संकलित करना\' संकेत दिखाता है।</string>
+    <string name="settings_show_quick_bar">त्वरित कार्रवाई बार दिखाएँ</string>
+    <string name="settings_help_show_quick_bar">त्वरित कार्रवाई बार दिखाने के लिए गेम की स्क्रीन पर दो बार टैप करें। बार छिपा होने पर भी गेम मेन्यू खोलने के लिए वापस बटन का उपयोग करें।</string>
+    <string name="emulation_portal_description">समर्थित गेम के लिए आभासी खिलौना आकृतियाँ प्रबंधित करें। किसी स्लॉट में आकृति की फ़ाइल आयात करें या पात्र सूची से नई आकृति बनाएँ। जुड़े हुए USB पोर्टल को प्राथमिकता दी जाती है।</string>
+    <string name="settings_mouse_button_left">बायाँ क्लिक</string>
+    <string name="settings_mouse_button_right">दायाँ क्लिक</string>
+    <string name="settings_mouse_button_middle">बीच का क्लिक</string>
+    <string name="settings_mouse_button_back">पीछे बटन</string>
+    <string name="settings_mouse_button_forward">आगे बटन</string>
+    <string name="settings_mouse_button_number">माउस बटन %1$d</string>
+    <string name="settings_keyboard_key_enter">एंटर</string>
+    <string name="settings_keyboard_key_backspace">बैकस्पेस</string>
+    <string name="settings_keyboard_key_space">स्पेस</string>
+    <string name="settings_keyboard_key_tab">टैब</string>
+    <string name="settings_keyboard_key_escape">एस्केप</string>
+    <string name="settings_keyboard_key_shift">शिफ़्ट</string>
+    <string name="settings_keyboard_key_control">कंट्रोल</string>
+    <string name="settings_keyboard_key_alt">ऑल्ट</string>
+    <string name="settings_keyboard_key_meta">मेटा</string>
+    <string name="settings_keyboard_key_home">होम</string>
+    <string name="settings_keyboard_key_end">एंड</string>
+    <string name="settings_keyboard_key_page_up">पेज अप</string>
+    <string name="settings_keyboard_key_page_down">पेज डाउन</string>
+    <string name="settings_keyboard_key_insert">इन्सर्ट</string>
+    <string name="settings_keyboard_key_delete">डिलीट</string>
+    <string name="settings_keyboard_key_caps_lock">कैप्स लॉक</string>
+    <string name="settings_keyboard_key_num_lock">नम लॉक</string>
+    <string name="settings_keyboard_key_scroll_lock">स्क्रॉल लॉक</string>
+    <string name="settings_keyboard_key_pause">पॉज़</string>
+    <string name="settings_keyboard_key_print_screen">प्रिंट स्क्रीन</string>
+    <string name="settings_keyboard_key_number">कुंजी %1$d</string>
+    <string name="settings_keyboard_mouse_milliseconds_value">%1$d मि.से.</string>
+    <string name="settings_mouse_wheel_desc" formatted="false">ऊपर और नीचे स्क्रॉल करने पर सक्रिय होने वाली कंट्रोलर क्रियाएँ चुनें। पहिए को बिना मैपिंग के रखने के लिए इसे बंद करें।</string>
+    <string name="settings_mouse_wheel_pulse_desc" formatted="false">पहिए का हर चरण अपनी मैप की गई कंट्रोलर क्रिया को कितनी देर दबाए रखता है। अगर गेम छोटे स्क्रॉल इनपुट नहीं पहचानता, तो इसे बढ़ाएँ।</string>
+    <string name="settings_mouse_vertical_sensitivity_desc" formatted="false">क्षैतिज निशाने के अनुपात में ऊर्ध्वाधर निशाना समायोजित करें। 100% पर दोनों अक्षों की संवेदनशीलता समान होती है।</string>
+    <string name="settings_mouse_deadzone_desc" formatted="false">अनचाहे निशाना खिसकने को कम करने के लिए केंद्र के पास माउस की छोटी हरकतों को अनदेखा करता है। अधिक मान पर निशाना चलने से पहले अधिक हरकत चाहिए।</string>
+    <string name="customization_theme_help" formatted="false">ऐप के रंग चुनें। सिस्टम विकल्प डिवाइस की थीम का अनुसरण करता है; अन्य विकल्प एक निश्चित रूप रखते हैं।</string>
+    <string name="customization_background_help" formatted="false">होम स्क्रीन के बैकग्राउंड के लिए चित्र या वीडियो चुनें। डिफ़ॉल्ट बैकग्राउंड वापस लाने के लिए निजीकरण रीसेट करें।</string>
+    <string name="customization_cover_size_help" formatted="false">लाइब्रेरी में गेम कवर का आकार बदलें। बड़े कवर होने पर हर पंक्ति में कम गेम दिखाई देते हैं।</string>
+    <string name="customization_font_help" formatted="false">ऐप का फ़ॉन्ट चुनें या TTF या OTF फ़ॉन्ट फ़ाइल आयात करें। सिस्टम विकल्प डिवाइस का फ़ॉन्ट इस्तेमाल करता है।</string>
+    <string name="customization_text_size_help" formatted="false">पूरे ऐप में टेक्स्ट का आकार बदलें। बड़े टेक्स्ट से कुछ लेबल अधिक पंक्तियों में जा सकते हैं।</string>
+    <string name="settings_customization_drawer_help" formatted="false">नेविगेशन ड्रॉअर का रूप चुनें। चुनने से पहले पूर्वावलोकन में हर शैली दिखाई देती है।</string>
 </resources>

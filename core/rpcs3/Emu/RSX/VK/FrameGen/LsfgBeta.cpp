@@ -72,6 +72,8 @@ LsfgBeta::LsfgBeta(const Device& device, MemoryAllocator& memory_allocator,
         out_images[i] = LsfgImage(device, memory_allocator, level_extent, LSFG_FLOW_FORMAT);
     }
 
+    if (memory_allocator.GetLastError() != VK_SUCCESS) return;
+
     std::vector<VkDescriptorSetLayout> layouts;
     for (size_t i = 0; i < LSFG_HISTORY_SLOTS; ++i) {
         layouts.push_back(passes[0].SetLayout());
@@ -116,8 +118,10 @@ LsfgBeta::LsfgBeta(const Device& device, MemoryAllocator& memory_allocator,
         .AddSampledImages(temp1)
         .AddStorageImages(temp2)
         .Build(device);
+    const VkBuffer buffer = resources.GetBuffer(0.5f);
+    if (!buffer) return;
     LsfgDescriptorWriter(descriptor_sets[3])
-        .AddUniformBuffer(resources.GetBuffer(0.5f), LsfgResources::BufferSize())
+        .AddUniformBuffer(buffer, LsfgResources::BufferSize())
         .AddSampler(sampler)
         .AddSampledImages(temp2)
         .AddStorageImages(out_images)

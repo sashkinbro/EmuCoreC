@@ -62,7 +62,8 @@ data class SettingsUiState(
     val appUpdate: AppUpdateUiState = AppUpdateUiState(),
     val cacheSizeBytes: Long = 0L,
     val coverCacheSizeBytes: Long = 0L,
-    val keepScreenOn: Boolean = true
+    val keepScreenOn: Boolean = true,
+    val showEmulationQuickBar: Boolean = false
 )
 
 data class StorageMigrationUiState(
@@ -114,7 +115,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             installedGpuDrivers = gpuDriverManager.listInstalledDrivers(),
             appLanguage = preferences.appLanguage,
             customization = customizationPreferences.current,
-            keepScreenOn = preferences.keepScreenOn
+            keepScreenOn = preferences.keepScreenOn,
+            showEmulationQuickBar = preferences.showEmulationQuickBar
         )
     )
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
@@ -243,7 +245,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 storageLocations = EmulatorStorage.availableStorageLocations(getApplication()),
                 installedGpuDrivers = gpuDriverManager.listInstalledDrivers(),
                 appLanguage = preferences.appLanguage,
-                keepScreenOn = preferences.keepScreenOn
+                keepScreenOn = preferences.keepScreenOn,
+                showEmulationQuickBar = preferences.showEmulationQuickBar
             )
         }
         refreshCacheSize()
@@ -309,6 +312,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         if (preferences.keepScreenOn == enabled) return
         preferences.keepScreenOn = enabled
         _uiState.value = _uiState.value.copy(keepScreenOn = enabled)
+    }
+
+    fun updateShowEmulationQuickBar(enabled: Boolean) {
+        preferences.showEmulationQuickBar = enabled
+        _uiState.value = _uiState.value.copy(showEmulationQuickBar = enabled)
     }
 
     fun updateAppLanguage(language: AppLanguage) {

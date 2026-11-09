@@ -86,6 +86,7 @@ LsfgGenerate::LsfgGenerate(const Device& device, const LsfgShaders& shaders,
     for (size_t slot = 0; slot < LSFG_GENERATION_SLOTS; ++slot) {
         Generation& target = generations[slot];
         target.buffer = resources.GetBuffer(LsfgSlotTimestamp(slot));
+        if (!target.buffer) return;
 
         for (auto& entry : target.targets) {
             for (auto& set : entry.descriptor_sets) {

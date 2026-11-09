@@ -3,6 +3,10 @@
 #include "VKGSRender.h"
 #include "VKCommandStream.h"
 #include "Emu/RSX/rsx_profiler.h"
+#ifdef __ANDROID__
+#include "vkutils/mobile_memory_budget.hpp"
+#include "util/sysinfo.hpp"
+#endif
 #ifdef __APPLE__
 // Included directly: an undefined TARGET_OS_IPHONE would silently read as 0 below.
 #include <TargetConditionals.h>
@@ -286,7 +290,15 @@ namespace vk
 #ifdef __APPLE__
 		// Read before the stats lock, so the malloc relief never runs under it.
 		const auto headroom_severity = include_headroom ? headroom_load_severity() : rsx::problem_severity::low;
-
+#elif defined(__ANDROID__)
+		// Driver command/descriptor storage also consumes unified RAM but does not pass
+		// through VMA. Its pressure must survive the VMA fragmentation downgrade below.
+		static const u64 reserve = mobile_memory_budget::system_reserve(utils::get_total_memory());
+		const u64 available = utils::get_avail_memory();
+		const auto headroom_severity = available < reserve / 2 ? rsx::problem_severity::fatal
+			: available < reserve ? rsx::problem_severity::severe
+			: available - reserve < (256ull << 20) ? rsx::problem_severity::moderate
+			: rsx::problem_severity::low;
 #endif
 		reader_lock lock(g_vmm_stats.mutex);
 
@@ -317,7 +329,10 @@ namespace vk
 				load_severity = rsx::problem_severity::moderate;
 			}
 
-			// Query actual usage for comparison. Maybe we just have really fragmented memory...
+#ifndef __ANDROID__
+			// Desktop heap headroom can distinguish fragmentation from real exhaustion.
+			// Android already reports aggregate pool pressure, so a larger driver heap
+			// must not downgrade a full application budget.
 			const auto mem_info = get_current_renderer()->get_memory_mapping();
 			const auto local_memory_usage = vmm_get_application_memory_usage_impl(mem_info.device_local);
 
@@ -346,9 +361,10 @@ namespace vk
 				rsx_log.warning("Actual device memory used by internal allocations is %lluM (%llu%%)", local_memory_usage / 0x100000, application_memory_load);
 				rsx_log.warning("Video memory usage is at %d%%. Will attempt to reclaim some resources.", static_cast<int>(vmm_load));
 			}
+#endif
 		}
 
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(__ANDROID__)
 		return std::max(load_severity, headroom_severity);
 #else
 		return load_severity;

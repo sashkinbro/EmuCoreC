@@ -11,6 +11,7 @@ import java.nio.file.Path
 import kotlin.io.path.readText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class CustomizationStyleContractTest {
@@ -106,8 +107,9 @@ class CustomizationStyleContractTest {
         assertTrue("Touch target geometry and input modifier must remain the outer layer", item.isNotBlank())
         assertTrue("Visual scaling must use graphicsLayer", "graphicsLayer(" in overlay)
         val renderer = sourceRoot().resolve("ui/common/VectorTouchControls.kt").readText()
-        assertTrue("Press scaling must remain inside the shared visual renderer",
-            "graphicsLayer(alpha = alpha, scaleX = pressScale, scaleY = pressScale)" in renderer)
+        val analog = renderer.substringAfter("fun VectorAnalogStick(")
+        assertFalse("Analog stick touches must not animate its size", "animatedPressScale(" in analog)
+        assertFalse("Analog stick touches must not scale its visual layer", "scaleX =" in analog || "scaleY =" in analog)
         com.sbro.emucorec.data.TouchControlPressEffect.entries.forEach { effect ->
             assertTrue("Missing press effect $effect", "TouchControlPressEffect.$effect ->" in renderer)
         }

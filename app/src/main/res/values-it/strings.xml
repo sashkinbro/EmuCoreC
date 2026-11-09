@@ -771,8 +771,8 @@
     <string name="core_label_center_horizontally">Centra orizzontalmente</string>
     <string name="core_label_center_vertically">Centra verticalmente</string>
     <string name="core_label_clans_enabled">Clan abilitati</string>
-    <string name="core_label_clock12">Orologio12</string>
-    <string name="core_label_clock24">Orologio24</string>
+    <string name="core_label_clock12">Formato 12 ore</string>
+    <string name="core_label_clock24">Formato 24 ore</string>
     <string name="core_label_clocks_scale">Scala degli orologi</string>
     <string name="core_label_compatible_savestate_mode">Modalità di salvataggio compatibile</string>
     <string name="core_label_connected">Connesso</string>
@@ -786,7 +786,7 @@
     <string name="core_label_custom_anaglyph_matrices">Matrici anaglifiche personalizzate</string>
     <string name="core_label_darkening_effect_strength">Intensità dell\'effetto oscurante</string>
     <string name="core_label_date_format">Formato data</string>
-    <string name="core_label_ddmmyyyy">Ggmmaaaa</string>
+    <string name="core_label_ddmmyyyy">Giorno–mese–anno</string>
     <string name="core_label_debug_console_mode">Modalità console di debug</string>
     <string name="core_label_debug_output">Uscita di debug</string>
     <string name="core_label_debug_overlay">Sovrapposizione di debug</string>
@@ -901,7 +901,7 @@
     <string name="core_label_matrix_right">Matrice Giusto</string>
     <string name="core_label_max_cpu_preempt_count">Conteggio massimo di preemption della CPU</string>
     <string name="core_label_max_llvm_compile_threads">Numero massimo di thread di compilazione LLVM</string>
-    <string name="core_label_max_spurs_threads">Discussioni SPURS massime</string>
+    <string name="core_label_max_spurs_threads">Numero massimo di thread SPURS</string>
     <string name="core_label_maximum_savestate_files">Numero massimo di file SaveState</string>
     <string name="core_label_maximum_savestate_files_space_mib">Spazio massimo per i file SaveState (MiB)</string>
     <string name="core_label_medium">Medio</string>
@@ -917,7 +917,7 @@
     <string name="core_label_minimal">Minimo</string>
     <string name="core_label_minimum_scalable_dimension">Dimensione minima scalabile</string>
     <string name="core_label_miscellaneous">Varie</string>
-    <string name="core_label_mmddyyyy">Mmddyyyy</string>
+    <string name="core_label_mmddyyyy">Mese–giorno–anno</string>
     <string name="core_label_mono">Mono</string>
     <string name="core_label_mouse">Topo</string>
     <string name="core_label_mouse_debug_overlay">Sovrapposizione di debug del mouse</string>
@@ -928,9 +928,9 @@
     <string name="core_label_multithreaded_rsx">RSX multithread</string>
     <string name="core_label_music_handler">Gestore della musica</string>
     <string name="core_label_nearest">Il più vicino</string>
-    <string name="core_label_net">Netto</string>
+    <string name="core_label_net">Rete</string>
     <string name="core_label_none">Nessuno</string>
-    <string name="core_label_null">Nullo</string>
+    <string name="core_label_null">Disattivato</string>
     <string name="core_label_off">Spento</string>
     <string name="core_label_opacity" formatted="false">Opacità (%)</string>
     <string name="core_label_opengl">OpenGL</string>
@@ -977,7 +977,7 @@
     <string name="core_label_read_color_buffers">Leggi Buffer di colore</string>
     <string name="core_label_read_depth_buffer">Leggi il buffer di profondità</string>
     <string name="core_label_real">Reale</string>
-    <string name="core_label_real_singstar">La vera SingStar</string>
+    <string name="core_label_real_singstar">SingStar fisico</string>
     <string name="core_label_recompiler_asmjit">Ricompilatore (ASMJIT)</string>
     <string name="core_label_recompiler_llvm">Ricompilatore (LLVM)</string>
     <string name="core_label_record_with_overlays">Registra con sovrapposizioni</string>
@@ -1099,7 +1099,7 @@
     <string name="core_label_write_color_buffers">Scrivi buffer di colore</string>
     <string name="core_label_write_depth_buffer">Scrivi buffer di profondità</string>
     <string name="core_label_xaudio2">XAudio2</string>
-    <string name="core_label_yyyymmdd">Aaaammgg</string>
+    <string name="core_label_yyyymmdd">Anno–mese–giorno</string>
     <string name="core_help_core_accurate_cache_line_stores" formatted="false">Elabora accuratamente l\'istruzione PPU DCBZ.
 Inoltre, se combinati con Accurate SPU DMA, gli accessi alla linea della cache SPU PUT verranno elaborati in modo atomico.</string>
     <string name="core_help_core_use_accurate_dfma" formatted="false">Utilizza istruzioni FMA precise a doppia precisione nei backend PPU e SPU.
@@ -1561,7 +1561,7 @@ Questa impostazione viene applicata solo quando il decodificatore SPU è imposta
     <string name="core_label_italian_keyboard">Tastiera italiana</string>
     <string name="core_label_japanese">Giapponese</string>
     <string name="core_label_japanese_keyboard">Tastiera giapponese</string>
-    <string name="core_label_japanese_keyboard_kana_state">Tastiera giapponese (stato Kana)</string>
+    <string name="core_label_japanese_keyboard_kana_state">Tastiera giapponese (modalità kana)</string>
     <string name="core_label_korean">Coreano</string>
     <string name="core_label_korean_keyboard">Tastiera coreana</string>
     <string name="core_label_norwegian">Norvegese</string>
@@ -2070,4 +2070,45 @@ Questa impostazione viene applicata solo quando il decodificatore SPU è imposta
     <string name="core_help_video_vr_height" formatted="false">Valori più alti spostano entrambe le immagini in alto, valori più bassi in basso, per allinearle alle lenti del visore.</string>
     <string name="core_label_show_spu_compilation_hint" formatted="false">Mostra il suggerimento per la compilazione della SPU</string>
     <string name="core_help_miscellaneous_show_spu_compilation_hint" formatted="false">Mostra il suggerimento &quot;Compilazione moduli SPU&quot; utilizzando l\'overlay nativo.</string>
+    <string name="settings_show_quick_bar">Mostra barra delle azioni rapide</string>
+    <string name="settings_help_show_quick_bar">Tocca due volte lo schermo di gioco per mostrare la barra delle azioni rapide. Usa Indietro per aprire il menu di gioco anche quando la barra è nascosta.</string>
+    <string name="emulation_portal_description">Gestisci le statuette virtuali dei giochi supportati. Importa un file di statuetta in uno slot o creane una dalla lista dei personaggi. I portali USB collegati hanno la priorità.</string>
+    <string name="settings_mouse_button_left">Clic sinistro</string>
+    <string name="settings_mouse_button_right">Clic destro</string>
+    <string name="settings_mouse_button_middle">Clic centrale</string>
+    <string name="settings_mouse_button_back">Pulsante Indietro</string>
+    <string name="settings_mouse_button_forward">Pulsante Avanti</string>
+    <string name="settings_mouse_button_number">Pulsante del mouse %1$d</string>
+    <string name="settings_keyboard_key_enter">Invio</string>
+    <string name="settings_keyboard_key_backspace">Cancella indietro</string>
+    <string name="settings_keyboard_key_space">Spazio</string>
+    <string name="settings_keyboard_key_tab">Tabulazione</string>
+    <string name="settings_keyboard_key_escape">Esc</string>
+    <string name="settings_keyboard_key_shift">Maiusc</string>
+    <string name="settings_keyboard_key_control">Ctrl</string>
+    <string name="settings_keyboard_key_alt">Alt</string>
+    <string name="settings_keyboard_key_meta">Meta</string>
+    <string name="settings_keyboard_key_home">Inizio</string>
+    <string name="settings_keyboard_key_end">Fine</string>
+    <string name="settings_keyboard_key_page_up">Pagina su</string>
+    <string name="settings_keyboard_key_page_down">Pagina giù</string>
+    <string name="settings_keyboard_key_insert">Inserisci</string>
+    <string name="settings_keyboard_key_delete">Cancella</string>
+    <string name="settings_keyboard_key_caps_lock">Bloc Maiusc</string>
+    <string name="settings_keyboard_key_num_lock">Bloc Num</string>
+    <string name="settings_keyboard_key_scroll_lock">Bloc Scorr</string>
+    <string name="settings_keyboard_key_pause">Pausa</string>
+    <string name="settings_keyboard_key_print_screen">Stampa schermo</string>
+    <string name="settings_keyboard_key_number">Tasto %1$d</string>
+    <string name="settings_keyboard_mouse_milliseconds_value">%1$d ms</string>
+    <string name="settings_mouse_wheel_desc" formatted="false">Scegli le azioni del controller attivate scorrendo verso l’alto e il basso. Disattiva per lasciare la rotella senza assegnazione.</string>
+    <string name="settings_mouse_wheel_pulse_desc" formatted="false">Durata per cui ogni scatto della rotella mantiene premuta l’azione assegnata. Aumentala se il gioco non rileva scorrimenti brevi.</string>
+    <string name="settings_mouse_vertical_sensitivity_desc" formatted="false">Regola la mira verticale rispetto a quella orizzontale. Al 100%, entrambi gli assi hanno la stessa sensibilità.</string>
+    <string name="settings_mouse_deadzone_desc" formatted="false">Ignora i piccoli movimenti del mouse vicino al centro per ridurre la deriva della mira. Valori più alti richiedono più movimento prima di iniziare a mirare.</string>
+    <string name="customization_theme_help" formatted="false">Scegli i colori dell’app. Sistema segue il tema del dispositivo; le altre opzioni mantengono un aspetto fisso.</string>
+    <string name="customization_background_help" formatted="false">Scegli un’immagine o un video per lo sfondo della schermata iniziale. Ripristina la personalizzazione per tornare allo sfondo predefinito.</string>
+    <string name="customization_cover_size_help" formatted="false">Modifica la dimensione delle copertine nella libreria. Le copertine più grandi mostrano meno giochi per riga.</string>
+    <string name="customization_font_help" formatted="false">Scegli il carattere dell’app o importa un file TTF o OTF. Sistema usa il carattere del dispositivo.</string>
+    <string name="customization_text_size_help" formatted="false">Ridimensiona il testo in tutta l’app. Un testo più grande può disporre alcune etichette su più righe.</string>
+    <string name="settings_customization_drawer_help" formatted="false">Scegli l’aspetto del pannello di navigazione. Le anteprime mostrano ogni stile prima della selezione.</string>
 </resources>

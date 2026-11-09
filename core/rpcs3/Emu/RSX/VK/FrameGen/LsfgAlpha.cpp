@@ -80,6 +80,8 @@ LsfgAlpha::LsfgAlpha(const Device& device, MemoryAllocator& memory_allocator,
         }
     }
 
+    if (memory_allocator.GetLastError() != VK_SUCCESS) return;
+
     std::vector<VkDescriptorSetLayout> layouts;
     for (size_t i = 0; i < LSFG_ALPHA_STAGES - 1; ++i) {
         layouts.push_back(passes->Get(i).SetLayout());

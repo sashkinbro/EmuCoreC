@@ -152,6 +152,10 @@ fun EmulationOverlayHost(
     val repository = remember(activity) { Ps3GameSettingsRepository(activity) }
     val controlLayoutRepository = remember(activity) { TouchControlLayoutRepository(activity) }
     val customizationPreferences = remember(activity) { CustomizationPreferences(activity) }
+    val appPreferences = remember(activity) { AppPreferences(activity) }
+    val showQuickBar by remember(appPreferences) { appPreferences.showEmulationQuickBarFlow }.collectAsState(
+        initial = appPreferences.showEmulationQuickBar
+    )
     val customization by customizationPreferences.settings.collectAsState()
     val overlayBridge = remember(activity) { activity.getmOverlay() }
     var config by remember(activity, gameId) { mutableStateOf(repository.loadEffective(gameId)) }
@@ -159,7 +163,7 @@ fun EmulationOverlayHost(
     var controlsEditMode by remember { mutableStateOf(false) }
     var editorProfileRevision by remember { mutableIntStateOf(0) }
     var menuOpen by remember { mutableStateOf(false) }
-    var menuButtonVisible by remember { mutableStateOf(true) }
+    var menuButtonVisible by remember { mutableStateOf(false) }
     var userPaused by remember { mutableStateOf(false) }
     var exitDialogVisible by remember { mutableStateOf(false) }
     var pendingSaveRequest by remember { mutableStateOf<SaveRequest?>(null) }
@@ -644,7 +648,7 @@ fun EmulationOverlayHost(
         }
 
         AnimatedVisibility(
-            visible = !controlsEditMode && menuButtonVisible,
+            visible = showQuickBar && !controlsEditMode && menuButtonVisible,
             enter = fadeIn(tween(180)),
             exit = fadeOut(tween(140)),
             modifier = Modifier.align(Alignment.TopCenter)

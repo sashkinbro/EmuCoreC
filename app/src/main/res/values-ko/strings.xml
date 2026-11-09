@@ -784,7 +784,7 @@
     <string name="core_label_custom_anaglyph_matrices">맞춤형 애너글리프 행렬</string>
     <string name="core_label_darkening_effect_strength">어둡게 하기 효과 강도</string>
     <string name="core_label_date_format">날짜 형식</string>
-    <string name="core_label_ddmmyyyy">일월년(DDMMYYYY)</string>
+    <string name="core_label_ddmmyyyy">일–월–년</string>
     <string name="core_label_debug_console_mode">디버그 콘솔 모드</string>
     <string name="core_label_debug_output">디버그 출력</string>
     <string name="core_label_debug_overlay">디버그 오버레이</string>
@@ -915,7 +915,7 @@
     <string name="core_label_minimal">미니멀</string>
     <string name="core_label_minimum_scalable_dimension">스케일링할 최소 크기</string>
     <string name="core_label_miscellaneous">기타</string>
-    <string name="core_label_mmddyyyy">월일년(MMDDYYYY)</string>
+    <string name="core_label_mmddyyyy">월–일–년</string>
     <string name="core_label_mono">모노</string>
     <string name="core_label_mouse">마우스</string>
     <string name="core_label_mouse_debug_overlay">마우스 디버그 오버레이</string>
@@ -928,7 +928,7 @@
     <string name="core_label_nearest">최근접</string>
     <string name="core_label_net">네트워크</string>
     <string name="core_label_none">없음</string>
-    <string name="core_label_null">없음</string>
+    <string name="core_label_null">사용 안 함</string>
     <string name="core_label_off">끔</string>
     <string name="core_label_opacity" formatted="false">불투명도(%)</string>
     <string name="core_label_opengl">OpenGL</string>
@@ -1097,7 +1097,7 @@
     <string name="core_label_write_color_buffers">색상 버퍼 쓰기</string>
     <string name="core_label_write_depth_buffer">깊이 버퍼 쓰기</string>
     <string name="core_label_xaudio2">XAudio2</string>
-    <string name="core_label_yyyymmdd">년월일(YYYYMMDD)</string>
+    <string name="core_label_yyyymmdd">년–월–일</string>
     <string name="core_help_core_accurate_cache_line_stores" formatted="false">PPU DCBZ 명령을 정확하게 처리합니다.\n‘정확한 SPU DMA’와 함께 사용하면 SPU PUT 캐시 라인 접근도 원자적으로 처리됩니다.</string>
     <string name="core_help_core_use_accurate_dfma" formatted="false">PPU 및 SPU 백엔드에서 정확한 배정밀도 FMA 명령을 사용합니다.\nFMA를 지원하지 않는 CPU에서는 비활성화하면 성능이 향상될 수 있지만, 원래 발생하지 않던 미묘한 오류가 생길 수 있습니다.\nFMA를 지원하는 CPU에서는 비활성화하지 마세요.</string>
     <string name="core_help_core_accurate_ppu_128_byte_reservation_op_max_length" formatted="false">활성화하면 PPU 원자적 연산이 캐시 라인 전체 데이터에 적용됩니다. 비활성화하면 하나의 64비트 메모리 블록에 적용됩니다.\n숫자 값은 원자적 연산의 길이에 따라 정확한 처리 방식을 사용할지 결정합니다.</string>
@@ -1926,4 +1926,45 @@ OpenGL을 사용하는 경우에는 필요하지 않습니다.</string>
     <string name="core_help_video_vr_height" formatted="false">값이 높을수록 두 화면이 위로, 낮을수록 아래로 이동합니다. 뷰어의 렌즈에 맞춰 조정하세요.</string>
     <string name="core_label_show_spu_compilation_hint" formatted="false">SPU 컴파일 힌트 표시</string>
     <string name="core_help_miscellaneous_show_spu_compilation_hint" formatted="false">네이티브 오버레이에 ‘SPU 모듈 컴파일 중’ 안내를 표시합니다.</string>
+    <string name="settings_show_quick_bar">빠른 작업 표시줄 표시</string>
+    <string name="settings_help_show_quick_bar">게임 화면을 두 번 탭하면 빠른 작업 표시줄이 나타납니다. 표시줄이 숨겨져 있어도 뒤로 가기를 사용하면 게임 메뉴를 열 수 있습니다.</string>
+    <string name="emulation_portal_description">지원되는 게임의 가상 피규어를 관리합니다. 피규어 파일을 슬롯으로 가져오거나 캐릭터 목록에서 새로 만드세요. 연결된 USB 포털이 우선합니다.</string>
+    <string name="settings_mouse_button_left">왼쪽 클릭</string>
+    <string name="settings_mouse_button_right">오른쪽 클릭</string>
+    <string name="settings_mouse_button_middle">가운데 클릭</string>
+    <string name="settings_mouse_button_back">뒤로 버튼</string>
+    <string name="settings_mouse_button_forward">앞으로 버튼</string>
+    <string name="settings_mouse_button_number">마우스 버튼 %1$d</string>
+    <string name="settings_keyboard_key_enter">엔터</string>
+    <string name="settings_keyboard_key_backspace">백스페이스</string>
+    <string name="settings_keyboard_key_space">스페이스</string>
+    <string name="settings_keyboard_key_tab">탭</string>
+    <string name="settings_keyboard_key_escape">이스케이프</string>
+    <string name="settings_keyboard_key_shift">시프트</string>
+    <string name="settings_keyboard_key_control">컨트롤</string>
+    <string name="settings_keyboard_key_alt">알트</string>
+    <string name="settings_keyboard_key_meta">메타</string>
+    <string name="settings_keyboard_key_home">홈</string>
+    <string name="settings_keyboard_key_end">끝</string>
+    <string name="settings_keyboard_key_page_up">페이지 위로</string>
+    <string name="settings_keyboard_key_page_down">페이지 아래로</string>
+    <string name="settings_keyboard_key_insert">삽입</string>
+    <string name="settings_keyboard_key_delete">삭제</string>
+    <string name="settings_keyboard_key_caps_lock">대문자 잠금</string>
+    <string name="settings_keyboard_key_num_lock">숫자 잠금</string>
+    <string name="settings_keyboard_key_scroll_lock">스크롤 잠금</string>
+    <string name="settings_keyboard_key_pause">일시 정지</string>
+    <string name="settings_keyboard_key_print_screen">화면 캡처</string>
+    <string name="settings_keyboard_key_number">키 %1$d</string>
+    <string name="settings_keyboard_mouse_milliseconds_value">%1$d 밀리초</string>
+    <string name="settings_mouse_wheel_desc" formatted="false">위아래로 스크롤할 때 실행할 컨트롤러 동작을 선택합니다. 끄면 휠에 동작을 할당하지 않습니다.</string>
+    <string name="settings_mouse_wheel_pulse_desc" formatted="false">휠을 한 칸 돌릴 때 할당한 컨트롤러 동작을 누르고 있는 시간입니다. 게임이 짧은 스크롤 입력을 놓치면 늘리세요.</string>
+    <string name="settings_mouse_vertical_sensitivity_desc" formatted="false">수평 조준에 대한 수직 조준 감도를 조절합니다. 100%에서는 두 축의 감도가 같습니다.</string>
+    <string name="settings_mouse_deadzone_desc" formatted="false">중앙 부근의 작은 마우스 움직임을 무시해 원치 않는 조준 흔들림을 줄입니다. 값이 높으면 조준을 시작하기 전에 더 많이 움직여야 합니다.</string>
+    <string name="customization_theme_help" formatted="false">앱 색상을 선택합니다. 시스템은 기기 테마를 따르고, 나머지 옵션은 고정된 모양을 유지합니다.</string>
+    <string name="customization_background_help" formatted="false">홈 화면 배경으로 쓸 이미지나 동영상을 선택합니다. 기본 배경으로 돌아가려면 사용자 지정을 초기화하세요.</string>
+    <string name="customization_cover_size_help" formatted="false">라이브러리의 게임 표지 크기를 변경합니다. 표지가 클수록 한 줄에 표시되는 게임 수가 줄어듭니다.</string>
+    <string name="customization_font_help" formatted="false">앱 글꼴을 선택하거나 TTF 또는 OTF 글꼴 파일을 가져옵니다. 시스템은 기기의 글꼴을 사용합니다.</string>
+    <string name="customization_text_size_help" formatted="false">앱 전체의 글자 크기를 조절합니다. 글자가 커지면 일부 레이블이 더 많은 줄로 표시될 수 있습니다.</string>
+    <string name="settings_customization_drawer_help" formatted="false">탐색 서랍의 모양을 선택합니다. 미리보기에서 선택 전에 각 스타일을 확인할 수 있습니다.</string>
 </resources>

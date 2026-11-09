@@ -195,8 +195,8 @@ fun GpuDriverScreen(
                     applyGameDriverOverride(driverName)
                 }
                 Toast.makeText(context, installSuccessTemplate.format(driverName), Toast.LENGTH_SHORT).show()
-            }.onFailure { error ->
-                Toast.makeText(context, error.message ?: installFailedMessage, Toast.LENGTH_LONG).show()
+            }.onFailure {
+                Toast.makeText(context, installFailedMessage, Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -335,11 +335,11 @@ fun GpuDriverScreen(
                 LoadingCard(text = stringResource(R.string.settings_gpu_driver_catalog_loading))
             }
         }
-        uiState.gpuDriverCatalogError?.let { error ->
+        uiState.gpuDriverCatalogError?.let {
             item {
                 ErrorCard(
                     title = stringResource(R.string.settings_gpu_driver_catalog_failed),
-                    message = error
+                    message = stringResource(R.string.achievements_assist_error)
                 )
             }
         }
@@ -381,8 +381,8 @@ fun GpuDriverScreen(
                                 applyGameDriverOverride(driverName)
                             }
                             Toast.makeText(context, installSuccessTemplate.format(driverName), Toast.LENGTH_SHORT).show()
-                        }.onFailure { error ->
-                            Toast.makeText(context, error.message ?: installFailedMessage, Toast.LENGTH_LONG).show()
+                        }.onFailure {
+                            Toast.makeText(context, installFailedMessage, Toast.LENGTH_LONG).show()
                         }
                     }
                 },
@@ -472,7 +472,17 @@ private fun FilterChipRow(
             FilterChip(shape = neonChipShape(), 
                 selected = selected == filter,
                 onClick = { onSelected(filter) },
-                label = { Text(if (filter == GPU_DRIVER_FILTER_ALL) stringResource(R.string.settings_gpu_driver_filter_all) else filter, maxLines = 1, softWrap = false) }
+                label = {
+                    Text(
+                        when (filter) {
+                            GPU_DRIVER_FILTER_ALL -> stringResource(R.string.settings_gpu_driver_filter_all)
+                            GPU_DRIVER_SOURCE_UNKNOWN -> stringResource(R.string.settings_gpu_driver_source)
+                            else -> filter
+                        },
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
             )
         }
     }
@@ -1033,6 +1043,7 @@ private fun ErrorCard(title: String, message: String) {
 }
 
 private const val GPU_DRIVER_FILTER_ALL = "all"
+private const val GPU_DRIVER_SOURCE_UNKNOWN = "unknown-source"
 
 private fun RemoteGpuDriver.matchesSearch(query: String): Boolean {
     val normalized = query.trim()
@@ -1045,6 +1056,6 @@ private fun RemoteGpuDriver.sourceLabel(): String {
     return when {
         credits.contains("nihui", ignoreCase = true) -> "nihui"
         credits.contains("K11MCH1", ignoreCase = true) -> "K11MCH1"
-        else -> credits.substringBefore('/').trim().ifBlank { "Source" }
+        else -> credits.substringBefore('/').trim().ifBlank { GPU_DRIVER_SOURCE_UNKNOWN }
     }
 }

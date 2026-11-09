@@ -784,7 +784,7 @@
     <string name="core_label_custom_anaglyph_matrices">Vlastní matice anaglyfu</string>
     <string name="core_label_darkening_effect_strength">Intenzita ztmavení</string>
     <string name="core_label_date_format">Formát data</string>
-    <string name="core_label_ddmmyyyy">DDMMRRRR</string>
+    <string name="core_label_ddmmyyyy">Den–měsíc–rok</string>
     <string name="core_label_debug_console_mode">Režim ladicí konzole</string>
     <string name="core_label_debug_output">Ladicí výstup</string>
     <string name="core_label_debug_overlay">Ladicí překryv</string>
@@ -899,7 +899,7 @@
     <string name="core_label_matrix_right">Pravá matice</string>
     <string name="core_label_max_cpu_preempt_count">Maximální počet přerušení běhu CPU</string>
     <string name="core_label_max_llvm_compile_threads">Maximum vláken kompilace LLVM</string>
-    <string name="core_label_max_spurs_threads">Maximum vláken SPURS</string>
+    <string name="core_label_max_spurs_threads">Maximální počet vláken SPURS</string>
     <string name="core_label_maximum_savestate_files">Maximální počet souborů stavů</string>
     <string name="core_label_maximum_savestate_files_space_mib">Maximální místo pro uložené stavy (MiB)</string>
     <string name="core_label_medium">Střední</string>
@@ -915,7 +915,7 @@
     <string name="core_label_minimal">Minimální</string>
     <string name="core_label_minimum_scalable_dimension">Nejmenší rozměr pro škálování</string>
     <string name="core_label_miscellaneous">Ostatní</string>
-    <string name="core_label_mmddyyyy">MMDDRRRR</string>
+    <string name="core_label_mmddyyyy">Měsíc–den–rok</string>
     <string name="core_label_mono">Mono</string>
     <string name="core_label_mouse">Myš</string>
     <string name="core_label_mouse_debug_overlay">Ladicí překryv myši</string>
@@ -928,7 +928,7 @@
     <string name="core_label_nearest">Nejbližší</string>
     <string name="core_label_net">Síť</string>
     <string name="core_label_none">Žádná</string>
-    <string name="core_label_null">Žádný</string>
+    <string name="core_label_null">Vypnuto</string>
     <string name="core_label_off">Vypnuto</string>
     <string name="core_label_opacity" formatted="false">Neprůhlednost (%)</string>
     <string name="core_label_opengl">OpenGL</string>
@@ -1097,7 +1097,7 @@
     <string name="core_label_write_color_buffers">Zapisovat barevné buffery</string>
     <string name="core_label_write_depth_buffer">Zapisovat hloubkový buffer</string>
     <string name="core_label_xaudio2">XAudio2</string>
-    <string name="core_label_yyyymmdd">RRRRMMDD</string>
+    <string name="core_label_yyyymmdd">Rok–měsíc–den</string>
     <string name="core_help_core_accurate_cache_line_stores" formatted="false">Přesně zpracovává instrukci PPU DCBZ. V kombinaci s přesným DMA jednotek SPU se navíc přístupy SPU PUT k řádkům mezipaměti zpracovávají atomicky.</string>
     <string name="core_help_core_use_accurate_dfma" formatted="false">Používejte přesné instrukce FMA s dvojnásobnou přesností v backendech PPU a SPU.
 I když jeho deaktivace může poskytnout slušné zvýšení výkonu, pokud váš CPU nepodporuje FMA, může také přinést jemné chyby, které se jinak nevyskytují.
@@ -1932,4 +1932,45 @@ Toto nikdy nepoužívejte.</string>
     <string name="core_help_video_vr_height" formatted="false">Kladné hodnoty posunou obrazy nahoru, záporné dolů.</string>
     <string name="core_label_show_spu_compilation_hint" formatted="false">Zobrazit oznámení kompilace SPU</string>
     <string name="core_help_miscellaneous_show_spu_compilation_hint" formatted="false">Zobrazuje nápovědu ke kompilaci modulů SPU pomocí nativního překrytí.</string>
+    <string name="settings_show_quick_bar">Zobrazovat panel rychlých akcí</string>
+    <string name="settings_help_show_quick_bar">Dvojitým klepnutím na obrazovku hry zobrazíte panel rychlých akcí. Tlačítkem Zpět otevřete nabídku hry, i když je panel skrytý.</string>
+    <string name="emulation_portal_description">Spravujte virtuální figurky pro podporované hry. Importujte soubor figurky do slotu nebo ji vytvořte ze seznamu postav. Připojené USB portály mají přednost.</string>
+    <string name="settings_mouse_button_left">Levé kliknutí</string>
+    <string name="settings_mouse_button_right">Pravé kliknutí</string>
+    <string name="settings_mouse_button_middle">Prostřední kliknutí</string>
+    <string name="settings_mouse_button_back">Tlačítko Zpět</string>
+    <string name="settings_mouse_button_forward">Tlačítko Vpřed</string>
+    <string name="settings_mouse_button_number">Tlačítko myši %1$d</string>
+    <string name="settings_keyboard_key_enter">Enter</string>
+    <string name="settings_keyboard_key_backspace">Zpětné mazání</string>
+    <string name="settings_keyboard_key_space">Mezerník</string>
+    <string name="settings_keyboard_key_tab">Tabulátor</string>
+    <string name="settings_keyboard_key_escape">Escape</string>
+    <string name="settings_keyboard_key_shift">Shift</string>
+    <string name="settings_keyboard_key_control">Ctrl</string>
+    <string name="settings_keyboard_key_alt">Alt</string>
+    <string name="settings_keyboard_key_meta">Meta</string>
+    <string name="settings_keyboard_key_home">Začátek</string>
+    <string name="settings_keyboard_key_end">Konec</string>
+    <string name="settings_keyboard_key_page_up">Stránka nahoru</string>
+    <string name="settings_keyboard_key_page_down">Stránka dolů</string>
+    <string name="settings_keyboard_key_insert">Vložit</string>
+    <string name="settings_keyboard_key_delete">Smazat</string>
+    <string name="settings_keyboard_key_caps_lock">Zámek velkých písmen</string>
+    <string name="settings_keyboard_key_num_lock">Zámek čísel</string>
+    <string name="settings_keyboard_key_scroll_lock">Zámek posouvání</string>
+    <string name="settings_keyboard_key_pause">Pauza</string>
+    <string name="settings_keyboard_key_print_screen">Snímek obrazovky</string>
+    <string name="settings_keyboard_key_number">Klávesa %1$d</string>
+    <string name="settings_keyboard_mouse_milliseconds_value">%1$d ms</string>
+    <string name="settings_mouse_wheel_desc" formatted="false">Vyberte akce ovladače spouštěné posouváním nahoru a dolů. Vypnutím ponecháte kolečko bez přiřazení.</string>
+    <string name="settings_mouse_wheel_pulse_desc" formatted="false">Doba, po kterou každý krok kolečka podrží přiřazenou akci ovladače. Zvyšte ji, pokud hra nezaznamenává krátká posunutí.</string>
+    <string name="settings_mouse_vertical_sensitivity_desc" formatted="false">Upravte svislé míření vzhledem k vodorovnému. Při 100% mají obě osy stejnou citlivost.</string>
+    <string name="settings_mouse_deadzone_desc" formatted="false">Ignoruje malé pohyby myši blízko středu a omezuje nechtěný pohyb zaměřovače. Vyšší hodnoty vyžadují větší pohyb před zahájením míření.</string>
+    <string name="customization_theme_help" formatted="false">Vyberte barvy aplikace. Systém se řídí motivem zařízení; ostatní možnosti zachovají pevný vzhled.</string>
+    <string name="customization_background_help" formatted="false">Vyberte obrázek nebo video pro pozadí domovské obrazovky. Obnovením přizpůsobení vrátíte výchozí pozadí.</string>
+    <string name="customization_cover_size_help" formatted="false">Změňte velikost obalů her v knihovně. Větší obaly zobrazí méně her v řádku.</string>
+    <string name="customization_font_help" formatted="false">Vyberte písmo aplikace nebo importujte soubor TTF či OTF. Systém použije písmo zařízení.</string>
+    <string name="customization_text_size_help" formatted="false">Změňte velikost textu v celé aplikaci. Větší text může některé popisky rozdělit do více řádků.</string>
+    <string name="settings_customization_drawer_help" formatted="false">Vyberte vzhled navigačního panelu. Náhledy ukazují každý styl před výběrem.</string>
 </resources>

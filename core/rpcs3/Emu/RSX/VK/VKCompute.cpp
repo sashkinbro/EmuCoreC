@@ -1,6 +1,7 @@
 #include "VKCompute.h"
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
 #include "Emu/RSX/rsx_profiler.h"
 #include "VKHelpers.h"
 #include "VKRenderPass.h"
@@ -157,6 +158,14 @@ namespace vk
 		{
 			m_shader.create(::glsl::program_domain::glsl_compute_program, m_src);
 			auto handle = m_shader.compile();
+			if (const char* directory = std::getenv("EMUCOREC_DUMP_COMPUTE_DIR"))
+			{
+				const std::string stem = std::string(directory) + "/" + m_debug_name;
+				std::ofstream(stem + ".comp") << m_src;
+				const auto words = m_shader.get_compiled();
+				std::ofstream(stem + ".spv", std::ios::binary).write(
+					reinterpret_cast<const char*>(words.data()), words.size() * sizeof(u32));
+			}
 
 			VkComputePipelineCreateInfo create_info
 			{

@@ -103,7 +103,7 @@ namespace vk
 
 		void create(command_pool& cmd_pool);
 		void destroy();
-		void reset();
+		void reset(bool release_resources = false);
 
 		void begin();
 		void end();

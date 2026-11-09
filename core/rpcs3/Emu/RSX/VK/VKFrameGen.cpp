@@ -3,6 +3,7 @@
 
 #include "Emu/system_config.h"
 #include "vkutils/device.h"
+#include "vkutils/memory.h"
 #include "vkutils/image.h"
 #include "vkutils/commands.h"
 #include "vkutils/barriers.h"
@@ -538,6 +539,8 @@ namespace vk::frame_gen
 	bool shared_image::create(const vk::render_device& dev, u32 width, u32 height, VkFormat format)
 	{
 		destroy();
+		// Failure cleanup must use the creating device too, including budget refusals.
+		m_device = dev;
 
 		// A PLAIN device-local image now, not AHardwareBuffer-backed.
 		//
@@ -601,7 +604,7 @@ namespace vk::frame_gen
 		ai.allocationSize = req.size;
 		ai.memoryTypeIndex = type_index;
 
-		if (vkAllocateMemory(dev, &ai, nullptr, &m_memory) != VK_SUCCESS ||
+		if (vk::allocate_device_memory(dev, &ai, nullptr, &m_memory) != VK_SUCCESS ||
 			vkBindImageMemory(dev, m_image, m_memory, 0) != VK_SUCCESS)
 		{
 			framegen_log.error("Could not back the capture image at %ux%u", width, height);
@@ -647,7 +650,7 @@ namespace vk::frame_gen
 
 		if (m_memory != VK_NULL_HANDLE)
 		{
-			vkFreeMemory(m_device, m_memory, nullptr);
+			vk::free_device_memory(m_device, m_memory, nullptr);
 			m_memory = VK_NULL_HANDLE;
 		}
 
@@ -1436,6 +1439,9 @@ namespace vk::frame_gen
 			VmaVulkanFunctions fns = {};
 			fns.vkGetInstanceProcAddr = ::vkGetInstanceProcAddr;
 			fns.vkGetDeviceProcAddr = ::vkGetDeviceProcAddr;
+			// Intermediate/history images share the renderer's aggregate admission too.
+			fns.vkAllocateMemory = vk::allocate_device_memory;
+			fns.vkFreeMemory = vk::free_device_memory;
 
 			if (!fns.vkGetInstanceProcAddr || !fns.vkGetDeviceProcAddr)
 			{
@@ -1692,9 +1698,19 @@ namespace vk::frame_gen
 
 		const VkExtent2D extent{g_shared_w, g_shared_h};
 
-		g_native.framegen->Process(*g_native.device, cmdbuf, g_source_image,
+		if (!g_native.framegen->Process(*g_native.device, cmdbuf, g_source_image,
 			g_shared_out[0].view(), extent, VK_FORMAT_R8G8B8A8_UNORM,
-			VkExtent2D{g_guest_w, g_guest_h});
+			VkExtent2D{g_guest_w, g_guest_h}))
+		{
+			framegen_log.error("Frame generation allocation failed: %d",
+				static_cast<int>(g_native.allocator->GetLastError()));
+			disable("not enough memory for frame generation");
+			// Rebuild idles the device before constructing the chain. Its partial
+			// chain has been released, and this buffer has not been submitted, so
+			// the native pool (including this recording) and retained VMA blocks can go.
+			destroy_native_stack();
+			return 0;
+		}
 
 		VkImageMemoryBarrier from_read = to_read;
 		from_read.oldLayout = VK_IMAGE_LAYOUT_GENERAL;

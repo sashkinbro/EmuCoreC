@@ -1,5 +1,7 @@
 package com.sbro.emucorec.ui.settings
 
+import android.view.KeyEvent
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -225,6 +227,7 @@ private fun KeyboardMouseSettingsContent(
                     AppPreferences.MOUSE_WHEEL_SHOULDERS to stringResource(R.string.settings_mouse_wheel_shoulders)
                 ),
                 selectedValue = settings.mouseWheelMode,
+                helpText = stringResource(R.string.settings_mouse_wheel_desc),
                 horizontalPadding = horizontalPadding,
                 onSelect = { mode ->
                     onSettingsChange(settings.copy(mouseWheelMode = mode))
@@ -236,7 +239,8 @@ private fun KeyboardMouseSettingsContent(
                     value = settings.mouseWheelPulseMs,
                     range = AppPreferences.MOUSE_WHEEL_PULSE_MIN_MS.toFloat()..
                         AppPreferences.MOUSE_WHEEL_PULSE_MAX_MS.toFloat(),
-                    valueSuffix = " ms",
+                    valueFormatRes = R.string.settings_keyboard_mouse_milliseconds_value,
+                    helpText = stringResource(R.string.settings_mouse_wheel_pulse_desc),
                     horizontalPadding = horizontalPadding,
                     onValueChange = { value ->
                         onSettingsChange(settings.copy(mouseWheelPulseMs = value))
@@ -272,6 +276,7 @@ private fun KeyboardMouseSettingsContent(
                 KeyboardMouseSliderItem(
                     title = stringResource(R.string.settings_mouse_vertical_sensitivity),
                     value = settings.mouseVerticalSensitivity,
+                    helpText = stringResource(R.string.settings_mouse_vertical_sensitivity_desc),
                     range = AppPreferences.MOUSE_VERTICAL_SENSITIVITY_MIN.toFloat()..
                         AppPreferences.MOUSE_VERTICAL_SENSITIVITY_MAX.toFloat(),
                     horizontalPadding = horizontalPadding,
@@ -293,6 +298,7 @@ private fun KeyboardMouseSettingsContent(
                 KeyboardMouseSliderItem(
                     title = stringResource(R.string.settings_mouse_deadzone),
                     value = settings.mouseAimDeadzone,
+                    helpText = stringResource(R.string.settings_mouse_deadzone_desc),
                     range = AppPreferences.MOUSE_DEADZONE_MIN.toFloat()..
                         AppPreferences.MOUSE_DEADZONE_MAX.toFloat(),
                     horizontalPadding = horizontalPadding,
@@ -477,8 +483,8 @@ private fun KeyboardMouseMappingDialog(
                 val value = when {
                     resolved == null -> stringResource(R.string.settings_not_set)
                     mappingSource == KeyboardMouseMappingSource.MOUSE ->
-                        KeyboardMouseBindings.mouseButtonLabel(resolved)
-                    else -> KeyboardMouseBindings.keyboardKeyLabel(resolved)
+                        localizedMouseButtonLabel(resolved)
+                    else -> localizedKeyboardKeyLabel(resolved)
                 }
                 KeyboardMouseBindingRow(
                     title = keyboardMouseActionLabel(actionId),
@@ -750,7 +756,7 @@ private fun KeyboardMouseSliderItem(
     title: String,
     value: Int,
     range: ClosedFloatingPointRange<Float>,
-    valueSuffix: String = "%",
+    valueFormatRes: Int = R.string.settings_gamepad_percent_value,
     horizontalPadding: Dp,
     helpText: String? = null,
     onValueChange: (Int) -> Unit
@@ -774,7 +780,7 @@ private fun KeyboardMouseSliderItem(
                 SettingHelpButton(title = title, description = it)
             }
             Text(
-                text = "${sliderValue.toInt()}$valueSuffix",
+                text = stringResource(valueFormatRes, sliderValue.toInt()),
                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
                 color = MaterialTheme.colorScheme.primary
             )
@@ -913,4 +919,65 @@ private fun keyboardMouseActionLabel(actionId: String): String = when (actionId)
     KeyboardMouseBindings.ACTION_QUICK_SAVE -> stringResource(R.string.emulation_quickbar_quick_save)
     KeyboardMouseBindings.ACTION_QUICK_LOAD -> stringResource(R.string.emulation_quickbar_quick_load)
     else -> actionId
+}
+
+@Composable
+private fun localizedMouseButtonLabel(button: Int): String = when (button) {
+    KeyboardMouseBindings.MOUSE_BUTTON_LEFT -> stringResource(R.string.settings_mouse_button_left)
+    KeyboardMouseBindings.MOUSE_BUTTON_RIGHT -> stringResource(R.string.settings_mouse_button_right)
+    KeyboardMouseBindings.MOUSE_BUTTON_MIDDLE -> stringResource(R.string.settings_mouse_button_middle)
+    KeyboardMouseBindings.MOUSE_BUTTON_BACK -> stringResource(R.string.settings_mouse_button_back)
+    KeyboardMouseBindings.MOUSE_BUTTON_FORWARD -> stringResource(R.string.settings_mouse_button_forward)
+    else -> stringResource(R.string.settings_mouse_button_number, button)
+}
+
+/** Translate key names while retaining the letters, digits and symbols printed on physical keys. */
+@Composable
+private fun localizedKeyboardKeyLabel(keyCode: Int): String = when (keyCode) {
+    KeyEvent.KEYCODE_DPAD_UP -> stringResource(R.string.controls_button_up)
+    KeyEvent.KEYCODE_DPAD_DOWN -> stringResource(R.string.controls_button_down)
+    KeyEvent.KEYCODE_DPAD_LEFT -> stringResource(R.string.controls_button_left)
+    KeyEvent.KEYCODE_DPAD_RIGHT -> stringResource(R.string.controls_button_right)
+    KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> stringResource(R.string.settings_keyboard_key_enter)
+    KeyEvent.KEYCODE_DEL -> stringResource(R.string.settings_keyboard_key_backspace)
+    KeyEvent.KEYCODE_SPACE -> stringResource(R.string.settings_keyboard_key_space)
+    KeyEvent.KEYCODE_TAB -> stringResource(R.string.settings_keyboard_key_tab)
+    KeyEvent.KEYCODE_ESCAPE -> stringResource(R.string.settings_keyboard_key_escape)
+    KeyEvent.KEYCODE_SHIFT_LEFT, KeyEvent.KEYCODE_SHIFT_RIGHT -> stringResource(R.string.settings_keyboard_key_shift)
+    KeyEvent.KEYCODE_CTRL_LEFT, KeyEvent.KEYCODE_CTRL_RIGHT -> stringResource(R.string.settings_keyboard_key_control)
+    KeyEvent.KEYCODE_ALT_LEFT, KeyEvent.KEYCODE_ALT_RIGHT -> stringResource(R.string.settings_keyboard_key_alt)
+    KeyEvent.KEYCODE_META_LEFT, KeyEvent.KEYCODE_META_RIGHT -> stringResource(R.string.settings_keyboard_key_meta)
+    KeyEvent.KEYCODE_MOVE_HOME -> stringResource(R.string.settings_keyboard_key_home)
+    KeyEvent.KEYCODE_MOVE_END -> stringResource(R.string.settings_keyboard_key_end)
+    KeyEvent.KEYCODE_PAGE_UP -> stringResource(R.string.settings_keyboard_key_page_up)
+    KeyEvent.KEYCODE_PAGE_DOWN -> stringResource(R.string.settings_keyboard_key_page_down)
+    KeyEvent.KEYCODE_INSERT -> stringResource(R.string.settings_keyboard_key_insert)
+    KeyEvent.KEYCODE_FORWARD_DEL -> stringResource(R.string.settings_keyboard_key_delete)
+    KeyEvent.KEYCODE_CAPS_LOCK -> stringResource(R.string.settings_keyboard_key_caps_lock)
+    KeyEvent.KEYCODE_NUM_LOCK -> stringResource(R.string.settings_keyboard_key_num_lock)
+    KeyEvent.KEYCODE_SCROLL_LOCK -> stringResource(R.string.settings_keyboard_key_scroll_lock)
+    KeyEvent.KEYCODE_BREAK -> stringResource(R.string.settings_keyboard_key_pause)
+    KeyEvent.KEYCODE_SYSRQ -> stringResource(R.string.settings_keyboard_key_print_screen)
+    in KeyEvent.KEYCODE_A..KeyEvent.KEYCODE_Z -> ('A'.code + keyCode - KeyEvent.KEYCODE_A).toChar().toString()
+    in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> (keyCode - KeyEvent.KEYCODE_0).toString()
+    in KeyEvent.KEYCODE_NUMPAD_0..KeyEvent.KEYCODE_NUMPAD_9 -> (keyCode - KeyEvent.KEYCODE_NUMPAD_0).toString()
+    in KeyEvent.KEYCODE_F1..KeyEvent.KEYCODE_F12 -> "F${keyCode - KeyEvent.KEYCODE_F1 + 1}"
+    KeyEvent.KEYCODE_COMMA -> ","
+    KeyEvent.KEYCODE_PERIOD, KeyEvent.KEYCODE_NUMPAD_DOT -> "."
+    KeyEvent.KEYCODE_GRAVE -> "`"
+    KeyEvent.KEYCODE_MINUS, KeyEvent.KEYCODE_NUMPAD_SUBTRACT -> "−"
+    KeyEvent.KEYCODE_EQUALS, KeyEvent.KEYCODE_NUMPAD_EQUALS -> "="
+    KeyEvent.KEYCODE_LEFT_BRACKET -> "["
+    KeyEvent.KEYCODE_RIGHT_BRACKET -> "]"
+    KeyEvent.KEYCODE_NUMPAD_LEFT_PAREN -> "("
+    KeyEvent.KEYCODE_NUMPAD_RIGHT_PAREN -> ")"
+    KeyEvent.KEYCODE_BACKSLASH -> "\\"
+    KeyEvent.KEYCODE_SEMICOLON -> ";"
+    KeyEvent.KEYCODE_APOSTROPHE -> "'"
+    KeyEvent.KEYCODE_SLASH, KeyEvent.KEYCODE_NUMPAD_DIVIDE -> "/"
+    KeyEvent.KEYCODE_PLUS, KeyEvent.KEYCODE_NUMPAD_ADD -> "+"
+    KeyEvent.KEYCODE_STAR, KeyEvent.KEYCODE_NUMPAD_MULTIPLY -> "*"
+    KeyEvent.KEYCODE_POUND -> "#"
+    KeyEvent.KEYCODE_AT -> "@"
+    else -> stringResource(R.string.settings_keyboard_key_number, keyCode)
 }

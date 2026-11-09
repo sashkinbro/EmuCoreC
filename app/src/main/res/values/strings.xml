@@ -772,8 +772,8 @@
     <string name="core_label_center_horizontally">Center Horizontally</string>
     <string name="core_label_center_vertically">Center Vertically</string>
     <string name="core_label_clans_enabled">Clans Enabled</string>
-    <string name="core_label_clock12">Clock12</string>
-    <string name="core_label_clock24">Clock24</string>
+    <string name="core_label_clock12">12-hour format</string>
+    <string name="core_label_clock24">24-hour format</string>
     <string name="core_label_clocks_scale">Clocks scale</string>
     <string name="core_label_compatible_savestate_mode">Compatible Savestate Mode</string>
     <string name="core_label_connected">Connected</string>
@@ -787,7 +787,7 @@
     <string name="core_label_custom_anaglyph_matrices">Custom Anaglyph Matrices</string>
     <string name="core_label_darkening_effect_strength">Darkening effect strength</string>
     <string name="core_label_date_format">Date Format</string>
-    <string name="core_label_ddmmyyyy">Ddmmyyyy</string>
+    <string name="core_label_ddmmyyyy">Day–month–year</string>
     <string name="core_label_debug_console_mode">Debug Console Mode</string>
     <string name="core_label_debug_output">Debug output</string>
     <string name="core_label_debug_overlay">Debug overlay</string>
@@ -902,7 +902,7 @@
     <string name="core_label_matrix_right">Matrix Right</string>
     <string name="core_label_max_cpu_preempt_count">Max CPU Preempt Count</string>
     <string name="core_label_max_llvm_compile_threads">Max LLVM Compile Threads</string>
-    <string name="core_label_max_spurs_threads">Max SPURS Threads</string>
+    <string name="core_label_max_spurs_threads">Maximum SPURS threads</string>
     <string name="core_label_maximum_savestate_files">Maximum SaveState Files</string>
     <string name="core_label_maximum_savestate_files_space_mib">Maximum SaveState Files Space (MiB)</string>
     <string name="core_label_medium">Medium</string>
@@ -918,7 +918,7 @@
     <string name="core_label_minimal">Minimal</string>
     <string name="core_label_minimum_scalable_dimension">Minimum Scalable Dimension</string>
     <string name="core_label_miscellaneous">Miscellaneous</string>
-    <string name="core_label_mmddyyyy">Mmddyyyy</string>
+    <string name="core_label_mmddyyyy">Month–day–year</string>
     <string name="core_label_mono">Mono</string>
     <string name="core_label_mouse">Mouse</string>
     <string name="core_label_mouse_debug_overlay">Mouse Debug overlay</string>
@@ -929,9 +929,9 @@
     <string name="core_label_multithreaded_rsx">Multithreaded RSX</string>
     <string name="core_label_music_handler">Music Handler</string>
     <string name="core_label_nearest">Nearest</string>
-    <string name="core_label_net">Net</string>
+    <string name="core_label_net">Network</string>
     <string name="core_label_none">None</string>
-    <string name="core_label_null">Null</string>
+    <string name="core_label_null">Disabled</string>
     <string name="core_label_off">Off</string>
     <string name="core_label_opacity" formatted="false">Opacity (%)</string>
     <string name="core_label_opengl">OpenGL</string>
@@ -978,7 +978,7 @@
     <string name="core_label_read_color_buffers">Read Color Buffers</string>
     <string name="core_label_read_depth_buffer">Read Depth Buffer</string>
     <string name="core_label_real">Real</string>
-    <string name="core_label_real_singstar">Real SingStar</string>
+    <string name="core_label_real_singstar">Physical SingStar</string>
     <string name="core_label_recompiler_asmjit">Recompiler (ASMJIT)</string>
     <string name="core_label_recompiler_llvm">Recompiler (LLVM)</string>
     <string name="core_label_record_with_overlays">Record With Overlays</string>
@@ -1100,7 +1100,7 @@
     <string name="core_label_write_color_buffers">Write Color Buffers</string>
     <string name="core_label_write_depth_buffer">Write Depth Buffer</string>
     <string name="core_label_xaudio2">XAudio2</string>
-    <string name="core_label_yyyymmdd">Yyyymmdd</string>
+    <string name="core_label_yyyymmdd">Year–month–day</string>
     <string name="core_help_core_accurate_cache_line_stores" formatted="false">Accurately processes PPU DCBZ instruction.
 In addition, when combined with Accurate SPU DMA, SPU PUT cache line accesses will be processed atomically.</string>
     <string name="core_help_core_use_accurate_dfma" formatted="false">Use accurate double-precision FMA instructions in PPU and SPU backends.
@@ -1563,7 +1563,7 @@ This setting is only applied when SPU Decoder is set to Dynamic or LLVM.</string
     <string name="core_label_italian_keyboard">Italian keyboard</string>
     <string name="core_label_japanese">Japanese</string>
     <string name="core_label_japanese_keyboard">Japanese keyboard</string>
-    <string name="core_label_japanese_keyboard_kana_state">Japanese keyboard (Kana state)</string>
+    <string name="core_label_japanese_keyboard_kana_state">Japanese keyboard (Kana mode)</string>
     <string name="core_label_korean">Korean</string>
     <string name="core_label_korean_keyboard">Korean keyboard</string>
     <string name="core_label_norwegian">Norwegian</string>
@@ -2068,4 +2068,45 @@ This setting is only applied when SPU Decoder is set to Dynamic or LLVM.</string
     <string name="core_help_video_vr_height" formatted="false">Higher values move both pictures up, lower values move them down, to line them up with the viewer\'s lenses.</string>
     <string name="core_label_show_spu_compilation_hint" formatted="false">Show SPU compilation hint</string>
     <string name="core_help_miscellaneous_show_spu_compilation_hint" formatted="false">Shows \'Compiling SPU modules\' hint using the native overlay.</string>
+    <string name="settings_show_quick_bar">Show quick action bar</string>
+    <string name="settings_help_show_quick_bar">Double-tap the game screen to show the quick action bar. Use Back to open the game menu even when the bar is hidden.</string>
+    <string name="emulation_portal_description">Manage virtual toy figures for supported games. Import a figure file into a slot, or create one from the character list. Connected USB portals take priority.</string>
+    <string name="settings_mouse_button_left">Left click</string>
+    <string name="settings_mouse_button_right">Right click</string>
+    <string name="settings_mouse_button_middle">Middle click</string>
+    <string name="settings_mouse_button_back">Back button</string>
+    <string name="settings_mouse_button_forward">Forward button</string>
+    <string name="settings_mouse_button_number">Mouse button %1$d</string>
+    <string name="settings_keyboard_key_enter">Enter</string>
+    <string name="settings_keyboard_key_backspace">Backspace</string>
+    <string name="settings_keyboard_key_space">Space</string>
+    <string name="settings_keyboard_key_tab">Tab</string>
+    <string name="settings_keyboard_key_escape">Escape</string>
+    <string name="settings_keyboard_key_shift">Shift</string>
+    <string name="settings_keyboard_key_control">Control</string>
+    <string name="settings_keyboard_key_alt">Alt</string>
+    <string name="settings_keyboard_key_meta">Meta</string>
+    <string name="settings_keyboard_key_home">Home</string>
+    <string name="settings_keyboard_key_end">End</string>
+    <string name="settings_keyboard_key_page_up">Page up</string>
+    <string name="settings_keyboard_key_page_down">Page down</string>
+    <string name="settings_keyboard_key_insert">Insert</string>
+    <string name="settings_keyboard_key_delete">Delete</string>
+    <string name="settings_keyboard_key_caps_lock">Caps Lock</string>
+    <string name="settings_keyboard_key_num_lock">Num Lock</string>
+    <string name="settings_keyboard_key_scroll_lock">Scroll Lock</string>
+    <string name="settings_keyboard_key_pause">Pause</string>
+    <string name="settings_keyboard_key_print_screen">Print Screen</string>
+    <string name="settings_keyboard_key_number">Key %1$d</string>
+    <string name="settings_keyboard_mouse_milliseconds_value">%1$d ms</string>
+    <string name="settings_mouse_wheel_desc" formatted="false">Choose which controller actions are triggered when you scroll up and down. Turn this off to leave the wheel unmapped.</string>
+    <string name="settings_mouse_wheel_pulse_desc" formatted="false">How long each wheel step holds its mapped controller action. Increase this if a game misses brief scroll inputs.</string>
+    <string name="settings_mouse_vertical_sensitivity_desc" formatted="false">Adjust vertical aiming relative to horizontal aiming. 100% gives both axes the same sensitivity.</string>
+    <string name="settings_mouse_deadzone_desc" formatted="false">Ignore small mouse movements near the center to reduce unwanted aiming drift. Higher values require more movement before aiming starts.</string>
+    <string name="customization_theme_help" formatted="false">Choose the app colors. System follows your device theme; the other options keep a fixed appearance.</string>
+    <string name="customization_background_help" formatted="false">Choose an image or video for the home screen background. Reset customization to restore the default background.</string>
+    <string name="customization_cover_size_help" formatted="false">Change the size of game covers in the library. Larger covers show fewer games per row.</string>
+    <string name="customization_font_help" formatted="false">Choose the app typeface or import a TTF or OTF font file. System uses the device font.</string>
+    <string name="customization_text_size_help" formatted="false">Scale text throughout the app. Larger text can make some labels wrap onto more lines.</string>
+    <string name="settings_customization_drawer_help" formatted="false">Choose the appearance of the navigation drawer. The previews show each style before you select it.</string>
 </resources>

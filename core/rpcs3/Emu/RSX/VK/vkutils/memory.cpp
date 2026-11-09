@@ -2,6 +2,12 @@
 #include "memory.h"
 #include "memory_budget.hpp"
 #include "Emu/system_config.h"
+#ifdef __ANDROID__
+#include "mobile_memory_budget.hpp"
+#include "util/sysinfo.hpp"
+#include <mutex>
+#include <unordered_map>
+#endif
 
 #include "Emu/RSX/Utils/algorithm.hpp"
 #include "Emu/system_config.h"
@@ -12,6 +18,80 @@
 
 namespace vk
 {
+#ifdef __ANDROID__
+	namespace
+	{
+		struct mobile_pool_state
+		{
+			mobile_memory_budget budget;
+			std::unordered_map<VkDeviceMemory, u64> allocations;
+			PFN_vkAllocateMemory allocate = ::vkAllocateMemory;
+			PFN_vkFreeMemory free = ::vkFreeMemory;
+
+			mobile_pool_state(u64 limit, u64 reserve) : budget(limit, reserve) {}
+		};
+
+		std::mutex mobile_pool_mutex;
+		std::unordered_map<VkDevice, mobile_pool_state> mobile_pools;
+
+		VKAPI_ATTR VkResult VKAPI_CALL mobile_allocate_memory(VkDevice device,
+			const VkMemoryAllocateInfo* info, const VkAllocationCallbacks* callbacks, VkDeviceMemory* memory)
+		{
+			std::lock_guard lock(mobile_pool_mutex);
+			auto& pool = mobile_pools.at(device);
+			const u64 available = utils::get_avail_memory();
+			if (!pool.budget.try_reserve(info->allocationSize, available))
+			{
+				rsx_log.warning("Mobile GPU pool refused %llu KiB: %llu KiB allocated, %llu KiB limit, %llu KiB system headroom",
+					info->allocationSize / 1024, pool.budget.used() / 1024, pool.budget.limit() / 1024, available / 1024);
+				return VK_ERROR_OUT_OF_DEVICE_MEMORY;
+			}
+
+			const auto result = pool.allocate(device, info, callbacks, memory);
+			if (result == VK_SUCCESS)
+			{
+				pool.allocations.emplace(*memory, info->allocationSize);
+			}
+			else
+			{
+				pool.budget.release(info->allocationSize);
+			}
+			return result;
+		}
+
+		VKAPI_ATTR void VKAPI_CALL mobile_free_memory(VkDevice device, VkDeviceMemory memory,
+			const VkAllocationCallbacks* callbacks)
+		{
+			std::lock_guard lock(mobile_pool_mutex);
+			auto& pool = mobile_pools.at(device);
+			pool.free(device, memory, callbacks);
+			if (const auto entry = pool.allocations.find(memory); entry != pool.allocations.end())
+			{
+				pool.budget.release(entry->second);
+				pool.allocations.erase(entry);
+			}
+		}
+	}
+#endif
+	VKAPI_ATTR VkResult VKAPI_CALL allocate_device_memory(VkDevice device, const VkMemoryAllocateInfo* info,
+		const VkAllocationCallbacks* callbacks, VkDeviceMemory* memory)
+	{
+#ifdef __ANDROID__
+		return mobile_allocate_memory(device, info, callbacks, memory);
+#else
+		return vkAllocateMemory(device, info, callbacks, memory);
+#endif
+	}
+
+	VKAPI_ATTR void VKAPI_CALL free_device_memory(VkDevice device, VkDeviceMemory memory, const VkAllocationCallbacks* callbacks)
+	{
+#ifdef __ANDROID__
+		mobile_free_memory(device, memory, callbacks);
+#else
+		vkFreeMemory(device, memory, callbacks);
+#endif
+	}
+
 	// Defined in VKHelpers.cpp. Declared here rather than including VKHelpers.h, which pulls the
 	// renderer into vkutils and inverts the dependency this directory is kept clean of.
 	bool is_last_ditch_eviction();
@@ -169,7 +249,22 @@ namespace vk
 
 	mem_allocator_base::mem_allocator_base(const vk::render_device& dev, VkPhysicalDevice /*pdev*/)
 		: m_device(dev), m_allocation_flags(0)
-	{}
+	{
+#ifdef __ANDROID__
+		const u64 total = utils::get_total_memory();
+		const u64 limit = mobile_memory_budget::limit_for_device(g_cfg.video.vk.vram_allocation_limit * 0x100000ull, total);
+		std::lock_guard lock(mobile_pool_mutex);
+		mobile_pools.try_emplace(m_device, limit, mobile_memory_budget::system_reserve(total));
+#endif
+	}
+
+	mem_allocator_base::~mem_allocator_base()
+	{
+#ifdef __ANDROID__
+		std::lock_guard lock(mobile_pool_mutex);
+		mobile_pools.erase(m_device);
+#endif
+	}
 
 #ifdef __APPLE__
 	// Device-local VMA block bytes for the perf line, kept in an atomic the bridge can read during teardown.
@@ -219,7 +314,6 @@ namespace vk
 		// VMA copies these at vmaCreateAllocator, so a local is enough.
 		const VmaDeviceMemoryCallbacks block_callbacks{on_vma_block_allocated, on_vma_block_freed, nullptr};
 		allocatorInfo.pDeviceMemoryCallbacks = &block_callbacks;
-
 #ifdef ARCH_ARM64
 		// VMA's default 256 MiB blocks held 736 MiB of Metal memory for 493 MiB in use on a 4 GB iPhone.
 		if (utils::low_memory_device())
@@ -278,8 +372,12 @@ namespace vk
 		}
 		else
 		{
+#ifdef __ANDROID__
+			rsx_log.notice("VK_EXT_memory_budget is unavailable. Using the aggregate mobile GPU pool and system headroom.");
+#else
 			rsx_log.warning("VK_EXT_memory_budget is unavailable. Video memory pressure will be "
 				"judged against the heap size rather than what the driver will actually part with.");
+#endif
 		}
 
 #ifdef __ANDROID__
@@ -307,6 +405,11 @@ namespace vk
 		}
 
 		allocatorInfo.pVulkanFunctions = &vulkan_functions;
+
+		// VMA invokes these for actual blocks, including dedicated allocations. A single
+		// reservation spans every memory type/heap: Android's heaps share physical RAM.
+		vulkan_functions.vkAllocateMemory = mobile_allocate_memory;
+		vulkan_functions.vkFreeMemory = mobile_free_memory;
 #endif
 
 		CHECK_RESULT(vmaCreateAllocator(&allocatorInfo, &m_allocator));
@@ -520,6 +623,10 @@ namespace vk
 
 	f32 mem_allocator_vma::get_memory_usage()
 	{
+#ifdef __ANDROID__
+		std::lock_guard lock(mobile_pool_mutex);
+		return mobile_pools.at(m_device).budget.pressure(utils::get_avail_memory());
+#else
 		vmaGetHeapBudgets(m_allocator, stats.data());
 
 		// Filter out the Re-BAR heap
@@ -529,6 +636,7 @@ namespace vk
 		}
 
 		return maximum_budget_usage(stats);
+#endif
 	}
 
 	std::string mem_allocator_vma::describe_heap_usage()
@@ -562,6 +670,14 @@ namespace vk
 				heap.usage / 0x100000, heap.budget / 0x100000);
 		}
 
+#ifdef __ANDROID__
+		{
+			std::lock_guard lock(mobile_pool_mutex);
+			const auto& pool = mobile_pools.at(m_device).budget;
+			fmt::append(result, "; mobile aggregate: %lluM committed, %lluM capacity, %lluM limit, %lluM system reserve",
+				pool.used() / 0x100000, pool.capacity() / 0x100000, pool.limit() / 0x100000, pool.reserve() / 0x100000);
+		}
+#endif
 		return result;
 	}
 
@@ -589,7 +705,11 @@ namespace vk
 			for (const auto& memory_type_index : *request.memory_type)
 			{
 				info.memoryTypeIndex = memory_type_index;
+#ifdef __ANDROID__
+				error_code = mobile_allocate_memory(m_device, &info, nullptr, &memory);
+#else
 				error_code = vkAllocateMemory(m_device, &info, nullptr, &memory);
+#endif
 				if (error_code == VK_SUCCESS)
 				{
 					return { error_code, memory_type_index };
@@ -637,7 +757,11 @@ namespace vk
 	void mem_allocator_vk::free(mem_handle_t mem_handle)
 	{
 		vmm_notify_memory_freed(mem_handle);
+#ifdef __ANDROID__
+		mobile_free_memory(m_device, static_cast<VkDeviceMemory>(mem_handle), nullptr);
+#else
 		vkFreeMemory(m_device, static_cast<VkDeviceMemory>(mem_handle), nullptr);
+#endif
 	}
 
 	void* mem_allocator_vk::map(mem_handle_t mem_handle, u64 offset, u64 size)
@@ -664,7 +788,12 @@ namespace vk
 
 	f32 mem_allocator_vk::get_memory_usage()
 	{
+#ifdef __ANDROID__
+		std::lock_guard lock(mobile_pool_mutex);
+		return mobile_pools.at(m_device).budget.pressure(utils::get_avail_memory());
+#else
 		return 0.f;
+#endif
 	}
 
 	mem_allocator_base* get_current_mem_allocator()

@@ -769,8 +769,8 @@
     <string name="core_label_center_horizontally">水平居中</string>
     <string name="core_label_center_vertically">垂直居中</string>
     <string name="core_label_clans_enabled">部落已启用</string>
-    <string name="core_label_clock12">时钟12</string>
-    <string name="core_label_clock24">时钟24</string>
+    <string name="core_label_clock12">12小时制</string>
+    <string name="core_label_clock24">24小时制</string>
     <string name="core_label_clocks_scale">钟表刻度</string>
     <string name="core_label_compatible_savestate_mode">兼容的保存状态模式</string>
     <string name="core_label_connected">已连接</string>
@@ -784,7 +784,7 @@
     <string name="core_label_custom_anaglyph_matrices">自定义浮雕矩阵</string>
     <string name="core_label_darkening_effect_strength">变暗效果强度</string>
     <string name="core_label_date_format">日期格式</string>
-    <string name="core_label_ddmmyyyy">Ddmmyyyy</string>
+    <string name="core_label_ddmmyyyy">日–月–年</string>
     <string name="core_label_debug_console_mode">调试控制台模式</string>
     <string name="core_label_debug_output">调试输出</string>
     <string name="core_label_debug_overlay">调试覆盖</string>
@@ -915,7 +915,7 @@
     <string name="core_label_minimal">最小</string>
     <string name="core_label_minimum_scalable_dimension">最小可缩放尺寸</string>
     <string name="core_label_miscellaneous">杂项</string>
-    <string name="core_label_mmddyyyy">嗯嗯</string>
+    <string name="core_label_mmddyyyy">月–日–年</string>
     <string name="core_label_mono">单声道</string>
     <string name="core_label_mouse">鼠标</string>
     <string name="core_label_mouse_debug_overlay">鼠标调试覆盖</string>
@@ -928,7 +928,7 @@
     <string name="core_label_nearest">最近的</string>
     <string name="core_label_net">网络</string>
     <string name="core_label_none">无</string>
-    <string name="core_label_null">空</string>
+    <string name="core_label_null">禁用</string>
     <string name="core_label_off">关闭</string>
     <string name="core_label_opacity" formatted="false">不透明度 (%)</string>
     <string name="core_label_opengl">OpenGL</string>
@@ -975,7 +975,7 @@
     <string name="core_label_read_color_buffers">读取颜色缓冲区</string>
     <string name="core_label_read_depth_buffer">读取深度缓冲区</string>
     <string name="core_label_real">真实</string>
-    <string name="core_label_real_singstar">真正的歌星</string>
+    <string name="core_label_real_singstar">实体 SingStar</string>
     <string name="core_label_recompiler_asmjit">重新编译器 (ASMJIT)</string>
     <string name="core_label_recompiler_llvm">重新编译器 (LLVM)</string>
     <string name="core_label_record_with_overlays">使用叠加记录</string>
@@ -1097,7 +1097,7 @@
     <string name="core_label_write_color_buffers">写入颜色缓冲区</string>
     <string name="core_label_write_depth_buffer">写入深度缓冲区</string>
     <string name="core_label_xaudio2">X音频2</string>
-    <string name="core_label_yyyymmdd">年月日</string>
+    <string name="core_label_yyyymmdd">年–月–日</string>
     <string name="core_help_core_accurate_cache_line_stores" formatted="false">准确处理PPU DCBZ指令。
 此外，当与 Accurate SPU DMA 结合使用时，SPU PUT 缓存行访问将以原子方式处理。</string>
     <string name="core_help_core_use_accurate_dfma" formatted="false">在 PPU 和 SPU 后端使用准确的双精度 FMA 指令。
@@ -1559,7 +1559,7 @@ Over-Under 更接近原生立体声输出，但不太受支持。</string>
     <string name="core_label_italian_keyboard">意大利语键盘</string>
     <string name="core_label_japanese">日语</string>
     <string name="core_label_japanese_keyboard">日语键盘</string>
-    <string name="core_label_japanese_keyboard_kana_state">日语键盘（假名状态）</string>
+    <string name="core_label_japanese_keyboard_kana_state">日语键盘（假名输入模式）</string>
     <string name="core_label_korean">韩语</string>
     <string name="core_label_korean_keyboard">韩语键盘</string>
     <string name="core_label_norwegian">挪威语</string>
@@ -2068,4 +2068,45 @@ Over-Under 更接近原生立体声输出，但不太受支持。</string>
     <string name="core_help_video_vr_height" formatted="false">数值越高两个画面越靠上，越低越靠下，用于对准眼镜的镜片。</string>
     <string name="core_label_show_spu_compilation_hint" formatted="false">显示 SPU 编译提示</string>
     <string name="core_help_miscellaneous_show_spu_compilation_hint" formatted="false">使用本机覆盖层显示“编译 SPU 模块”提示。</string>
+    <string name="settings_show_quick_bar">显示快捷操作栏</string>
+    <string name="settings_help_show_quick_bar">双击游戏画面可显示快捷操作栏。即使操作栏已隐藏，也可以使用返回操作打开游戏菜单。</string>
+    <string name="emulation_portal_description">管理受支持游戏的虚拟玩偶。将玩偶文件导入插槽，或从角色列表中创建玩偶。已连接的USB传送门优先使用。</string>
+    <string name="settings_mouse_button_left">滑鼠左鍵</string>
+    <string name="settings_mouse_button_right">滑鼠右鍵</string>
+    <string name="settings_mouse_button_middle">滑鼠中鍵</string>
+    <string name="settings_mouse_button_back">上一頁按鈕</string>
+    <string name="settings_mouse_button_forward">下一頁按鈕</string>
+    <string name="settings_mouse_button_number">滑鼠按鈕 %1$d</string>
+    <string name="settings_keyboard_key_enter">輸入鍵</string>
+    <string name="settings_keyboard_key_backspace">退格鍵</string>
+    <string name="settings_keyboard_key_space">空白鍵</string>
+    <string name="settings_keyboard_key_tab">定位鍵</string>
+    <string name="settings_keyboard_key_escape">退出鍵</string>
+    <string name="settings_keyboard_key_shift">上檔鍵</string>
+    <string name="settings_keyboard_key_control">控制鍵</string>
+    <string name="settings_keyboard_key_alt">Alt 鍵</string>
+    <string name="settings_keyboard_key_meta">Meta 鍵</string>
+    <string name="settings_keyboard_key_home">行首鍵</string>
+    <string name="settings_keyboard_key_end">行尾鍵</string>
+    <string name="settings_keyboard_key_page_up">上一頁鍵</string>
+    <string name="settings_keyboard_key_page_down">下一頁鍵</string>
+    <string name="settings_keyboard_key_insert">插入鍵</string>
+    <string name="settings_keyboard_key_delete">刪除鍵</string>
+    <string name="settings_keyboard_key_caps_lock">大寫鎖定鍵</string>
+    <string name="settings_keyboard_key_num_lock">數字鎖定鍵</string>
+    <string name="settings_keyboard_key_scroll_lock">捲動鎖定鍵</string>
+    <string name="settings_keyboard_key_pause">暫停鍵</string>
+    <string name="settings_keyboard_key_print_screen">螢幕擷取鍵</string>
+    <string name="settings_keyboard_key_number">按鍵 %1$d</string>
+    <string name="settings_keyboard_mouse_milliseconds_value">%1$d 毫秒</string>
+    <string name="settings_mouse_wheel_desc" formatted="false">選擇向上及向下捲動時觸發的控制器動作。關閉後，滾輪將不對應任何動作。</string>
+    <string name="settings_mouse_wheel_pulse_desc" formatted="false">設定每格滾輪捲動按住對應控制器動作的時間。若遊戲無法辨識短暫捲動輸入，請增加此值。</string>
+    <string name="settings_mouse_vertical_sensitivity_desc" formatted="false">調整垂直瞄準相對於水平瞄準的靈敏度。100% 表示兩個軸的靈敏度相同。</string>
+    <string name="settings_mouse_deadzone_desc" formatted="false">忽略中心附近細微的滑鼠移動，減少瞄準偏移。數值越高，開始瞄準前所需的移動幅度越大。</string>
+    <string name="customization_theme_help" formatted="false">選擇應用程式的配色。「系統」會跟隨裝置主題；其他選項會維持固定外觀。</string>
+    <string name="customization_background_help" formatted="false">選擇圖片或影片作為主畫面背景。重設個人化設定即可恢復預設背景。</string>
+    <string name="customization_cover_size_help" formatted="false">調整遊戲庫中的封面大小。封面越大，每列顯示的遊戲越少。</string>
+    <string name="customization_font_help" formatted="false">選擇應用程式字型，或匯入 TTF 或 OTF 字型檔。「系統」會使用裝置字型。</string>
+    <string name="customization_text_size_help" formatted="false">縮放整個應用程式的文字。較大的文字可能使部分標籤換行。</string>
+    <string name="settings_customization_drawer_help" formatted="false">選擇導覽抽屜的外觀。預覽會在選取前顯示各種樣式。</string>
 </resources>

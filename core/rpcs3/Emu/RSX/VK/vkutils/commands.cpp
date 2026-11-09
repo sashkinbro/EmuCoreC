@@ -71,10 +71,10 @@ namespace vk
 		}
 	}
 
-	void command_buffer::reset()
+	void command_buffer::reset(bool release_resources)
 	{
 		// Do the driver reset
-		CHECK_RESULT(vkResetCommandBuffer(commands, 0));
+		CHECK_RESULT(vkResetCommandBuffer(commands, release_resources ? VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT : 0));
 	}
 
 	void command_buffer::clear_state_cache()

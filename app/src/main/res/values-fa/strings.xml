@@ -784,7 +784,7 @@
     <string name="core_label_custom_anaglyph_matrices">ماتریس‌های سفارشی آناگلیف</string>
     <string name="core_label_darkening_effect_strength">شدت تاریک‌سازی</string>
     <string name="core_label_date_format">فرمت تاریخ</string>
-    <string name="core_label_ddmmyyyy">روز/ماه/سال</string>
+    <string name="core_label_ddmmyyyy">روز–ماه–سال</string>
     <string name="core_label_debug_console_mode">حالت کنسول اشکال‌زدایی</string>
     <string name="core_label_debug_output">خروجی اشکال‌زدایی</string>
     <string name="core_label_debug_overlay">لایهٔ اشکال‌زدایی</string>
@@ -899,7 +899,7 @@
     <string name="core_label_matrix_right">ماتریس راست</string>
     <string name="core_label_max_cpu_preempt_count">حداکثر تعداد وقفهٔ زمان‌بندی CPU</string>
     <string name="core_label_max_llvm_compile_threads">حداکثر رشته‌های کامپایل LLVM</string>
-    <string name="core_label_max_spurs_threads">حداکثر رشته‌های SPURS</string>
+    <string name="core_label_max_spurs_threads">حداکثر تعداد رشته‌های SPURS</string>
     <string name="core_label_maximum_savestate_files">حداکثر تعداد فایل‌های ذخیرهٔ وضعیت</string>
     <string name="core_label_maximum_savestate_files_space_mib">حداکثر فضای ذخیره‌های وضعیت (MiB)</string>
     <string name="core_label_medium">متوسط</string>
@@ -915,7 +915,7 @@
     <string name="core_label_minimal">مینیمال</string>
     <string name="core_label_minimum_scalable_dimension">حداقل ابعاد قابل تغییر اندازه</string>
     <string name="core_label_miscellaneous">متفرقه</string>
-    <string name="core_label_mmddyyyy">ماه/روز/سال</string>
+    <string name="core_label_mmddyyyy">ماه–روز–سال</string>
     <string name="core_label_mono">مونو</string>
     <string name="core_label_mouse">ماوس</string>
     <string name="core_label_mouse_debug_overlay">لایهٔ اشکال‌زدایی ماوس</string>
@@ -928,7 +928,7 @@
     <string name="core_label_nearest">نزدیک‌ترین</string>
     <string name="core_label_net">شبکه</string>
     <string name="core_label_none">هیچ‌کدام</string>
-    <string name="core_label_null">هیچ‌کدام</string>
+    <string name="core_label_null">غیرفعال</string>
     <string name="core_label_off">خاموش</string>
     <string name="core_label_opacity" formatted="false">میزان کدری (%)</string>
     <string name="core_label_opengl">OpenGL</string>
@@ -1097,7 +1097,7 @@
     <string name="core_label_write_color_buffers">نوشتن بافرهای رنگ</string>
     <string name="core_label_write_depth_buffer">نوشتن بافر عمق</string>
     <string name="core_label_xaudio2">XAudio2</string>
-    <string name="core_label_yyyymmdd">سال/ماه/روز</string>
+    <string name="core_label_yyyymmdd">سال–ماه–روز</string>
     <string name="core_help_core_accurate_cache_line_stores" formatted="false">دستور PPU DCBZ را دقیق پردازش می‌کند. همراه با گزینهٔ DMA دقیق SPU، دسترسی‌های SPU PUT به خط‌های حافظهٔ نهان نیز به‌صورت اتمی پردازش می‌شوند.</string>
     <string name="core_help_core_use_accurate_dfma" formatted="false">از دستورالعمل های دقیق FMA با دقت دوگانه در بخش اجرایی PPU و SPU استفاده کنید. در حالی که غیرفعال کردن آن ممکن است عملکرد مناسبی را در صورتی که CPU شما از FMA پشتیبانی نمی کند افزایش دهد، ممکن است اشکالات ظریفی را نیز ایجاد کند که در غیر این صورت رخ نمی دهند. اگر CPU شما از FMA پشتیبانی می کند، نباید آن را غیرفعال کنید.</string>
     <string name="core_help_core_accurate_ppu_128_byte_reservation_op_max_length" formatted="false">در حالت فعال، عملیات اتمی PPU روی تمام داده‌های یک خط حافظهٔ نهان انجام می‌شوند؛ در حالت غیرفعال، فقط روی یک بلوک ۶۴بیتی حافظه. مقدار عددی تعیین می‌کند که بر اساس طول عملیات اتمی، نسخهٔ دقیق فعال شود یا نه.</string>
@@ -1828,4 +1828,45 @@
     <string name="core_help_video_vr_height" formatted="false">مقادیر بالاتر هر دو تصویر را بالا و مقادیر پایین‌تر آن‌ها را پایین می‌برند، تا با عدسی‌های هدست هم‌تراز شوند.</string>
     <string name="core_label_show_spu_compilation_hint" formatted="false">نمایش پیام کامپایل SPU</string>
     <string name="core_help_miscellaneous_show_spu_compilation_hint" formatted="false">راهنمایی «کامپایل کردن ماژول‌های SPU» را با استفاده از لایه اصلی نشان می‌دهد.</string>
+    <string name="settings_show_quick_bar">نمایش نوار اقدامات سریع</string>
+    <string name="settings_help_show_quick_bar">برای نمایش نوار اقدامات سریع، دو بار روی صفحهٔ بازی بزنید. حتی وقتی نوار پنهان است، با دکمهٔ بازگشت می‌توانید منوی بازی را باز کنید.</string>
+    <string name="emulation_portal_description">پیکره‌های مجازی بازی‌های پشتیبانی‌شده را مدیریت کنید. فایل پیکره را در یک جایگاه وارد کنید یا از فهرست شخصیت‌ها پیکره بسازید. درگاه‌های USB متصل اولویت دارند.</string>
+    <string name="settings_mouse_button_left">کلیک چپ</string>
+    <string name="settings_mouse_button_right">کلیک راست</string>
+    <string name="settings_mouse_button_middle">کلیک میانی</string>
+    <string name="settings_mouse_button_back">دکمهٔ بازگشت</string>
+    <string name="settings_mouse_button_forward">دکمهٔ جلو</string>
+    <string name="settings_mouse_button_number">دکمهٔ ماوس %1$d</string>
+    <string name="settings_keyboard_key_enter">ورود</string>
+    <string name="settings_keyboard_key_backspace">پس‌بر</string>
+    <string name="settings_keyboard_key_space">فاصله</string>
+    <string name="settings_keyboard_key_tab">جدول‌بندی</string>
+    <string name="settings_keyboard_key_escape">گریز</string>
+    <string name="settings_keyboard_key_shift">تبدیل</string>
+    <string name="settings_keyboard_key_control">کنترل</string>
+    <string name="settings_keyboard_key_alt">Alt</string>
+    <string name="settings_keyboard_key_meta">Meta</string>
+    <string name="settings_keyboard_key_home">ابتدا</string>
+    <string name="settings_keyboard_key_end">انتها</string>
+    <string name="settings_keyboard_key_page_up">صفحه بالا</string>
+    <string name="settings_keyboard_key_page_down">صفحه پایین</string>
+    <string name="settings_keyboard_key_insert">درج</string>
+    <string name="settings_keyboard_key_delete">حذف</string>
+    <string name="settings_keyboard_key_caps_lock">قفل حروف بزرگ</string>
+    <string name="settings_keyboard_key_num_lock">قفل اعداد</string>
+    <string name="settings_keyboard_key_scroll_lock">قفل پیمایش</string>
+    <string name="settings_keyboard_key_pause">مکث</string>
+    <string name="settings_keyboard_key_print_screen">ثبت صفحه</string>
+    <string name="settings_keyboard_key_number">کلید %1$d</string>
+    <string name="settings_keyboard_mouse_milliseconds_value">%1$d میلی‌ثانیه</string>
+    <string name="settings_mouse_wheel_desc" formatted="false">کنش‌های دسته را برای پیمایش به بالا و پایین انتخاب کنید. برای بی‌تخصیص ماندن چرخ، این گزینه را خاموش کنید.</string>
+    <string name="settings_mouse_wheel_pulse_desc" formatted="false">مدتی که هر پلهٔ چرخ، کنش تخصیص‌یافتهٔ دسته را نگه می‌دارد. اگر بازی ورودی‌های کوتاه پیمایش را تشخیص نمی‌دهد، آن را افزایش دهید.</string>
+    <string name="settings_mouse_vertical_sensitivity_desc" formatted="false">نشانه‌گیری عمودی را نسبت به افقی تنظیم کنید. در 100%، حساسیت هر دو محور یکسان است.</string>
+    <string name="settings_mouse_deadzone_desc" formatted="false">برای کاهش لغزش ناخواستهٔ نشانه، حرکت‌های کوچک ماوس نزدیک مرکز را نادیده می‌گیرد. مقادیر بالاتر به حرکت بیشتری برای آغاز نشانه‌گیری نیاز دارند.</string>
+    <string name="customization_theme_help" formatted="false">رنگ‌های برنامه را انتخاب کنید. گزینهٔ سیستم از تم دستگاه پیروی می‌کند؛ گزینه‌های دیگر ظاهر ثابتی دارند.</string>
+    <string name="customization_background_help" formatted="false">یک تصویر یا ویدیو برای پس‌زمینهٔ صفحهٔ اصلی انتخاب کنید. برای بازگرداندن پس‌زمینهٔ پیش‌فرض، شخصی‌سازی را بازنشانی کنید.</string>
+    <string name="customization_cover_size_help" formatted="false">اندازهٔ جلد بازی‌ها در کتابخانه را تغییر دهید. جلدهای بزرگ‌تر تعداد کمتری بازی در هر ردیف نشان می‌دهند.</string>
+    <string name="customization_font_help" formatted="false">قلم برنامه را انتخاب یا یک فایل قلم TTF یا OTF وارد کنید. گزینهٔ سیستم از قلم دستگاه استفاده می‌کند.</string>
+    <string name="customization_text_size_help" formatted="false">اندازهٔ متن را در سراسر برنامه تغییر دهید. متن بزرگ‌تر ممکن است بعضی برچسب‌ها را در چند خط نمایش دهد.</string>
+    <string name="settings_customization_drawer_help" formatted="false">ظاهر کشوی ناوبری را انتخاب کنید. پیش‌نمایش‌ها هر سبک را پیش از انتخاب نشان می‌دهند.</string>
 </resources>
