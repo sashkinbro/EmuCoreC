@@ -214,8 +214,8 @@ android {
         applicationId = "com.sbro.emucorec"
         minSdk = 29
         targetSdk = 37
-        versionCode = 21
-        versionName = "0.0.7"
+        versionCode = 44
+        versionName = "0.1.2"
 
         buildConfigField("String", "FEEDBACK_ENDPOINT", buildConfigString(feedbackEndpoint))
         buildConfigField("String", "FEEDBACK_API_KEY", buildConfigString(feedbackApiKey))
