@@ -1,4 +1,7 @@
 #include "stdafx.h"
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#endif
 #include "system_config_types.h"
 
 template <>
@@ -130,6 +133,9 @@ void fmt_class_string<audio_renderer>::format(std::string& out, u64 arg)
 		case audio_renderer::xaudio: return "XAudio2";
 #endif
 		case audio_renderer::cubeb: return "Cubeb";
+#ifdef __ANDROID__
+		case audio_renderer::oboe: return "Oboe";
+#endif
 #ifdef HAVE_FAUDIO
 		case audio_renderer::faudio: return "FAudio";
 #endif
@@ -706,6 +712,25 @@ void fmt_class_string<stereo_render_mode_options>::format(std::string& out, u64 
 }
 
 template <>
+void fmt_class_string<frame_generation_mode>::format(std::string& out, u64 arg)
+{
+	format_enum(out, arg, [](frame_generation_mode value)
+	{
+		switch (value)
+		{
+		case frame_generation_mode::off: return "Off";
+		case frame_generation_mode::x2: return "x2";
+		case frame_generation_mode::x3: return "x3";
+		case frame_generation_mode::x4: return "x4";
+		}
+
+		// A missing case serialises as `unknown`, and cfg::_enum then refuses the value on load --
+		// the setting silently reverts to Off with nothing explaining why.
+		return unknown;
+	});
+}
+
+template <>
 void fmt_class_string<output_scaling_mode>::format(std::string& out, u64 arg)
 {
 	format_enum(out, arg, [](output_scaling_mode value)
@@ -715,6 +740,15 @@ void fmt_class_string<output_scaling_mode>::format(std::string& out, u64 arg)
 		case output_scaling_mode::nearest: return "Nearest";
 		case output_scaling_mode::bilinear: return "Bilinear";
 		case output_scaling_mode::fsr: return "FidelityFX Super Resolution";
+#if defined(__ANDROID__) || (defined(__APPLE__) && TARGET_OS_IPHONE)
+		// Missing case here would serialise as `unknown` and the mode would
+		// silently never be selectable -- same trap as pad_handler::virtual_pad.
+		case output_scaling_mode::shader: return "Shader chain (librashader)";
+#endif
+#ifdef __ANDROID__
+		case output_scaling_mode::sgsr: return "Snapdragon Game Super Resolution";
+		case output_scaling_mode::sgsr_edge: return "Snapdragon Game Super Resolution (Edge Direction)";
+#endif
 		}
 
 		return unknown;

@@ -26,6 +26,9 @@ struct EmuCoreCApi {
   bool (*overlayPadData)(int port, int digital1, int digital2, int leftStickX,
                          int leftStickY, int rightStickX, int rightStickY);
   void (*setSocInfo)(std::string_view socInfo);
+  void (*setPrivateCacheDir)(std::string_view directory);
+  void (*setAppBackgrounded)(bool backgrounded);
+  void (*setCardboardVr)(bool enabled, int size, int spacing, int vertical);
   void (*setLogLevelFloor)(int level);
   bool (*initialize)(std::string_view rootDir, std::string_view user);
   bool (*processCompilationQueue)(JNIEnv *env);
@@ -125,6 +128,9 @@ struct EmuCoreCLibrary : EmuCoreCApi {
     // clang-format off
     result.overlayPadData = reinterpret_cast<decltype(overlayPadData)>(dlsym(handle, "emucorec_overlayPadData"));
     result.setSocInfo = reinterpret_cast<decltype(setSocInfo)>(dlsym(handle, "emucorec_setSocInfo"));
+    result.setPrivateCacheDir = reinterpret_cast<decltype(setPrivateCacheDir)>(dlsym(handle, "emucorec_setPrivateCacheDir"));
+    result.setAppBackgrounded = reinterpret_cast<decltype(setAppBackgrounded)>(dlsym(handle, "emucorec_setAppBackgrounded"));
+    result.setCardboardVr = reinterpret_cast<decltype(setCardboardVr)>(dlsym(handle, "emucorec_setCardboardVr"));
     result.setLogLevelFloor = reinterpret_cast<decltype(setLogLevelFloor)>(dlsym(handle, "emucorec_setLogLevelFloor"));
     result.initialize = reinterpret_cast<decltype(initialize)>(dlsym(handle, "emucorec_initialize"));
     result.processCompilationQueue = reinterpret_cast<decltype(processCompilationQueue)>(dlsym(handle, "emucorec_processCompilationQueue"));
@@ -239,6 +245,21 @@ extern "C" JNIEXPORT void JNICALL Java_com_sbro_emucorec_core_Ps3Core_setLogLeve
     return;
   }
   emucorecLib.setLogLevelFloor(level);
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_sbro_emucorec_core_Ps3Core_setPrivateCacheDir(
+    JNIEnv *env, jobject, jstring directory) {
+  if (emucorecLib.setPrivateCacheDir) emucorecLib.setPrivateCacheDir(unwrap(env, directory));
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_sbro_emucorec_core_Ps3Core_setCardboardVr(
+    JNIEnv *, jobject, jboolean enabled, jint size, jint spacing, jint vertical) {
+  if (emucorecLib.setCardboardVr) emucorecLib.setCardboardVr(enabled, size, spacing, vertical);
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_sbro_emucorec_core_Ps3Core_setAppBackgrounded(
+    JNIEnv *, jobject, jboolean backgrounded) {
+  if (emucorecLib.setAppBackgrounded) emucorecLib.setAppBackgrounded(backgrounded);
 }
 
 extern "C" JNIEXPORT jboolean JNICALL Java_com_sbro_emucorec_core_Ps3Core_initialize(

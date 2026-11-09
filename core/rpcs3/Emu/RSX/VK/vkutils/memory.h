@@ -97,6 +97,9 @@ namespace vk
 		virtual VkDeviceMemory get_vk_device_memory(mem_handle_t mem_handle) = 0;
 		virtual u64 get_vk_device_memory_offset(mem_handle_t mem_handle) = 0;
 		virtual f32 get_memory_usage() = 0;
+
+		// Diagnostics only: what the allocator holds on each device-local heap, against the size
+		// it lets that heap reach. Empty when the allocator keeps no such figures.
 		virtual std::string describe_heap_usage() { return {}; }
 
 		virtual void set_safest_allocation_flags() {}
@@ -137,6 +140,8 @@ namespace vk
 		VmaAllocator m_allocator;
 		std::array<VmaBudget, VK_MAX_MEMORY_HEAPS> stats;
 		u32 m_rebar_heap_idx = UINT32_MAX;
+
+		// Whether pHeapSizeLimit was applied, so a report can say "cap" only when VMA enforces one.
 		bool m_heap_capped = false;
 	};
 
@@ -216,8 +221,16 @@ namespace vk
 	u64  vmm_get_application_memory_usage(const memory_type_info& memory_type);
 	u64  vmm_get_application_pool_usage(vmm_allocation_pool pool);
 	bool vmm_handle_memory_pressure(rsx::problem_severity severity);
-	std::string vmm_describe_memory_usage();
+#ifdef __APPLE__
+	// False leaves out the iOS jetsam-headroom term and returns the VMA figure alone.
+	rsx::problem_severity vmm_determine_memory_load_severity(bool include_headroom = true);
+#else
 	rsx::problem_severity vmm_determine_memory_load_severity();
+#endif
+
+	// Diagnostics: the allocator's heap totals, what each pool holds, and how far the GPU is
+	// behind on retiring work. One line, for the log; changes nothing.
+	std::string vmm_describe_memory_usage();
 
 	// Tracking for host memory objects. Allocated count is more important than actual memory amount.
 	void vmm_notify_object_allocated(vmm_allocation_pool pool);

@@ -509,7 +509,7 @@ private:
 					// Create a buffer separate from data_buf to uncompress.
 					ensure(data_buf.size() > data_buf_offset);
 					const std::vector<u8> zlib_buf(data_buf.cbegin() + data_buf_offset, data_buf.cend());
-		
+
 					// Use zlib uncompress on the new buffer.
 					// decomp_buf_length changes inside the call to uncompress
 					uLongf decomp_buf_length = ::narrow<uLongf>(filesz);

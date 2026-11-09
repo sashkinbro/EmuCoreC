@@ -6,6 +6,7 @@
 #include "Utilities/Thread.h"
 #include "Utilities/address_range.h"
 #include "Emu/CPU/CPUThread.h"
+#include "Emu/Cell/PPUThread.h"
 #include "Emu/RSX/RSXThread.h"
 #include "Emu/Cell/SPURecompiler.h"
 #include "Emu/perf_meter.hpp"
@@ -16,12 +17,29 @@
 #include "util/asm.hpp"
 #include "util/simd.hpp"
 #include "util/serialization.hpp"
+#ifdef __APPLE__
+#include "ios_vm_layout.h"
+#endif
 
 #include <thread>
+
+#ifdef ANDROID
+#include <atomic>
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
+#include <fcntl.h>
+#include <sys/resource.h>
+#include <unistd.h>
+#endif
 
 LOG_CHANNEL(vm_log, "VM");
 
 void ppu_remove_hle_instructions(u32 addr, u32 size);
+
+// SPUThread.cpp: the lines that reached the writer_lock barrier and the SPU PC of the last store to
+// each, filled only while ARMSX3_PUTLLC_SITES=1.
+std::string spu_putllc_barrier_sites();
 extern bool is_memory_compatible_for_copy_from_executable_optimization(u32 addr, u32 size);
 
 namespace vm
@@ -39,6 +57,15 @@ namespace vm
 		fmt::throw_exception("Failed to reserve vm memory");
 	}
 
+#ifdef __APPLE__
+	// The layout can omit the hook reservation, which leaves g_hook_addr null.
+	const vm_layout& s_vm_layout = vm_layout_for_this_platform();
+	u8* const g_base_addr = memory_reserve_4GiB(reinterpret_cast<void*>(0x2'0000'0000), s_vm_layout.base_size, true);
+	u8* const g_sudo_addr = g_base_addr + 0x1'0000'0000;
+	u8* const g_exec_addr = memory_reserve_4GiB(g_sudo_addr, s_vm_layout.exec_size);
+	u8* const g_hook_addr = s_vm_layout.hook_size ? memory_reserve_4GiB(g_exec_addr, s_vm_layout.hook_size) : nullptr;
+	u8* const g_stat_addr = memory_reserve_4GiB(g_hook_addr ? g_hook_addr : g_exec_addr, s_vm_layout.stat_size);
+#else
 	// Emulated virtual memory
 	u8* const g_base_addr = memory_reserve_4GiB(reinterpret_cast<void*>(0x2'0000'0000), 0x2'0000'0000, true);
 
@@ -53,12 +80,18 @@ namespace vm
 
 	// Stats for debugging
 	u8* const g_stat_addr = memory_reserve_4GiB(g_hook_addr);
+#endif
 
 	// For SPU
 	u8* const g_free_addr = g_stat_addr + 0x1'0000'0000;
 
 	// Reservation stats
+#ifdef __APPLE__
+	alignas(4096) u8 g_reservations[rsrv_table_size]{0};
+	static_assert(sizeof(g_reservations) == rsrv_table_size);
+#else
 	alignas(4096) u8 g_reservations[65536 / 128 * 64]{0};
+#endif
 
 	// Pointers to shared memory mirror or zeros for "normal" memory
 	alignas(4096) atomic_t<u64> g_shmem[65536]{0};
@@ -454,6 +487,295 @@ namespace vm
 		}
 	}
 
+#ifdef ANDROID
+	namespace
+	{
+		// Long waits in writer_lock for a PPU thread to park: how much they cost, and why.
+		//
+		// Web of Shadows logs a few "waiting for a PPU thread to reach cpu_flag::wait" lines a minute,
+		// always on a PPU in state 0x220 -- suspend + memory, not wait: told to park, and not yet at
+		// its next check_state(). Three different things look exactly like that, and each needs a
+		// different fix: the PPU running guest code that reaches no check point, the PPU runnable but
+		// given no core while the SPU threads spin, and the PPU asleep in the kernel without the wait
+		// flag. The waited-on PPU's schedstat tells them apart: the time it ran, the time it queued
+		// for a CPU, and the rest, which it slept.
+		//
+		// Only waits past a spin threshold are clocked, so the common short wait costs nothing extra.
+		// Counters are plain relaxed atomics; this is a report, not a synchronisation point.
+		//
+		// The same threshold is where the waited-on PPU is boosted and the waiter starts yielding
+		// (wlock_yield). 4096 in 47d53f675, which cut the seconds with a 10 ms+ wait from 47% to 12%
+		// in Web of Shadows; 1024 hands the core over sooner. ARMSX3_WLOCK_YIELD_SPINS=<n> sets it.
+		//
+		// These switches are read on first use, not at load. driver_env.txt is applied after the core
+		// library is loaded, so an initialiser at namespace scope runs first and never sees it.
+		u64 wlock_after_spins()
+		{
+			static const u64 spins = []
+			{
+				const char* value = std::getenv("ARMSX3_WLOCK_YIELD_SPINS");
+				const u64 n = value ? std::strtoull(value, nullptr, 10) : 0;
+				return n ? n : u64{1024};
+			}();
+
+			return spins;
+		}
+
+		// The waited-on PPU's schedstat is read for 1 long wait in 16. Reading it costs an open, a
+		// read and a close of a /proc file at each end of the wait, and the second pair runs with
+		// every other PPU still parked behind this barrier; one in 16 is plenty for the breakdown.
+		constexpr u32 k_schedstat_sample_mask = 15;
+
+		struct wlock_wait_stats
+		{
+			std::atomic<u64> barriers{0};
+			std::atomic<u64> waits{0};
+			std::atomic<u64> total_ns{0};
+			std::atomic<u64> sampled_ns{0}; // the total_ns of the waits whose schedstat was read
+			std::atomic<u64> ran_ns{0};
+			std::atomic<u64> queued_ns{0};
+			std::atomic<u64> max_ns{0};
+			std::atomic<u64> max_detail{0}; // PPU id << 32 | its PC when it parked
+			std::atomic<u32> max_pc0{0};    // and its PC when the wait was first clocked
+			std::atomic<u64> last_report{0};
+			std::atomic<u64> boosted{0};       // long waits whose PPU got the boost
+			std::atomic<u64> boost_skipped{0}; // long waits whose PPU was not at nice 0, so kept its own
+			std::atomic<s32> skipped_nice{0};  // the nice such a PPU was at, the last time
+			std::atomic<u64> slept{0};         // long waits that reached wlock_sleep
+		};
+
+		wlock_wait_stats g_wlock_stats;
+
+		// The waited-on PPU's Linux tid, from the thread_base it runs in. NOT stored on cpu_thread:
+		// a new cpu_thread member moves every ppu_thread member after it, and PPU code loaded from
+		// the LLVM cache has those offsets compiled in. 3821a8819 did exactly that and every game
+		// booted to a black screen.
+		u32 native_tid_of(cpu_thread* cpu)
+		{
+			if (auto ppu = cpu->try_get<ppu_thread>())
+			{
+				return thread_ctrl::get_native_tid(*static_cast<named_thread<ppu_thread>*>(ppu));
+			}
+
+			return 0;
+		}
+
+		u64 steady_ns()
+		{
+			return static_cast<u64>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+				std::chrono::steady_clock::now().time_since_epoch()).count());
+		}
+
+		// On-CPU time and time spent runnable but waiting for a CPU, from the kernel's schedstat.
+		bool read_schedstat(u32 tid, u64& run_ns, u64& queued_ns)
+		{
+			char path[64];
+			std::snprintf(path, sizeof(path), "/proc/self/task/%u/schedstat", tid);
+
+			const int fd = ::open(path, O_RDONLY | O_CLOEXEC);
+
+			if (fd < 0)
+			{
+				return false;
+			}
+
+			char buf[96]{};
+			const auto n = ::read(fd, buf, sizeof(buf) - 1);
+			::close(fd);
+
+			unsigned long long run = 0, queued = 0;
+
+			if (n <= 0 || std::sscanf(buf, "%llu %llu", &run, &queued) != 2)
+			{
+				return false;
+			}
+
+			run_ns = run;
+			queued_ns = queued;
+			return true;
+		}
+
+		// The treatment for the "queued for a CPU" case: while an SPU waits on a PPU that has not
+		// parked, that PPU gets the RSX thread's weighting (nice -8) so the scheduler runs it ahead of
+		// the spinning SPU threads, which are all at nice 0; it goes back to 0 when it parks. It is
+		// the one thread everybody is waiting on. ARMSX3_WLOCK_BOOST=0 turns it off, for an A/B.
+		bool wlock_boost()
+		{
+			static const bool on = []
+			{
+				const char* value = std::getenv("ARMSX3_WLOCK_BOOST");
+				return !(value && value[0] == '0');
+			}();
+
+			return on;
+		}
+
+		// The fix the measurement pointed at. Web of Shadows, 112 s: the waited-on PPU spent 77% of
+		// these waits runnable but queued for a CPU, 20% running, 3% asleep, boost on throughout.
+		// The cores it is queued behind are the SPU threads, this spinning waiter among them. Past
+		// the long-wait mark the waiter yields its core to the scheduler on every check instead of
+		// spinning, so a PPU queued on it can run. Short waits spin exactly as before, and a game
+		// that never waits this long never gets here. ARMSX3_WLOCK_YIELD=0 turns it off, for an A/B.
+		bool wlock_yield()
+		{
+			static const bool on = []
+			{
+				const char* value = std::getenv("ARMSX3_WLOCK_YIELD");
+				return !(value && value[0] == '0');
+			}();
+
+			return on;
+		}
+
+		// How far into a long wait the waiter starts blocking instead of yielding (wlock_sleep).
+		constexpr u64 k_wlock_sleep_after_ns = 100'000;
+
+		// The case wlock_yield cannot reach. sched_yield hands the core only to a thread of the
+		// waiter's own scheduling class, and a phone's game mode can lift the SPU threads above the
+		// PPU they wait on. OnePlus 12, LittleBigPlanet 2, Game Space on against off in the same
+		// scene: the waited-on PPU queued for a CPU 94-99% of every long wait against 55-92%, the
+		// waits added up to 300-900 ms a second against 50-260, and the game ran at 18 fps against
+		// 30, with the same cores allowed, the same clock limits and the same cpuset both ways. A
+		// blocked waiter leaves its core to whatever is queued there, whatever its class, so past
+		// k_wlock_sleep_after_ns the waiter sleeps 20 us a check (about 50 us with Android's default
+		// timer slack) instead. A shorter wait never sleeps, and the boost and the yield before it
+		// are unchanged. ARMSX3_WLOCK_SLEEP=0 turns it off, for an A/B.
+		bool wlock_sleep()
+		{
+			static const bool on = []
+			{
+				const char* value = std::getenv("ARMSX3_WLOCK_SLEEP");
+				return !(value && value[0] == '0');
+			}();
+
+			return on;
+		}
+
+		void report_long_waits(u64 now)
+		{
+			u64 last = g_wlock_stats.last_report.load(std::memory_order_relaxed);
+
+			// now <= last: another thread reported after this wait was clocked. Without the check the
+			// subtraction wraps, the report fires, and its window reads 18446744073.7 s.
+			if (last && (now <= last || now - last < 1'000'000'000ull))
+			{
+				return;
+			}
+
+			if (!g_wlock_stats.last_report.compare_exchange_strong(last, now, std::memory_order_relaxed))
+			{
+				return;
+			}
+
+			const u64 barriers = g_wlock_stats.barriers.exchange(0, std::memory_order_relaxed);
+			const u64 waits = g_wlock_stats.waits.exchange(0, std::memory_order_relaxed);
+			const u64 total = g_wlock_stats.total_ns.exchange(0, std::memory_order_relaxed);
+			const u64 sampled = g_wlock_stats.sampled_ns.exchange(0, std::memory_order_relaxed);
+			const u64 ran = g_wlock_stats.ran_ns.exchange(0, std::memory_order_relaxed);
+			const u64 queued = g_wlock_stats.queued_ns.exchange(0, std::memory_order_relaxed);
+			const u64 max = g_wlock_stats.max_ns.exchange(0, std::memory_order_relaxed);
+			const u64 detail = g_wlock_stats.max_detail.load(std::memory_order_relaxed);
+			const u32 pc0 = g_wlock_stats.max_pc0.load(std::memory_order_relaxed);
+			const u64 boosted = g_wlock_stats.boosted.exchange(0, std::memory_order_relaxed);
+			const u64 boost_skipped = g_wlock_stats.boost_skipped.exchange(0, std::memory_order_relaxed);
+			const s32 skipped_nice = g_wlock_stats.skipped_nice.load(std::memory_order_relaxed);
+			const u64 slept = g_wlock_stats.slept.exchange(0, std::memory_order_relaxed);
+
+			// The first call only opens the window.
+			if (!last)
+			{
+				return;
+			}
+
+			const f64 total_ms = total / 1e6;
+			const f64 sampled_ms = sampled / 1e6;
+			const f64 ran_pct = sampled ? 100. * ran / sampled : 0.;
+			const f64 queued_pct = sampled ? 100. * queued / sampled : 0.;
+
+			// The boost and sleep counts say what the treatments did: a boost is skipped when the PPU
+			// was not at nice 0 (its own priority, or one the system gave it), and a wait that slept
+			// went past k_wlock_sleep_after_ns.
+			std::string skipped_at;
+
+			if (boost_skipped)
+			{
+				skipped_at = fmt::format(", last at nice %d", skipped_nice);
+			}
+
+			vm_log.notice("writer_lock: %u long PPU waits in %.1fs (~%u barriers), %.2f ms in all, longest %.2f ms"
+				" (PPU 0x%x, pc 0x%x -> 0x%x). Sampled %.2f ms: the waited-on PPU ran %.0f%%, queued for a CPU %.0f%%, slept %.0f%%."
+				" Boost %s (%u given, %u skipped%s), yield %s, sleep %s (%u waits past %u us), after %u spins.",
+				waits, (now - last) / 1e9, barriers, total_ms, max / 1e6,
+				static_cast<u32>(detail >> 32), pc0, static_cast<u32>(detail),
+				sampled_ms, ran_pct, queued_pct, sampled ? std::max(0., 100. - ran_pct - queued_pct) : 0.,
+				wlock_boost() ? "on" : "off", boosted, boost_skipped, skipped_at,
+				wlock_yield() ? "on" : "off", wlock_sleep() ? "on" : "off", slept, k_wlock_sleep_after_ns / 1000,
+				wlock_after_spins());
+
+			// Which SPU loops the barriers come from, every fifth report. Aims the PUTLLC16 whitelist:
+			// it is keyed by loop, and a loop that never reaches the barrier is not worth admitting.
+			// Only the RSX profiler printed this before, and that costs far more than it measures.
+			static u32 s_reports = 0;
+
+			if (++s_reports % 5 == 0)
+			{
+				if (const std::string sites = spu_putllc_barrier_sites(); !sites.empty())
+				{
+					vm_log.notice("writer_lock sources (line:count@pc):%s", sites);
+				}
+			}
+		}
+
+		void note_long_wait(const cpu_thread& ppu, u64 t0, u32 tid, bool sched0, u64 run0, u64 queued0, u32 pc0,
+			bool boosted, bool boost_skipped, bool slept)
+		{
+			const u64 t1 = steady_ns();
+			const u64 dt = t1 - t0;
+
+			if (boosted)
+			{
+				g_wlock_stats.boosted.fetch_add(1, std::memory_order_relaxed);
+			}
+
+			if (boost_skipped)
+			{
+				g_wlock_stats.boost_skipped.fetch_add(1, std::memory_order_relaxed);
+			}
+
+			if (slept)
+			{
+				g_wlock_stats.slept.fetch_add(1, std::memory_order_relaxed);
+			}
+
+			u64 run1 = 0, queued1 = 0;
+
+			if (sched0 && read_schedstat(tid, run1, queued1))
+			{
+				g_wlock_stats.sampled_ns.fetch_add(dt, std::memory_order_relaxed);
+				g_wlock_stats.ran_ns.fetch_add(std::min(dt, run1 - run0), std::memory_order_relaxed);
+				g_wlock_stats.queued_ns.fetch_add(std::min(dt, queued1 - queued0), std::memory_order_relaxed);
+			}
+
+			g_wlock_stats.waits.fetch_add(1, std::memory_order_relaxed);
+			g_wlock_stats.total_ns.fetch_add(dt, std::memory_order_relaxed);
+
+			u64 max = g_wlock_stats.max_ns.load(std::memory_order_relaxed);
+
+			while (dt > max && !g_wlock_stats.max_ns.compare_exchange_weak(max, dt, std::memory_order_relaxed))
+			{
+			}
+
+			if (dt > max)
+			{
+				g_wlock_stats.max_detail.store(u64{ppu.id} << 32 | ppu.get_pc(), std::memory_order_relaxed);
+				g_wlock_stats.max_pc0.store(pc0, std::memory_order_relaxed);
+			}
+
+			report_long_waits(t1);
+		}
+	}
+#endif
+
 	writer_lock::writer_lock() noexcept
 		: writer_lock(0, nullptr, 1)
 	{
@@ -519,11 +841,60 @@ namespace vm
 			{
 				std::this_thread::yield();
 			}
+
+			// Name whoever is holding this up, once, if it stops looking like contention.
+			//
+			// This loop has no timeout and no progress guarantee: the exclusive form waits for
+			// every range lock bit in the set to clear, so one thread that stops releasing its
+			// bit hangs every other thread that takes a reservation, with no clue left behind.
+			// From outside it reads as a guest deadlock with everything in a legitimate wait,
+			// which is exactly how Sonic Unleashed presents at the SEGA logo: main_thread pinned
+			// in cellSpursRemoveWorkload, whose tail is a reservation_op, spinning here with
+			// cpu_flag::wait NOT set while one SPURS kernel sits on a single PC.
+			//
+			// Rate limited to one report per stuck acquisition. At 100 iterations of busy_wait
+			// plus yields this is several seconds in, far past any real contention.
+			if (i == 400'000)
+			{
+				const u64 held = get_range_lock_bits(true).load();
+				vm_log.error("vm::writer_lock stuck at addr=0x%x, size=0x%x: range lock bits still held = 0x%016x%s",
+					addr, size, held, range_lock ? "" : " (waiting for ALL bits, exclusive)");
+
+				for (u32 bit = 0; bit < 64; bit++)
+				{
+					if (~held & (u64{1} << bit))
+					{
+						continue;
+					}
+
+					const u64 entry = g_range_lock_set[bit].load();
+					vm_log.error("  range lock %u held: addr=0x%x size=0x%x flags=0x%x",
+						bit, static_cast<u32>(entry), static_cast<u32>(entry >> 32) & 0xffff, static_cast<u32>(entry >> 48));
+				}
+			}
 		}
 
 		if (range_lock)
 		{
+#ifdef __APPLE__
+			// Built with nullptr so it reads the counter only when the performance report is on.
+			perf_meter<"SUSPEND"_u64> perf0(nullptr);
+#else
 			perf_meter<"SUSPEND"_u64> perf0;
+#endif
+
+#ifdef ANDROID
+			// Counted in batches of 64 per thread: a SPURS title takes this path over a million times
+			// a second, and one shared counter bumped on every one would be a contended line of its own.
+			{
+				thread_local u32 s_barriers = 0;
+
+				if ((++s_barriers & 63) == 0)
+				{
+					g_wlock_stats.barriers.fetch_add(64, std::memory_order_relaxed);
+				}
+			}
+#endif
 
 			for (auto lock = g_locks.cbegin(), end = lock + g_cfg.core.ppu_threads; lock != end; lock++)
 			{
@@ -595,10 +966,139 @@ namespace vm
 			{
 				if (auto ptr = +*lock)
 				{
-					while (!(ptr->state & cpu_flag::wait))
+#ifdef ANDROID
+					// See wlock_wait_stats, wlock_boost, wlock_yield and wlock_sleep.
+					const u64 after_spins = wlock_after_spins();
+					const bool boost = wlock_boost(), yield = wlock_yield(), sleep = wlock_sleep();
+					u64 wait_t0 = 0, run0 = 0, queued0 = 0;
+					u32 wait_tid = 0, wait_pc0 = 0;
+					bool sched0 = false, boosted = false, boost_skipped = false, slept = false;
+#endif
+
+					for (u64 spins = 0; !(ptr->state & cpu_flag::wait); spins++)
 					{
+#ifdef ANDROID
+						if (spins == after_spins) [[unlikely]]
+						{
+							wait_t0 = steady_ns();
+							wait_tid = native_tid_of(ptr);
+							wait_pc0 = ptr->get_pc();
+
+							// See k_schedstat_sample_mask.
+							thread_local u32 s_long_waits = 0;
+							sched0 = (++s_long_waits & k_schedstat_sample_mask) == 0 && wait_tid && read_schedstat(wait_tid, run0, queued0);
+
+							// Only from the normal weighting: a PPU at another priority set it itself, or
+							// the system did, and either way it keeps it. Counted, with the value, so a
+							// report shows when that is what happened.
+							errno = 0;
+
+							if (boost && wait_tid)
+							{
+								const int nice = getpriority(PRIO_PROCESS, wait_tid);
+
+								if (!errno && nice == 0)
+								{
+									boosted = setpriority(PRIO_PROCESS, wait_tid, -8) == 0;
+								}
+								else if (!errno)
+								{
+									boost_skipped = true;
+									g_wlock_stats.skipped_nice.store(nice, std::memory_order_relaxed);
+								}
+							}
+						}
+#endif
+
+						// Say who we are stuck behind, once.
+						//
+						// This waits for every registered PPU thread to reach cpu_flag::wait, with
+						// no timeout and nothing logged, so a thread that never gets there hangs the
+						// caller silently and the emulator looks like a clean guest deadlock: every
+						// thread in a legitimate wait, nothing obviously at fault.
+						//
+						// Sonic Unleashed stops at the SEGA logo in exactly that shape, with
+						// main_thread pinned in cellSpursRemoveWorkload carrying cpu_flag::memory
+						// but never cpu_flag::wait. The acquire loop above was instrumented first
+						// and reported nothing, which is what pointed here.
+#ifdef __APPLE__
+						// Past 1024 spins each one yields, about 1 us, so 300k waits about as long as 40M plain spins.
+						if (spins == 300'000)
+#else
+						if (spins == 40'000'000)
+#endif
+						{
+							vm_log.error("vm::writer_lock waiting for a PPU thread to reach cpu_flag::wait: id=0x%x '%s' state=0x%x, lock addr=0x%x size=0x%x",
+								ptr->id, ptr->get_name(), +ptr->state, addr, size);
+						}
+
+#ifdef ANDROID
+						// See wlock_yield and wlock_sleep.
+						if (yield && spins >= after_spins) [[unlikely]]
+						{
+							if (sleep && steady_ns() - wait_t0 >= k_wlock_sleep_after_ns)
+							{
+								slept = true;
+								std::this_thread::sleep_for(std::chrono::microseconds(20));
+							}
+							else
+							{
+								std::this_thread::yield();
+							}
+
+							continue;
+						}
+#elif defined(__APPLE__)
+						// Give up the core so a PPU queued behind the spinning SPU threads can run and park.
+						if (spins >= 1024) [[unlikely]]
+						{
+							std::this_thread::yield();
+							continue;
+						}
+#endif
+
+#if defined(ARCH_ARM64)
+						// utils::pause() is ISB on arm64 -- an instruction synchronisation
+						// barrier, i.e. a pipeline flush. It stands in for x86's PAUSE, and the
+						// spin counts around it were written for PAUSE at roughly thirty cycles;
+						// a flush costs far more than that and does real work rather than just
+						// delaying.
+						//
+						// This loop is the worst place in the emulator to pay it. It runs once per
+						// registered PPU thread on EVERY reservation commit that takes the
+						// barrier, and a SPURS-heavy title issues those at over a million a
+						// second: Soulcalibur V measured 16M barrier-taking stores per ten seconds,
+						// and simpleperf put 28% of all time inside vm::writer_lock on this
+						// loop's ISB. The same title runs flawlessly on six year old x86, where
+						// this is a PAUSE.
+						//
+						// YIELD is arm64's actual spin-wait hint. Keep an occasional ISB so the
+						// backoff still has weight on cores where YIELD retires as a nop, and so
+						// the loop cannot become a tight unhinted spin.
+						if ((spins & 15) == 15)
+						{
+							utils::pause();
+						}
+						else
+						{
+							__asm__ volatile("yield" ::: "memory");
+						}
+#else
 						utils::pause();
+#endif
 					}
+
+#ifdef ANDROID
+					if (wait_t0) [[unlikely]]
+					{
+						if (boosted)
+						{
+							setpriority(PRIO_PROCESS, wait_tid, 0);
+						}
+
+						note_long_wait(*ptr, wait_t0, wait_tid, sched0, run0, queued0, wait_pc0, boosted, boost_skipped, slept);
+					}
+#endif
 				}
 			}
 		}
@@ -817,10 +1317,13 @@ namespace vm
 		//       the RSX might try to invalidate memory that got unmapped and remapped
 		if (const auto rsxthr = g_fxo->try_get<rsx::thread>())
 		{
-			if (flags & page_1m_size && ~bflags & rsx_incomp)
-			{
-				rsxthr->on_notify_memory_mapped(addr, size);
-			}
+			// Every mapping, as before upstream 13eaa2b03, which skips mappings that are not 1MB
+			// RSX-compatible pages so ordinary allocations do not pause the RSX. With #19467 (audio
+			// shared memory, 9583a524b) in as well, that exemption made Guitar Hero World Tour lose
+			// the GPU on Turnip (Odin 3) within a minute of every song. Each change alone was fine,
+			// and so was notifying everything. Exempting only non-shareable memory still crashed, so
+			// which mapping the RSX needs to hear about is not pinned down; until it is, all of them.
+			rsxthr->on_notify_memory_mapped(addr, size);
 		}
 
 		auto prot = utils::protection::rw;
@@ -966,7 +1469,16 @@ namespace vm
 					if ((old_val ^ start_value) & (page_readable | page_writable))
 					{
 						const auto protection = start_value & page_writable ? utils::protection::rw : (start_value & page_readable ? utils::protection::ro : utils::protection::no);
+#ifdef __APPLE__
+						// Guest pages are 4 KiB but iOS host pages are 16 KiB, so protect the whole host pages
+						// that hold the range. memory_protect rounds the same way inside on POSIX; doing it here
+						// keeps the length the kernel acts on visible at the call.
+						const u64 host_start = utils::page_start(start * 4096ull);
+						const u64 host_end = utils::page_end(start * 4096ull + page_size - 1);
+						utils::memory_protect(g_base_addr + host_start, host_end - host_start + 1, protection);
+#else
 						utils::memory_protect(g_base_addr + start * 4096, page_size, protection);
+#endif
 					}
 
 					range_lock->release(0);
@@ -1049,10 +1561,8 @@ namespace vm
 		//       the RSX might try to call VirtualProtect on memory that is already unmapped
 		if (auto rsxthr = g_fxo->try_get<rsx::thread>())
 		{
-			if ((addr >> 28 << 28) == 0xC0000000 || (map_flags & page_1m_size && ~bflags & rsx_incomp))
-			{
-				rsxthr->on_notify_pre_memory_unmapped(addr, size, unmap_events);
-			}
+			// Every unmap too, see _page_map.
+			rsxthr->on_notify_pre_memory_unmapped(addr, size, unmap_events);
 		}
 
 		// Deregister PPU related data
@@ -1188,6 +1698,15 @@ namespace vm
 
 		if (!utils::memory_lock(g_sudo_addr + addr, size))
 		{
+			// Report this once per session, not once per call.
+			//
+			// Android does not grant RLIMIT_MEMLOCK to ordinary apps, so this fails for every
+			// mapping and cannot be "fixed" by the user the message tells to raise their limits.
+			// Games that map and unmap shared memory in a loop then drown the log in it --
+			// Oblivion's BSTaskManagerThread produced 6470 of these in ten seconds, and writing
+			// them is expensive enough on Android to stall the emulator outright.
+			//
+			// The first one still says what happened; the rest are the same fact repeated.
 			static atomic_t<bool> s_reported{false};
 
 			if (!s_reported.exchange(true))
@@ -1203,39 +1722,6 @@ namespace vm
 
 	bool block_t::try_alloc(u32 addr, u64 bflags, u32 size, std::shared_ptr<utils::shm>&& shm) const
 	{
-		if (!size)
-		{
-			return false;
-		}
-
-		if (this->flags & stack_guarded)
-		{
-			ensure(this->size >= 0x100000);
-
-			if (addr < this->addr + 4096 || addr + size - 1 >= this->addr + this->size - 4096 - 1)
-			{
-				return false;
-			}
-
-			// Protect guard pages
-			if (g_pages[addr / 4096 - 1] || g_pages[addr / 4096 + size / 4096])
-			{
-				return  false;
-			}
-
-			// Guard pages must be consecutive for non-edge allocations
-			if (addr > this->addr + 4096 && g_pages[addr / 4096 - 2])
-			{
-				return false;
-			}
-
-			// Same
-			if (size + addr < this->addr + this->size - 4096 && g_pages[addr / 4096 + size / 4096 + 1])
-			{
-				return false;
-			}
-		}
-
 		// Check if memory area is already mapped
 		for (u32 i = addr / 4096; i <= (addr + size - 1) / 4096; i++)
 		{
@@ -1244,6 +1730,9 @@ namespace vm
 				return false;
 			}
 		}
+
+		const u32 page_addr = addr + (this->flags & stack_guarded ? 0x1000 : 0);
+		const u32 page_size = size - (this->flags & stack_guarded ? 0x2000 : 0);
 
 		// No flags are default to readable/writable
 		// Explicit (un...) flags are used to protect from such access
@@ -1273,8 +1762,15 @@ namespace vm
 			flags |= page_1m_size;
 		}
 
+		if (this->flags & stack_guarded)
+		{
+			// Mark overflow/underflow guard pages as allocated
+			ensure(!g_pages[addr / 4096].exchange(page_allocated));
+			ensure(!g_pages[addr / 4096 + size / 4096 - 1].exchange(page_allocated));
+		}
+
 		// Map "real" memory pages; provide a function to search for mirrors with private member access
-		_page_map(addr, flags, size, shm.get(), this->flags, [](vm::block_t* _this, utils::shm* shm)
+		_page_map(page_addr, flags, page_size, shm.get(), this->flags, [](vm::block_t* _this, utils::shm* shm)
 		{
 			auto& map = (_this->m.*block_map)();
 
@@ -1301,15 +1797,23 @@ namespace vm
 		// Fill stack guards with STACKGRD
 		if (this->flags & stack_guarded)
 		{
-			const auto fill64 = [](u8* ptr, u64 data, usz count)
+			auto fill64 = [](u8* ptr, u64 data, usz count)
 			{
-				u64* dst = reinterpret_cast<u64*>(ptr);
-				std::fill(dst, dst + count, data);
+#if defined(_M_X64) && defined(_MSC_VER)
+				__stosq(reinterpret_cast<u64*>(ptr), data, count);
+#elif defined(ARCH_X64)
+				__asm__ ("mov %0, %%rdi; mov %1, %%rax; mov %2, %%rcx; rep stosq;"
+					:
+					: "r" (ptr), "r" (data), "r" (count)
+					: "rdi", "rax", "rcx", "memory");
+#else
+				for (usz i = 0; i < count; i++)
+					reinterpret_cast<u64*>(ptr)[i] = data;
+#endif
 			};
 
-			const u32 begina = addr - 4096;
-			const u32 enda = addr + size;
-			fill64(g_sudo_addr + begina, "STACKGRD"_u64, 4096 / sizeof(u64));
+			const u32 enda = addr + size - 4096;
+			fill64(g_sudo_addr + addr, "STACKGRD"_u64, 4096 / sizeof(u64));
 			fill64(g_sudo_addr + enda, "UNDERFLO"_u64, 4096 / sizeof(u64));
 		}
 
@@ -1488,7 +1992,7 @@ namespace vm
 		const u32 min_page_size = flags & block_size_4k ? 0x1000 : 0x10000;
 
 		// Align to minimal page size
-		const u32 size = utils::align(orig_size, min_page_size);
+		const u32 size = utils::align(orig_size, min_page_size) + (flags & stack_guarded ? 0x2000 : 0);
 
 		// Check alignment (it's page allocation, so passing small values there is just silly)
 		if (align < min_page_size || align != (0x80000000u >> std::countl_zero(align)))
@@ -1536,7 +2040,7 @@ namespace vm
 		{
 			if (try_alloc(addr, flags, size, std::move(shm)))
 			{
-				return addr;
+				return addr + (flags & stack_guarded ? 0x1000 : 0);
 			}
 
 			if (addr == max)
@@ -1631,7 +2135,7 @@ namespace vm
 
 			vm::writer_lock lock;
 
-			const auto found = m_map.find(addr);
+			const auto found = m_map.find(addr - (flags & stack_guarded ? 0x1000 : 0));
 
 			if (found == m_map.end())
 			{
@@ -1644,7 +2148,14 @@ namespace vm
 			}
 
 			// Get allocation size
-			const auto size = found->second.first;
+			const auto size = found->second.first - (flags & stack_guarded ? 0x2000 : 0);
+
+			if (flags & stack_guarded)
+			{
+				// Clear guard pages
+				ensure(g_pages[addr / 4096 - 1].exchange(0) == page_allocated);
+				ensure(g_pages[addr / 4096 + size / 4096].exchange(0) == page_allocated);
+			}
 
 			// Unmap "real" memory pages
 			ensure(size == _page_unmap(addr, size, this->flags, found->second.second.get(), unmap_notification.event_data));
@@ -1710,7 +2221,7 @@ namespace vm
 
 		for (auto& entry : (m.*block_map)())
 		{
-			result += entry.second.first;
+			result += entry.second.first - (flags & stack_guarded ? 0x2000 : 0);
 		}
 
 		return result;
@@ -1860,7 +2371,7 @@ namespace vm
 		for (const auto& [addr, shm] : m_map)
 		{
 			// Assume first page flags represent all the map
-			ar(g_pages[addr / 4096]);
+			ar(g_pages[addr / 4096 + !!(flags & stack_guarded)]);
 
 			ar(addr);
 			ar(shm.first);
@@ -1877,7 +2388,8 @@ namespace vm
 				}
 
 				// Save raw binary image
-				serialize_memory_bytes(ar, vm::get_super_ptr<u8>(addr), shm.first);
+				const u32 guard_size = flags & stack_guarded ? 0x1000 : 0;
+				serialize_memory_bytes(ar, vm::get_super_ptr<u8>(addr + guard_size), shm.first - guard_size * 2);
 			}
 			else
 			{
@@ -1939,13 +2451,20 @@ namespace vm
 			{
 				pflags |= block_size_64k;
 			}
+			else if (flags & block_size_4k)
+			{
+				// The stack block is 4K, and this used to pass no size for it at all. try_alloc
+				// reads "no size" as 1M, so every restored stack was mapped with page_1m_size
+				// between guard pages that carry page_allocated alone, and the next _page_unmap,
+				// which is closing the game, threw "Memory inconsistency found! (addr=0xd0000000,
+				// flags: 0x80 vs 0xc0)" and took the process down. Bomberman ULTRA, 2026-09-27:
+				// save a state (which reloads it), then close. alloc() passes the block's own
+				// flags, so only a restored state ever reached this. Upstream has the same code.
+				pflags |= block_size_4k;
+			}
 			else if (!(flags & (block_size_mask & ~block_size_1m)))
 			{
 				pflags |= block_size_1m;
-			}
-			else
-			{
-				pflags |= block_size_4k;
 			}
 
 			// Map the memory through the same method as alloc() and falloc()
@@ -1955,7 +2474,8 @@ namespace vm
 			if (flags & preallocated)
 			{
 				// Load binary image
-				serialize_memory_bytes(ar, vm::get_super_ptr<u8>(addr0), size0);
+				const u32 guard_size = flags & stack_guarded ? 0x1000 : 0;
+				serialize_memory_bytes(ar, vm::get_super_ptr<u8>(addr0 + guard_size), size0 - guard_size * 2);
 			}
 		}
 	}
@@ -2324,10 +2844,52 @@ namespace vm
 
 	inline namespace ps3_
 	{
+#ifdef __APPLE__
+		// Built on first use, and only when the layout has a hook reservation to map.
+		static utils::shm& hook_shm()
+		{
+			static utils::shm s_hook{s_vm_layout.hook_size, ""};
+			return s_hook;
+		}
+#else
 		static utils::shm s_hook{0x800000000, ""};
+#endif
 
 		void init()
 		{
+#ifdef __APPLE__
+			// The hook line and its argument go together, or the format string and arguments disagree.
+			if (g_hook_addr)
+			{
+				vm_log.notice("Guest memory bases address ranges:\n"
+				"vm::g_base_addr = %p - %p\n"
+				"vm::g_sudo_addr = %p - %p\n"
+				"vm::g_exec_addr = %p - %p\n"
+				"vm::g_hook_addr = %p - %p\n"
+				"vm::g_stat_addr = %p - %p\n"
+				"vm::g_reservations = %p - %p\n",
+				g_base_addr, g_base_addr + 0xffff'ffff,
+				g_sudo_addr, g_sudo_addr + 0xffff'ffff,
+				g_exec_addr, g_exec_addr + 0x200000000 - 1,
+				g_hook_addr, g_hook_addr + s_vm_layout.hook_size - 1,
+				g_stat_addr, g_stat_addr + 0xffff'ffff,
+				g_reservations, g_reservations + sizeof(g_reservations) - 1);
+			}
+			else
+			{
+				vm_log.notice("Guest memory bases address ranges:\n"
+				"vm::g_base_addr = %p - %p\n"
+				"vm::g_sudo_addr = %p - %p\n"
+				"vm::g_exec_addr = %p - %p\n"
+				"vm::g_stat_addr = %p - %p\n"
+				"vm::g_reservations = %p - %p\n",
+				g_base_addr, g_base_addr + 0xffff'ffff,
+				g_sudo_addr, g_sudo_addr + 0xffff'ffff,
+				g_exec_addr, g_exec_addr + 0x200000000 - 1,
+				g_stat_addr, g_stat_addr + 0xffff'ffff,
+				g_reservations, g_reservations + sizeof(g_reservations) - 1);
+			}
+#else
 			vm_log.notice("Guest memory bases address ranges:\n"
 			"vm::g_base_addr = %p - %p\n"
 			"vm::g_sudo_addr = %p - %p\n"
@@ -2341,6 +2903,7 @@ namespace vm
 			g_hook_addr, g_hook_addr + 0x800000000 - 1,
 			g_stat_addr, g_stat_addr + 0xffff'ffff,
 			g_reservations, g_reservations + sizeof(g_reservations) - 1);
+#endif
 
 			std::memset(&g_pages, 0, sizeof(g_pages));
 
@@ -2360,10 +2923,17 @@ namespace vm
 			std::memset(g_range_lock_set, 0, sizeof(g_range_lock_set));
 			std::memset(g_range_lock_bits, 0, sizeof(g_range_lock_bits));
 
+#ifdef __APPLE__
+			if (g_hook_addr)
+			{
+				ensure(hook_shm().map(g_hook_addr, utils::protection::rw, true));
+			}
+#else
 #ifdef _WIN32
 			utils::memory_release(g_hook_addr, 0x800000000);
 #endif
 			ensure(s_hook.map(g_hook_addr, utils::protection::rw, true));
+#endif
 		}
 	}
 
@@ -2387,11 +2957,18 @@ namespace vm
 		utils::memory_decommit(g_exec_addr, 0x200000000);
 		utils::memory_decommit(g_stat_addr, 0x100000000);
 
+#ifdef __APPLE__
+		if (g_hook_addr)
+		{
+			utils::memory_decommit(g_hook_addr, s_vm_layout.hook_size);
+		}
+#else
 #ifdef _WIN32
 		s_hook.unmap(g_hook_addr);
 		ensure(utils::memory_reserve(0x800000000, g_hook_addr));
 #else
 		utils::memory_decommit(g_hook_addr, 0x800000000);
+#endif
 #endif
 
 		std::memset(g_range_lock_set, 0, sizeof(g_range_lock_set));
@@ -2568,7 +3145,7 @@ void fmt_class_string<vm::_ptr_base<const char, u32>>::format(std::string& out, 
 	// Special case (may be allowed for some arguments)
 	if (arg == 0)
 	{
-		out += reinterpret_cast<const char*>(u8"В«NULLВ»");
+		out += reinterpret_cast<const char*>(u8"«NULL»");
 		return;
 	}
 
@@ -2577,25 +3154,25 @@ void fmt_class_string<vm::_ptr_base<const char, u32>>::format(std::string& out, 
 	// Filter certainly invalid addresses
 	if (!vm::check_addr(addr, vm::page_readable))
 	{
-		out += reinterpret_cast<const char*>(u8"В«INVALID_ADDRESS:");
+		out += reinterpret_cast<const char*>(u8"«INVALID_ADDRESS:");
 		fmt_class_string<u32>::format(out, arg);
-		out += reinterpret_cast<const char*>(u8"В»");
+		out += reinterpret_cast<const char*>(u8"»");
 		return;
 	}
 
 	const auto start = out.size();
 
-	out += reinterpret_cast<const char*>(u8"вЂњ");
+	out += reinterpret_cast<const char*>(u8"“");
 
 	if (!vm::read_string(addr, umax, out, true))
 	{
 		// Revert changes
 		out.resize(start);
-		out += reinterpret_cast<const char*>(u8"В«INVALID_ADDRESS:");
+		out += reinterpret_cast<const char*>(u8"«INVALID_ADDRESS:");
 		fmt_class_string<u32>::format(out, arg);
-		out += reinterpret_cast<const char*>(u8"В»");
+		out += reinterpret_cast<const char*>(u8"»");
 		return;
 	}
 
-	out += reinterpret_cast<const char*>(u8"вЂќ");
+	out += reinterpret_cast<const char*>(u8"”");
 }

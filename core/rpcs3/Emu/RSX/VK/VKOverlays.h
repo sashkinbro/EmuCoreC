@@ -170,8 +170,11 @@ namespace vk
 
 		void emit_geometry(vk::command_buffer& cmd, glsl::program* program) override;
 
+		// [advance]: step the overlay's state after drawing it. False draws the same overlay again
+		// without that step -- for a generated frame, which must look like the real one it follows
+		// and must not be counted as a frame of its own (the performance overlay counts updates).
 		void run(vk::command_buffer& cmd, const areau& viewport, vk::framebuffer* target, VkRenderPass render_pass,
-				vk::data_heap& upload_heap, rsx::overlays::overlay& ui);
+				vk::data_heap& upload_heap, rsx::overlays::overlay& ui, bool advance = true);
 	};
 
 	struct attachment_clear_pass : public overlay_pass
@@ -238,9 +241,36 @@ namespace vk
 
 		void update_uniforms(vk::command_buffer& cmd, vk::glsl::program* /*program*/) override;
 
+		// single_image_eye (ARMSX3 Cardboard VR): 0 or 1 draws only that eye of a stereo pair the game
+		// drew into the one image in src, left above right. -1 is the normal pass.
 		void run(vk::command_buffer& cmd, const areau& viewport, vk::framebuffer* target,
 			const rsx::simple_array<vk::viewable_image*>& src, f32 gamma, bool limited_rgb,
-			bool stereo_enabled, VkRenderPass render_pass);
+			bool stereo_enabled, VkRenderPass render_pass, s32 single_image_eye = -1);
+	};
+
+	// ARMSX3: the last pass of a pre-rotated present (see swapchain_WSI::init). Draws the finished,
+	// upright frame into the whole swapchain image, turned clockwise by the swapchain's quarter
+	// turns. One instance per turn, since get_overlay_pass builds them without arguments.
+	struct present_rotation_pass : public overlay_pass
+	{
+		explicit present_rotation_pass(u32 quarter_turns);
+
+		void run(vk::command_buffer& cmd, vk::framebuffer* target, vk::viewable_image* src, VkRenderPass render_pass);
+	};
+
+	struct present_rotation_pass_90 : public present_rotation_pass
+	{
+		present_rotation_pass_90() : present_rotation_pass(1) {}
+	};
+
+	struct present_rotation_pass_180 : public present_rotation_pass
+	{
+		present_rotation_pass_180() : present_rotation_pass(2) {}
+	};
+
+	struct present_rotation_pass_270 : public present_rotation_pass
+	{
+		present_rotation_pass_270() : present_rotation_pass(3) {}
 	};
 
 	// TODO: Replace with a proper manager

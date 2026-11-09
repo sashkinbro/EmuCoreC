@@ -7,17 +7,17 @@ layout(%set, binding=%loc, std430) buffer ssbo{ uint data[]; };
 #define KERNEL_SIZE %ks
 
 // Generic swap routines
-#define bswap_u16(bits)     (bits & 0xFFu) << 8u | (bits & 0xFF00u) >> 8u | (bits & 0xFF0000u) << 8u | (bits & 0xFF000000u) >> 8u
-#define bswap_u32(bits)     (bits & 0xFFu) << 24u | (bits & 0xFF00u) << 8u | (bits & 0xFF0000u) >> 8u | (bits & 0xFF000000u) >> 24u
-#define bswap_u16_u32(bits) (bits & 0xFFFFu) << 16u | (bits & 0xFFFF0000u) >> 16u
+#define bswap_u16(bits)     (bits & 0xFF) << 8 | (bits & 0xFF00) >> 8 | (bits & 0xFF0000) << 8 | (bits & 0xFF000000) >> 8
+#define bswap_u32(bits)     (bits & 0xFF) << 24 | (bits & 0xFF00) << 8 | (bits & 0xFF0000) >> 8 | (bits & 0xFF000000) >> 24
+#define bswap_u16_u32(bits) (bits & 0xFFFF) << 16 | (bits & 0xFFFF0000) >> 16
 
 // Depth format conversions
 #define d24_to_f32(bits)             floatBitsToUint(float(bits) / 16777215.f)
 #define f32_to_d24(bits)             f32_to_unorm24(uintBitsToFloat(bits))
-#define d24f_to_f32(bits)            (bits << 7u)
-#define f32_to_d24f(bits)            (bits >> 7u)
-#define d24x8_to_f32(bits)           d24_to_f32(bits >> 8u)
-#define d24x8_to_d24x8_swapped(bits) (bits & 0xFF00u) | (bits & 0xFF0000u) >> 16u | (bits & 0xFFu) << 16u
+#define d24f_to_f32(bits)            (bits << 7)
+#define f32_to_d24f(bits)            (bits >> 7)
+#define d24x8_to_f32(bits)           d24_to_f32(bits >> 8)
+#define d24x8_to_d24x8_swapped(bits) (bits & 0xFF00) | (bits & 0xFF0000) >> 16 | (bits & 0xFF) << 16
 #define f32_to_d24x8_swapped(bits)   d24x8_to_d24x8_swapped(f32_to_d24(bits))
 
 uint linear_invocation_id()
@@ -40,7 +40,7 @@ uint f32_to_unorm24(const in float value)
 void main()
 {
 	uint invocation_id = linear_invocation_id();
-	uint index = invocation_id * uint(KERNEL_SIZE);
+	uint index = invocation_id * KERNEL_SIZE;
 	uint value;
 	%vars
 

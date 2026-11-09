@@ -44,14 +44,14 @@ namespace gl
 		bool ARB_shader_texture_image_samples_supported = false;
 		bool EXT_texture_compression_s3tc_supported = false;
 		bool ARB_shader_storage_buffer_object_supported = false;
-		bool GLES_texture_view_supported = false;
-		bool GLES_clip_distance_supported = false;
 		bool ARB_framebuffer_no_attachments_supported = false;
+		bool ARB_robustness_supported = false;
 
 		bool vendor_INTEL = false;  // has broken GLSL compiler
 		bool vendor_AMD = false;    // has broken ARB_multidraw
 		bool vendor_NVIDIA = false; // has NaN poisoning issues
 		bool vendor_MESA = false;   // requires CLIENT_STORAGE bit set for streaming buffers
+		bool vendor_QUALCOMM_GLES = false; // Adreno's own ES driver: needs each pass submitted at a target switch
 
 		bool subvendor_RADEONSI = false;
 		bool subvendor_NOUVEAU = false;
@@ -62,4 +62,8 @@ namespace gl
 
 	const capabilities& get_driver_caps();
 	const std::string get_device_name();
+
+	// Forget the capabilities read so far; the next get_driver_caps() reads them from the
+	// current context. For a renderer starting on a different driver than the last one.
+	void reset_driver_caps();
 }

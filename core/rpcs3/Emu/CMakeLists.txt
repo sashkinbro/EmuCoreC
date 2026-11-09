@@ -20,6 +20,8 @@ add_library(rpcs3_emu STATIC
     IPC_config.cpp
     IPC_socket.cpp
     Io/SkylanderPortalIPC_config.cpp
+    Io/SkylanderPortalIPC.cpp
+    Io/wiimote_config.cpp
 )
 
 if(USE_LTO)
@@ -112,6 +114,14 @@ set_source_files_properties("../util/yaml.cpp" PROPERTIES
     SKIP_PRECOMPILE_HEADERS ON
 )
 
+# Frontend main-thread callbacks may throw through the wrapper System.cpp builds.
+if(APPLE)
+    set_source_files_properties("System.cpp" PROPERTIES
+        COMPILE_FLAGS "$<IF:$<CXX_COMPILER_ID:MSVC>,/EHsc,-fexceptions>"
+        SKIP_PRECOMPILE_HEADERS ON
+    )
+endif()
+
 # Crypto
 target_sources(rpcs3_emu PRIVATE
     ../Crypto/aes.cpp
@@ -155,9 +165,16 @@ target_sources(rpcs3_emu PRIVATE
     Audio/AudioDumper.cpp
     Audio/AudioBackend.cpp
     Audio/Cubeb/CubebBackend.cpp
-    $<$<BOOL:${ANDROID}>:Audio/Oboe/OboeCapture.cpp>
     Audio/Cubeb/cubeb_enumerator.cpp
 )
+
+# Oboe headers exist only in Android builds.
+if(ANDROID)
+    target_sources(rpcs3_emu PRIVATE
+        Audio/Oboe/OboeBackend.cpp
+        Audio/Oboe/OboeCapture.cpp
+    )
+endif()
 
 if(USE_FAUDIO)
     find_package(SDL3)
@@ -410,13 +427,20 @@ target_sources(rpcs3_emu PRIVATE
     CPU/CPUTranslator.cpp
 )
 
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64|arm64|aarch64")
+# CMAKE_SYSTEM_PROCESSOR is empty on an iOS cross-compile.
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64|arm64|aarch64" OR (IOS AND CMAKE_OSX_ARCHITECTURES MATCHES "arm64|ARM64|aarch64"))
     target_sources(rpcs3_emu PRIVATE
-        CPU/Backends/AArch64/AArch64ASM.cpp
         CPU/Backends/AArch64/AArch64Common.cpp
-        CPU/Backends/AArch64/AArch64JIT.cpp
         CPU/Backends/AArch64/AArch64Signal.cpp
     )
+
+    # These two use llvm types without an LLVM_AVAILABLE guard.
+    if(WITH_LLVM)
+        target_sources(rpcs3_emu PRIVATE
+            CPU/Backends/AArch64/AArch64ASM.cpp
+            CPU/Backends/AArch64/AArch64JIT.cpp
+        )
+    endif()
 endif()
 
 
@@ -431,13 +455,13 @@ target_sources(rpcs3_emu PRIVATE
     Io/GHLtar.cpp
     Io/GunCon3.cpp
     Io/Infinity.cpp
-    Io/wiimote_config.cpp
     Io/interception.cpp
     Io/KamenRider.cpp
     Io/KeyboardHandler.cpp
     Io/midi_config_types.cpp
     Io/mouse_config.cpp
     Io/MouseHandler.cpp
+    Io/nfc_reader.cpp
     Io/pad_config.cpp
     Io/pad_config_types.cpp
     Io/pad_types.cpp
@@ -449,7 +473,6 @@ target_sources(rpcs3_emu PRIVATE
     Io/RB3MidiKeyboard.cpp
     Io/recording_config.cpp
     Io/Skylander.cpp
-    Io/SkylanderPortalIPC.cpp
     Io/TopShotElite.cpp
     Io/TopShotFearmaster.cpp
     Io/Turntable.cpp
@@ -464,6 +487,7 @@ target_sources(rpcs3_emu PRIVATE
 # Np
 target_sources(rpcs3_emu PRIVATE
     NP/pb_helpers.cpp
+    NP/np_avatar.cpp
     NP/np_cache.cpp
     NP/np_gui_cache.cpp
     NP/np_contexts.cpp
@@ -475,6 +499,7 @@ target_sources(rpcs3_emu PRIVATE
     NP/np_requests.cpp
     NP/signaling_handler.cpp
     NP/np_structs_extra.cpp
+    NP/arkham_revived.cpp
     NP/clans_client.cpp
     NP/clans_config.cpp
     NP/rpcn_client.cpp
@@ -501,14 +526,21 @@ target_sources(rpcs3_emu PRIVATE
     RSX/Common/texture_cache.cpp
     RSX/Common/texture_cache_types.cpp
     RSX/Core/RSXContext.cpp
+    RSX/Core/RSXCoreRenderer.cpp
+    RSX/Core/RSXDisplayEngine.cpp
+    RSX/Core/RSXDisplayOutput.cpp
+    RSX/Core/RSXPowerMgmt.cpp
+    RSX/Core/RSXRenderBackend.cpp
+    RSX/Core/RSXRendererFactory.cpp
     RSX/Core/RSXDisplay.cpp
     RSX/Core/RSXDrawCommands.cpp
+    RSX/Core/RSXGraphEngine.cpp
     RSX/gcm_enums.cpp
     RSX/gcm_printing.cpp
-    RSX/GSRender.cpp
     RSX/Host/MM.cpp
     RSX/Host/RSXDMAWriter.cpp
     RSX/Null/NullGSRender.cpp
+    RSX/NV47/FW/context.cpp
     RSX/NV47/FW/draw_call.cpp
     RSX/NV47/FW/reg_context.cpp
     RSX/NV47/HW/common.cpp
@@ -554,6 +586,7 @@ target_sources(rpcs3_emu PRIVATE
     RSX/Overlays/overlay_osk.cpp
     RSX/Overlays/overlay_osk_panel.cpp
     RSX/Overlays/overlay_perf_metrics.cpp
+    RSX/Overlays/overlay_gauge_button.cpp
     RSX/Overlays/overlay_progress_bar.cpp
     RSX/Overlays/overlay_save_dialog.cpp
     RSX/Overlays/overlay_select.cpp
@@ -588,6 +621,7 @@ target_sources(rpcs3_emu PRIVATE
     RSX/RSXThread.cpp
     RSX/RSXZCULL.cpp
     RSX/rsx_methods.cpp
+    RSX/rsx_profiler.cpp
     RSX/rsx_vertex_data.cpp
     RSX/Utils/rsx_utils.cpp
 )
@@ -599,6 +633,7 @@ if(NOT APPLE)
         RSX/GL/GLDMA.cpp
         RSX/GL/GLDraw.cpp
         RSX/GL/GLFragmentProgram.cpp
+        RSX/GL/GLFrameDump.cpp
         RSX/GL/GLGSRender.cpp
         RSX/GL/GLHelpers.cpp
         RSX/GL/GLOverlays.cpp
@@ -624,21 +659,31 @@ if(NOT APPLE)
         RSX/GL/OpenGL.cpp
         RSX/GL/upscalers/fsr1/fsr_pass.cpp
     )
-endif()
 
-if(ANDROID)
-    target_compile_definitions(rpcs3_emu PUBLIC RSX_GLES=1)
+    # ARMSX3: the OpenGL ES 3.2 target. OpenGL_ES.cpp is the entry-point table,
+    # the desktop-GL compatibility layer and the EGL/ANGLE loader; GLSLES.cpp
+    # retargets the generated GLSL. Both are Android-only and self-disable via
+    # RSX_GLES, so listing them unconditionally would still be inert - they are
+    # guarded here anyway so a desktop build never even parses them.
+    if(ANDROID)
+        target_sources(rpcs3_emu PRIVATE
+            RSX/GL/OpenGL_ES.cpp
+            RSX/GL/GLSLES.cpp
+        )
+    endif()
 endif()
 
 if(TARGET 3rdparty_vulkan)
     target_sources(rpcs3_emu PRIVATE
         RSX/VK/upscalers/fsr1/fsr_pass.cpp
+        RSX/VK/upscalers/sgsr/sgsr_pass.cpp
         RSX/VK/vkutils/barriers.cpp
         RSX/VK/vkutils/buffer_object.cpp
         RSX/VK/vkutils/chip_class.cpp
         RSX/VK/vkutils/commands.cpp
         RSX/VK/vkutils/ex.cpp
         RSX/VK/vkutils/data_heap.cpp
+        RSX/VK/vkutils/gpu_timer.cpp
         RSX/VK/vkutils/debug_print.cpp
         RSX/VK/vkutils/descriptors.cpp
         RSX/VK/vkutils/image.cpp
@@ -652,6 +697,25 @@ if(TARGET 3rdparty_vulkan)
         RSX/VK/vkutils/sampler.cpp
         RSX/VK/vkutils/shared.cpp
         RSX/VK/vkutils/unique_resource.cpp
+        # Frame generation, ported from Eden (CamilleLaVey, eden PR #4263) via ARMSX2, and
+        # relicensed GPL-2.0-or-later by its author for use here. Runs the passes on OUR device
+        # in our own present path -- the earlier implementation lived behind a dlopen'd .so with
+        # its own VkDevice, which forced every frame through an AHardwareBuffer round-trip.
+        RSX/VK/FrameGen/FrameGen.cpp
+        RSX/VK/FrameGen/FrameGenPacer.cpp
+        RSX/VK/FrameGen/LosslessDll.cpp
+        RSX/VK/FrameGen/LsfgAlpha.cpp
+        RSX/VK/FrameGen/LsfgBeta.cpp
+        RSX/VK/FrameGen/LsfgChain.cpp
+        RSX/VK/FrameGen/LsfgCommon.cpp
+        RSX/VK/FrameGen/LsfgDelta.cpp
+        RSX/VK/FrameGen/LsfgGamma.cpp
+        RSX/VK/FrameGen/LsfgGenerate.cpp
+        RSX/VK/FrameGen/LsfgMipmaps.cpp
+        RSX/VK/FrameGen/LsfgShaders.cpp
+        RSX/VK/FrameGen/LsfgTranslate.cpp
+        RSX/VK/FrameGen/LsfgUtil.cpp
+        RSX/VK/FrameGen/LsfgVkCompat.cpp
         RSX/VK/VKAsyncScheduler.cpp
         RSX/VK/VKCommandStream.cpp
         RSX/VK/VKCommonDecompiler.cpp
@@ -659,6 +723,8 @@ if(TARGET 3rdparty_vulkan)
         RSX/VK/VKCompute.cpp
         RSX/VK/VKDataHeapManager.cpp
         RSX/VK/VKDMA.cpp
+        RSX/VK/VKFrameGen.cpp
+        RSX/VK/VKFrameDump.cpp
         RSX/VK/VKDraw.cpp
         RSX/VK/VKFormats.cpp
         RSX/VK/VKFragmentProgram.cpp
@@ -681,6 +747,9 @@ if(TARGET 3rdparty_vulkan)
         RSX/VK/VKVertexProgram.cpp
         RSX/VK/VKTextureCache.cpp
         RSX/VK/VulkanAPI.cpp
+        # Android Vulkan dispatch table (adrenotools custom-driver support).
+        # Generated by android/tools/gen_vk_loader.py; self-disables off Android.
+        RSX/VK/vk_android_loader.cpp
     )
     if(APPLE)
         target_sources(rpcs3_emu PRIVATE
@@ -719,6 +788,7 @@ target_link_libraries(rpcs3_emu
         Threads::Threads
     PRIVATE
         3rdparty::glslang
+        3rdparty::spirv-cross
         3rdparty::libpng
         3rdparty::rtmidi
         3rdparty::yaml-cpp

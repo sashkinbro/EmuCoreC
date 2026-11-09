@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#include "Utilities/ppu_patch.h"
 #include "Utilities/JIT.h"
 #include "Utilities/StrUtil.h"
 #include "util/serialization.hpp"
@@ -11,15 +12,16 @@
 #include "Emu/Memory/vm_reservation.h"
 #include "Emu/Memory/vm_locking.h"
 #include "Emu/RSX/Core/RSXReservationLock.hpp"
+#include "Emu/RSX/Overlays/overlay_message.h"
 #include "Emu/VFS.h"
 #include "Emu/system_progress.hpp"
+#include "Emu/android_app_state.h"
 #include "Emu/system_utils.hpp"
 #include "Emu/System.h"
 #include "PPUThread.h"
 #include "PPUInterpreter.h"
 #include "PPUAnalyser.h"
 #include "PPUModule.h"
-#include "Emu/RSX/Overlays/overlay_message.h"
 #include "PPUDisAsm.h"
 #include "Common.h"
 #include "SPURecompiler.h"
@@ -29,6 +31,7 @@
 #include "lv2/sys_overlay.h"
 #include "lv2/sys_process.h"
 #include "lv2/sys_spu.h"
+#include "lv2/sys_timer.h"
 
 #ifdef LLVM_AVAILABLE
 #ifdef _MSC_VER
@@ -72,13 +75,12 @@
 
 #ifdef __APPLE__
 #include <libkern/OSCacheControl.h>
+#include <TargetConditionals.h>
+#include "ios_jit_dual_map.h"
 #endif
 
 extern atomic_t<u64> g_watchdog_hold_ctr;
-
 #ifdef ARCH_ARM64
-// GHC-CC recompiled functions use the gateway stack as shared spill storage.
-// Large compiled functions can exceed the historical 8 KiB allocation.
 constexpr u32 s_aarch64_ghc_scratch_size = 64 * 1024;
 #endif
 
@@ -179,16 +181,51 @@ bool serialize<ppu_thread::cr_bits>(utils::serial& ar, typename ppu_thread::cr_b
 extern void ppu_initialize();
 extern void ppu_finalize(const ppu_module<lv2_obj>& info, bool force_mem_release = false);
 extern bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only = false, u64 file_size = 0);
-extern thread_local bool g_ppu_avoid_strict_fma;
 static bool ppu_initialize2(class jit_compiler& jit, const ppu_module<lv2_obj>& module_part, const std::string& cache_path, const std::string& obj_name);
 extern bool ppu_load_exec(const ppu_exec_object&, bool virtual_load, const std::string&, utils::serial* = nullptr);
 extern std::pair<shared_ptr<lv2_overlay>, CellError> ppu_load_overlay(const ppu_exec_object&, bool virtual_load, const std::string& path, s64 file_offset, utils::serial* = nullptr);
 extern void ppu_unload_prx(const lv2_prx&);
 extern shared_ptr<lv2_prx> ppu_load_prx(const ppu_prx_object&, bool virtual_load, const std::string&, s64 file_offset, utils::serial* = nullptr);
 extern void ppu_execute_syscall(ppu_thread& ppu, u64 code);
+
+// Defined in PPUTranslator.cpp: emit the allocator-friendly form of VMADDFP for this translation.
+extern thread_local bool g_ppu_avoid_strict_fma;
+
+// Set by a compile worker when LLVM could not get memory, read once after the workers join so
+// the user is told rather than left watching a progress bar that quietly produced an
+// uncompiled game. Not thread_local: any worker may be the one that hits it.
+static atomic_t<bool> g_ppu_compile_oom{false};
+
+// Set by ppu_initialize2 on the calling thread when the module it just tried failed for want of
+// memory. The worker reads it to tell running out of memory, which is worth waiting out and
+// retrying alone, from a codegen failure, which is worth the allocator-friendly retry instead.
+static thread_local bool g_ppu_module_oom = false;
+
+// Set when the title being booted needs upstream's cached reservation, which only Metal Gear
+// Solid 4 does (see the end of ppu_store_reservation's success path). Written whenever a PPU thread
+// is created, before the game's own code runs, so the conditional store reads one flag instead of
+// comparing serials on every success.
+static atomic_t<bool> g_ppu_res_cache_upstream{false};
+
+static bool ppu_res_cache_upstream_title(std::string_view title)
+{
+	static constexpr std::string_view s_titles[] =
+	{
+		"BLUS30109"sv, "BLES00246"sv, "BLJM67001"sv, // disc
+		"NPUB31633"sv, "NPEB02182"sv, "NPJB00698"sv, // PSN
+	};
+
+	return std::find(std::begin(s_titles), std::end(s_titles), title) != std::end(s_titles);
+}
+
+// Defined in JITLLVM.cpp: runs func on a disposable thread so that LLVM's fatal handler or running
+// out of memory ends that thread instead of the caller. False when it did not finish; error says
+// why, starting with "Out of memory" when that was the reason.
+extern bool jit_run_recoverable(const std::function<void()>& func, std::string& error);
+
 static void ppu_break(ppu_thread&, ppu_opcode_t, be_t<u32>*, ppu_intrp_func*);
 
-extern void do_cell_atomic_128_store(u32 addr, const void* to_write);
+extern void do_cell_atomic_128_store(u32 addr, const void* to_write, bool lock_rsx = true);
 
 const auto ppu_gateway = build_function_asm<void(*)(ppu_thread*)>("ppu_gateway", [](native_asm& c, auto& args)
 {
@@ -547,6 +584,380 @@ void ppu_recompiler_fallback(ppu_thread& ppu)
 			break;
 		}
 	}
+}
+
+// The writer of a field a thread is spinning on.
+//
+// A poll loop names the address it reads and nothing names what fills it, and a producer that
+// never ran appears in no call stack, so there is nothing to follow. ARMSX3_WATCH_SPIN=<cia>[:<reg>]
+// arms a watch on the address held in <reg> (r31 by default) every time sys_timer_usleep is
+// reached from <cia>, and the first writes to that address are logged with the instruction that
+// made them. Run it on the PPU interpreter, where every guest store is visible: an address that
+// no PPU store touches is filled by an SPU, or by nothing at all, and those are different bugs.
+// Up to four watched words, and everything that can reach them.
+//
+// One slot is armed from a spin loop (ARMSX3_WATCH_SPIN), the rest from fixed addresses
+// (ARMSX3_WATCH_ADDR), because the interesting address is sometimes a heap field a thread
+// happens to be waiting on and sometimes a structure whose address never changes.
+//
+// Every writer reports here: guest PPU stores of any width, conditional stores, SPU transfers
+// and SPU atomic stores. The first few of each are always printed and the rest are decimated,
+// so a writer that fires twice is as visible as one that fires constantly. Getting that wrong
+// is what made a field that is written every frame look like it had no writer at all.
+//
+// The hooks that sit in the path of guest loads and stores compile out unless someone is
+// actively hunting: build with ARMSX3_WATCH_HOOKS=1 to have them (see PPUInterpreter.cpp).
+#ifndef ARMSX3_WATCH_HOOKS
+#define ARMSX3_WATCH_HOOKS 0
+#endif
+
+atomic_t<u32> g_ppu_watch[4]{};
+
+// How much of each slot to watch. A completion flag is one word; a structure whose writers are
+// the question -- a SPURS control block, say -- is a whole 128-byte line, and watching four
+// bytes of it reports that nothing writes it while the other 124 bytes are written constantly.
+atomic_t<u32> g_ppu_watch_size[4]{};
+
+struct ppu_watch_stat_t
+{
+	atomic_t<u32> ppu_store{0};
+	atomic_t<u32> ppu_stcx{0};
+	atomic_t<u32> spu_put{0};
+	atomic_t<u32> spu_ll_ok{0};
+	atomic_t<u32> spu_ll_fail{0};
+	atomic_t<u32> last_value{0};
+};
+
+ppu_watch_stat_t g_ppu_watch_stats[4]{};
+
+// The last writes to each watched word, kept whether or not they were logged.
+//
+// Decimation is what keeps a log readable and is also what throws away the only events that
+// matter at a hang: the handful just before everything went quiet. A ring costs nothing and
+// the dump can print it in order.
+struct ppu_watch_event_t
+{
+	u32 addr;
+	u32 value;
+	u32 who;
+	u16 size;
+	u16 kind; // 0 store, 1 conditional, 2 transfer, 3 atomic took, 4 atomic could not
+};
+
+ppu_watch_event_t g_ppu_watch_ring[4][32]{};
+atomic_t<u32> g_ppu_watch_ring_pos[4]{};
+
+void ppu_watch_record(int slot, u32 addr, u32 value, u32 who, u16 size, u16 kind)
+{
+	if (slot < 0 || slot >= 4)
+	{
+		return;
+	}
+
+	// Only transitions.
+	//
+	// The SPURS idle loop writes these words back unchanged millions of times, so a ring that
+	// records every write holds nothing but the last few microseconds of noise and the moment
+	// the value actually moved is long gone. What is wanted is the history of changes.
+	static atomic_t<u32> s_last[4]{};
+
+	if (s_last[slot].exchange(value) == value)
+	{
+		return;
+	}
+
+	const u32 i = g_ppu_watch_ring_pos[slot]++ % 32;
+	g_ppu_watch_ring[slot][i] = {addr, value, who, size, kind};
+}
+
+u32 g_ppu_watch_load_cia = 0;
+
+#if ARMSX3_WATCH_HOOKS
+// ARMSX3_WATCH_STORE_CIA=<hex pc>: watch the address the store at that instruction writes to.
+// Only the interpreter's store hook calls this, so it exists only in a hooks build.
+u32 g_ppu_watch_store_cia = 0;
+
+// Latch slot 2 on the address a chosen store writes to, once.
+void ppu_watch_arm_addr2(u32 addr, u32 value)
+{
+	// Several instances of the same structure pass through one instruction, and the one that
+	// matters is identified by what it points at, not by which came first. ARMSX3_WATCH_STORE_VAL
+	// = lo-hi latches only when the stored value falls in that range.
+	static const std::pair<u32, u32> range = []() -> std::pair<u32, u32>
+	{
+		const char* env = std::getenv("ARMSX3_WATCH_STORE_VAL");
+
+		if (!env || !*env)
+		{
+			return {0, 0};
+		}
+
+		const std::string_view text{env};
+		const usz dash = text.find('-');
+		u32 lo = 0, hi = 0;
+
+		if (dash != umax)
+		{
+			std::from_chars(text.data(), text.data() + dash, lo, 16);
+			std::from_chars(text.data() + dash + 1, text.data() + text.size(), hi, 16);
+			ppu_log.warning("ARMSX3_WATCH_STORE_VAL: only values in 0x%x..0x%x", lo, hi);
+		}
+
+		return {lo, hi};
+	}();
+
+	if (range.second && (value < range.first || value > range.second))
+	{
+		return;
+	}
+
+	static atomic_t<u32> s_armed{0};
+
+	if (addr < 0x10000 || !s_armed.compare_and_swap_test(0, addr))
+	{
+		return;
+	}
+
+	g_ppu_watch[2].release(addr);
+	ppu_log.warning("ARMSX3_WATCH_STORE_CIA: latched on 0x%x", addr);
+}
+#endif
+
+// Arm slot 0 (and the word below it) at a chosen address, resetting the per-slot state so a
+// new slot does not inherit the last one's "already set" memory.
+void ppu_watch_arm_addr(u32 addr)
+{
+	// Once, and then never again.
+	//
+	// Following the address means following whichever slot is being waited on right now, which
+	// during a hang is the one slot that is dead, and its whole history is resets. What has
+	// never been observed is a slot's healthy life: set, consumed, cleared, set again. Latching
+	// the first slot seen -- the load at the top of the wait runs on every call, so the first
+	// one is early and healthy -- and holding it gives exactly that, and the producer with it.
+	static atomic_t<u32> s_armed{0};
+	static atomic_t<u32> s_seen{0};
+
+	// What this load reads is the whole question and has never been observed. A wait that is
+	// satisfied on arrival reads non-zero and returns; one that has to wait reads zero and
+	// sleeps. If a non-zero read never appears, the flag is never set at all and the first
+	// sleep is fatal, which is a different bug from a completion that arrives too late.
+	if (const u32 n = ++s_seen; n <= 64 || n % 512 == 0)
+	{
+		ppu_log.error("WATCHLOAD #%u: 0x%x reads 0x%x, index 0x%x", n, addr,
+			vm::check_addr(addr) ? +vm::read32(addr) : 0u,
+			(addr >= 0x1000c && vm::check_addr(addr - 12)) ? +vm::read32(addr - 12) : 0u);
+	}
+
+	if (addr < 0x1000c || !s_armed.compare_and_swap_test(0, addr))
+	{
+		return;
+	}
+
+	g_ppu_watch[0].release(addr);
+	g_ppu_watch[3].release(addr - 12);
+	ppu_log.warning("ARMSX3_WATCH_LOAD: latched on 0x%x", addr);
+}
+
+int ppu_watch_slot(u32 addr, u32 size)
+{
+	for (int i = 0; i < 4; i++)
+	{
+		const u32 w = g_ppu_watch[i].load();
+		const u32 width = std::max<u32>(g_ppu_watch_size[i].load(), 4);
+
+		if (w && addr < w + width && addr + size > w)
+		{
+			return i;
+		}
+	}
+
+	return -1;
+}
+
+bool ppu_watch_should_log(u32 count)
+{
+	return count <= 8 || count % 256 == 0;
+}
+
+static void ppu_watch_parse_fixed()
+{
+	const char* env = std::getenv("ARMSX3_WATCH_ADDR");
+
+	if (!env || !*env)
+	{
+		return;
+	}
+
+	std::string_view rest{env};
+	int slot = 1;
+
+	while (!rest.empty() && slot < 4)
+	{
+		const usz comma = rest.find(',');
+		const std::string_view item = rest.substr(0, comma);
+		rest = comma == umax ? std::string_view{} : rest.substr(comma + 1);
+
+		// "addr" watches the whole 128-byte line it sits in; "addr:width" watches exactly that
+		// many bytes. A control block wants the line, one counter inside it wants four bytes,
+		// and watching the line when you meant the counter buries the counter in its neighbours.
+		u32 addr = 0, width = 128;
+		const usz colon = item.find(':');
+
+		if (colon != umax)
+		{
+			std::from_chars(item.data() + colon + 1, item.data() + item.size(), width, 10);
+			width = std::clamp<u32>(width, 4, 128);
+		}
+
+		const std::string_view addr_text = item.substr(0, colon == umax ? item.size() : colon);
+
+		if (std::from_chars(addr_text.data(), addr_text.data() + addr_text.size(), addr, 16).ec == std::errc() && addr >= 0x10000)
+		{
+			g_ppu_watch_size[slot].release(width);
+			g_ppu_watch[slot++].release(addr);
+			ppu_log.warning("ARMSX3_WATCH_ADDR: watching %u bytes at 0x%x", width, addr);
+		}
+	}
+}
+
+void ppu_watch_arm(const ppu_thread& ppu)
+{
+	static const std::pair<u32, u32> cfg = []() -> std::pair<u32, u32>
+	{
+		ppu_watch_parse_fixed();
+
+#if ARMSX3_WATCH_HOOKS
+		if (const char* st = std::getenv("ARMSX3_WATCH_STORE_CIA"); st && *st)
+		{
+			u32 cia = 0;
+
+			if (std::from_chars(st, st + std::strlen(st), cia, 16).ec == std::errc())
+			{
+				g_ppu_watch_store_cia = cia;
+				ppu_log.warning("ARMSX3_WATCH_STORE_CIA: arming on the store at 0x%x", cia);
+			}
+		}
+#endif
+
+		if (const char* load = std::getenv("ARMSX3_WATCH_LOAD"); load && *load)
+		{
+			u32 cia = 0;
+
+			if (std::from_chars(load, load + std::strlen(load), cia, 16).ec == std::errc())
+			{
+				g_ppu_watch_load_cia = cia;
+				ppu_log.warning("ARMSX3_WATCH_LOAD: arming on the load at 0x%x", cia);
+			}
+		}
+
+		const char* env = std::getenv("ARMSX3_WATCH_SPIN");
+
+		if (!env || !*env)
+		{
+			return {0, 31};
+		}
+
+		const std::string_view text{env};
+		const usz colon = text.find(':');
+
+		u32 cia = 0, reg = 31;
+		std::from_chars(text.data(), text.data() + (colon == umax ? text.size() : colon), cia, 16);
+
+		if (colon != umax)
+		{
+			std::from_chars(text.data() + colon + 1, text.data() + text.size(), reg, 10);
+		}
+
+		if (cia)
+		{
+			ppu_log.warning("ARMSX3_WATCH_SPIN: watching the address in r%u whenever usleep is called from 0x%x", reg, cia);
+		}
+
+		return {cia, std::min<u32>(reg, 31)};
+	}();
+
+	if (!cfg.first || ppu.cia != cfg.first)
+	{
+		return;
+	}
+
+	if (const u32 addr = static_cast<u32>(ppu.gpr[cfg.second]); addr >= 0x10000)
+	{
+		g_ppu_watch[0].release(addr);
+
+		// The word 12 bytes below is the field that decides whether this wait happens at all:
+		// the caller loads it as the dependency index and treats -1 as "nothing to wait for".
+		// It has read 0 at every hang, so what writes it matters as much as what writes the flag.
+		if (addr >= 0x1000c)
+		{
+			g_ppu_watch[3].release(addr - 12);
+		}
+	}
+}
+
+void ppu_watch_store(const ppu_thread& ppu, u32 addr, u64 value, u32 size)
+{
+	const int slot = ppu_watch_slot(addr, size & 0x7f);
+
+	if (slot < 0)
+	{
+		return;
+	}
+
+	const bool stcx = (size & 0x80) != 0;
+	auto& counter = stcx ? g_ppu_watch_stats[slot].ppu_stcx : g_ppu_watch_stats[slot].ppu_store;
+
+	// The event this search exists for is the word going from clear to set, not the word being
+	// set: a word that is normally non-zero would otherwise log every write it ever gets, which
+	// floods the log and slows the emulator enough to change what is being measured.
+	const u32 now = static_cast<u32>(value);
+	const bool became_set = now && !g_ppu_watch_stats[slot].last_value.exchange(now);
+
+	ppu_watch_record(slot, addr, now, ppu.cia, static_cast<u16>(size & 0x7f), stcx ? 1 : 0);
+
+	if (ppu_watch_should_log(++counter) || became_set)
+	{
+		ppu_log.error("WATCH[%d] 0x%x <- 0x%llx (%u bytes%s) from 0x%x on '%s'",
+			slot, addr, value, size & 0x7f, stcx ? ", stcx" : "", ppu.cia, ppu.get_name());
+	}
+}
+
+// Everything the watch has seen, for the end of a thread dump.
+std::string ppu_watch_summary()
+{
+	std::string out;
+
+	for (int i = 0; i < 4; i++)
+	{
+		const u32 w = g_ppu_watch[i].load();
+
+		if (!w)
+		{
+			continue;
+		}
+
+		auto& st = g_ppu_watch_stats[i];
+
+		static const char* const kinds[] = {"store", "conditional", "transfer", "atomic took", "atomic could not"};
+
+		fmt::append(out, "\nWATCH[%d] 0x%x+%u = 0x%x: %u PPU stores, %u conditional, %u SPU transfers, %u SPU atomics took, %u would have failed",
+			i, w, std::max<u32>(g_ppu_watch_size[i].load(), 4), vm::check_addr(w) ? +vm::read32(w) : 0u,
+			st.ppu_store.load(), st.ppu_stcx.load(), st.spu_put.load(), st.spu_ll_ok.load(), st.spu_ll_fail.load());
+
+		// Oldest first, so the bottom of the list is the last thing that happened before the
+		// silence, which is the only part of it anyone reads.
+		const u32 pos = g_ppu_watch_ring_pos[i].load();
+
+		for (u32 n = pos > 32 ? pos - 32 : 0; n < pos; n++)
+		{
+			const auto& e = g_ppu_watch_ring[i][n % 32];
+
+			fmt::append(out, "\n  #%u 0x%x <- 0x%x (%u bytes, %s) by 0x%x", n, e.addr, e.value,
+				e.size, e.kind < 5 ? kinds[e.kind] : "?", e.who);
+		}
+	}
+
+	return out;
 }
 
 void ppu_reservation_fallback(ppu_thread& ppu)
@@ -1096,6 +1507,19 @@ struct ppu_far_jumps_t
 	}
 };
 
+bool ppu_has_far_jump(u32 addr, u32 size)
+{
+	if (!g_fxo->is_init<ppu_far_jumps_t>())
+	{
+		return false;
+	}
+
+	auto& jumps = g_fxo->get<ppu_far_jumps_t>();
+	reader_lock lock(jumps.mutex);
+	const auto it = jumps.vals.lower_bound(addr);
+	return it != jumps.vals.end() && it->first - addr < size;
+}
+
 u32 ppu_get_far_jump(u32 pc)
 {
 	if (!g_fxo->is_init<ppu_far_jumps_t>())
@@ -1190,12 +1614,12 @@ bool ppu_form_branch_to_code(u32 entry, u32 target, bool link, bool with_toc)
 
 bool ppu_form_branch_to_code(u32 entry, u32 target, bool link)
 {
-	return ppu_form_branch_to_code(entry, target, link, false);
+	return ppu_form_branch_to_code(entry, target, link, false, std::string{});
 }
 
 bool ppu_form_branch_to_code(u32 entry, u32 target)
 {
-	return ppu_form_branch_to_code(entry, target, false);
+	return ppu_form_branch_to_code(entry, target, false, false, std::string{});
 }
 
 void ppu_remove_hle_instructions(u32 addr, u32 size)
@@ -2185,7 +2609,7 @@ std::vector<std::pair<u32, u32>> ppu_thread::dump_callstack_list() const
 			{
 				auto& [work_pc, modified_stack, restored_stack] = workload[wi];
 
-				for (u32 inst_pc = work_pc;;)
+				for (usz inst_pc = work_pc;;)
 				{
 					be_t<u32>& opcode = get_inst(inst_pc, func_call_before_target);
 
@@ -2335,7 +2759,7 @@ std::vector<std::pair<u32, u32>> ppu_thread::dump_callstack_list() const
 			{
 				auto& [work_pc, modified_stack, restored_stack] = workload[wi];
 
-				for (u32 inst_pc = work_pc;;)
+				for (usz inst_pc = work_pc;;)
 				{
 					if (inst_pc == func_call_next)
 					{
@@ -2604,7 +3028,6 @@ void ppu_thread::cpu_task()
 					}
 				}
 			}
-
 			cmd_pop(), fast_call(entry_func.addr, entry_func.rtoc, true);
 			break;
 		}
@@ -2753,11 +3176,14 @@ void ppu_thread::cpu_on_stop()
 		ppu_log.notice("thread context: %s", ret);
 	}
 
-	if (is_stopped())
+	// Report once. Nothing guarantees this hook runs a single time, and a PPU thread that
+	// re-enters the stop path without exiting reports on every pass -- measured at ~100,000
+	// lines per second from one thread, which saturates the log writer and stalls the whole
+	// emulator during shutdown on Android, where the log goes to external storage.
+	if (is_stopped() && !perf_stats_reported)
 	{
-		// EmuCoreC: trace. This runs for every stopped PPU thread, so a game
-		// that churns through threads emitted a line per thread at notice --
-		// pure developer telemetry, not something a bug report needs.
+		perf_stats_reported = true;
+
 		if (last_succ == 0 && last_fail == 0 && exec_bytes == 0)
 		{
 			perf_log.trace("PPU thread perf stats are not available.");
@@ -2789,13 +3215,12 @@ void ppu_thread::cpu_wait(bs_t<cpu_flag> old)
 		return;
 	}
 
-	hw_sleep_time = 0;
 	state.wait(old);
 }
 
 void ppu_thread::exec_task()
 {
-#ifdef __APPLE__
+#if defined(__APPLE__) && !TARGET_OS_IPHONE && !defined(ARCH_ARM64)
 	// Ensure correct state before executing JIT code
 	pthread_jit_write_protect_np(true);
 #endif
@@ -2855,6 +3280,8 @@ ppu_thread::ppu_thread(const ppu_thread_params& param, std::string_view name, u3
 	, ppu_tname(make_single<std::string>(name))
 {
 	prio.raw().prio = _prio;
+
+	g_ppu_res_cache_upstream = ppu_res_cache_upstream_title(Emu.GetTitleID());
 
 	memset(&hv_ctx, 0, sizeof(hv_ctx));
 
@@ -2951,6 +3378,8 @@ ppu_thread::ppu_thread(utils::serial& ar)
 {
 	[[maybe_unused]] const s32 version = GET_SERIALIZATION_VERSION(ppu);
 
+	g_ppu_res_cache_upstream = ppu_res_cache_upstream_title(Emu.GetTitleID());
+
 	struct init_pushed
 	{
 		bool pushed = false;
@@ -2995,6 +3424,19 @@ ppu_thread::ppu_thread(utils::serial& ar)
 
 	const u32 status = ar.pop<u32>();
 
+	// A savestate can catch a thread inside sys_cond_wait or _sys_lwcond_queue_wait while it already
+	// sits in the run queue: its timeout expired just before the save, so it was woken but had not yet
+	// left the wait. Restore it like a sleeping thread: do not re-queue it, replay the wait, and do not
+	// start the scheduler before the replayed wait has slept.
+	// Only LLE callers stopped on the sc instruction are detected. HLE wrappers (sysPrxForUser
+	// sys_lwcond_wait, codec modules) also keep state in optional_savestate_state, but they sit on an
+	// HLE stub and the sc check leaves them alone.
+	// Contributed by k1r4ct (PR #219).
+	const bool replay_wait = (status == PPU_THREAD_STATUS_RUNNABLE || status == PPU_THREAD_STATUS_ONPROC) &&
+		!optional_savestate_state->data.empty() &&
+		(gpr[11] == 107 /* sys_cond_wait */ || gpr[11] == 113 /* _sys_lwcond_queue_wait */) &&
+		vm::check_addr(cia) && vm::read32(cia) == ppu_instructions::SC(0);
+
 	switch (status)
 	{
 	case PPU_THREAD_STATUS_IDLE:
@@ -3016,7 +3458,8 @@ ppu_thread::ppu_thread(utils::serial& ar)
 				std::map<u32, ppu_thread*> awake_ppus;
 			};
 
-			g_fxo->get<awake_pushed>().awake_ppus[order] = this;
+			// A replayed wait is not re-queued; its slot stays (as nullptr) so the saved orders remain contiguous
+			g_fxo->get<awake_pushed>().awake_ppus[order] = replay_wait ? nullptr : this;
 
 			if (!std::exchange(g_fxo->get<awake_pushed>().pushed, true))
 			{
@@ -3028,16 +3471,21 @@ ppu_thread::ppu_thread(utils::serial& ar)
 					{
 						ensure(prev + 1 == ppu.first);
 						prev = ppu.first;
-						lv2_obj::awake(ppu.second);
+
+						if (ppu.second)
+						{
+							lv2_obj::awake(ppu.second);
+						}
 					}
 
 					g_fxo->get<awake_pushed>().awake_ppus.clear();
 				});
 			}
 		}
-		else
+		else if (!replay_wait)
 		{
-			lv2_obj::awake(this);
+			hw_sleep_time = 0;
+	lv2_obj::awake(this);
 		}
 
 		[[fallthrough]];
@@ -3076,8 +3524,13 @@ ppu_thread::ppu_thread(utils::serial& ar)
 			});
 		}
 
-		if (status == PPU_THREAD_STATUS_SLEEP)
+		if (status == PPU_THREAD_STATUS_SLEEP || replay_wait)
 		{
+			if (replay_wait)
+			{
+				ppu_log.notice("Loading PPU Thread [0x%x]: saved %s inside a blocking wait, replaying the wait", id, ppu_thread_status{status});
+			}
+
 			cmd_list
 			({
 				{ppu_cmd::ptr_call, 0},
@@ -3438,6 +3891,234 @@ static void ppu_error(ppu_thread& ppu, u64 addr, u32 /*op*/)
 	ppu_recompiler_fallback(ppu);
 }
 
+// Whether the Killzone 3 builder-vs-traversal sync probe is armed. Off unless ARMSX3_KZ3_SYNC=1 in
+// driver_env.txt, so it costs nothing in a normal run. Function-local read so it is seen after
+// driver_env is parsed.
+bool kz3_sync_probe_enabled()
+{
+	static const bool s_on = []
+	{
+		const char* v = std::getenv("ARMSX3_KZ3_SYNC");
+		return v && v[0] == '1' && v[1] == '\0';
+	}();
+
+	return s_on;
+}
+
+// Emitted by the translator only at PPU 0x00cdb2c8 in BCUS98234: the Physics KdTree Building
+// thread's store that clears a job descriptor's root word 0 (the destructor at 0x00cdb1f0). r30
+// holds the descriptor base EA. x86 clears the same descriptor a minimum of 7.6 ms after the SPU
+// read it (looks like it waits for the job); this logs the ARM timing to compare. Correlate with
+// the "KZ3 GET" line by EA: gap = clear_time - last_get_time.
+static void ppu_kz3_desc_clear(u64 ea)
+{
+	if (!kz3_sync_probe_enabled()) [[likely]]
+	{
+		return;
+	}
+
+	static atomic_t<u32> s_n{0};
+
+	const u32 n = ++s_n;
+
+	if (n <= 20000)
+	{
+		ppu_log.error("KZ3 CLEAR ea=0x%08x t=%llu (#%u)", static_cast<u32>(ea), get_system_time(), n);
+	}
+}
+
+// Naughty Bear: Panic in Paradise (NPUB30828, NPEB01054; both trials share one executable).
+//
+// The game builds its graphics SPU's command stream from two PPU threads at once: main_thread and
+// "A2M Render Task Thread" run the same ~100 emitter functions, and each emitter loads the
+// stream's write pointer (0x010e9864), writes its command there and stores the pointer back, with
+// no lock. When two emitters overlap, one writes its command over the other's: in the dump that
+// pinned it, a lights command written from a stale pointer covered ten object draws and ran 8
+// bytes into the next one. The graphics SPU then dispatches garbage, overwrites its own code and
+// the game freezes (RPCS3 #18768, on PC too).
+//
+// The translator calls ppu_nb_stream_lock at each emitter's pointer load, ppu_nb_stream_unlock
+// at the store that publishes its last command, and both around the frame end's buffer swap, so
+// one emitter at a time owns the pointer. The sites come from a static pass over the executable
+// and each is checked against its instruction word before it is hooked (PPUTranslator.cpp); at
+// run time the load or store must also hit the pointer's address, or the call does nothing.
+static constexpr u32 s_nb_stream_ptr = 0x010e9864;
+static atomic_t<bool> s_nb_stream_lock_on{false};
+static atomic_t<u32> s_nb_stream_owner{0};
+static atomic_t<u32> s_nb_stream_owner_site{0};
+static thread_local u32 s_nb_stream_site = 0;
+static thread_local bool s_nb_stream_swap = false;
+static atomic_t<u64> s_nb_stream_waits{0};
+
+bool ppu_nb_stream_lock_part(u32 lo, u32 hi); // PPUTranslator.cpp
+
+bool ppu_nb_stream_lock_enabled()
+{
+	return s_nb_stream_lock_on.load();
+}
+
+void ppu_nb_stream_lock_reset(bool on)
+{
+	s_nb_stream_owner.release(0);
+	s_nb_stream_waits.release(0);
+	s_nb_stream_lock_on.release(on);
+
+	if (on)
+	{
+		ppu_log.notice("Naughty Bear: the graphics command stream's emitters take turns on its write pointer");
+	}
+}
+
+static void ppu_nb_stream_lock(ppu_thread& ppu, u64 site, u64 ea)
+{
+	if (static_cast<u32>(ea) != s_nb_stream_ptr)
+	{
+		// This path of the hooked load reads something else
+		return;
+	}
+
+	const u32 me = ppu.id;
+
+	if (s_nb_stream_owner.load() == me)
+	{
+		// Owning is on or off, never counted: an emitter that calls another emitter reloads the
+		// pointer afterwards (it must, or it would write over the callee's command), so the
+		// callee's release ends nothing the caller still needs, and the reload takes it again.
+		return;
+	}
+
+	u64 wait_start = 0;
+
+	for (u32 spins = 0;; spins++)
+	{
+		u32 old = 0;
+
+		if (s_nb_stream_owner.compare_exchange(old, me))
+		{
+			s_nb_stream_site = static_cast<u32>(site);
+			s_nb_stream_owner_site.release(static_cast<u32>(site));
+			break;
+		}
+
+		if (::is_stopped(ppu.state))
+		{
+			// Emulation is stopping: the thread exits at its next check, nothing more is drawn
+			return;
+		}
+
+		if (spins < 64)
+		{
+			utils::pause();
+			continue;
+		}
+
+		const u64 now = get_system_time();
+
+		if (Emu.IsPaused())
+		{
+			// The owner is paused too; wait out the pause without counting it
+			wait_start = now;
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			continue;
+		}
+
+		if (!wait_start)
+		{
+			wait_start = now;
+		}
+		else if (now - wait_start >= 200'000)
+		{
+			// An emitter owns the pointer for microseconds. This long means the owner left it
+			// behind without a release (it may now be waiting on this thread): take it over
+			// rather than freeze, and name the load the owner took it at.
+			if (s_nb_stream_owner.compare_exchange(old, me))
+			{
+				static atomic_t<u32> s_logged{0};
+
+				if (s_logged++ < 50)
+				{
+					ppu_log.error("Naughty Bear: took the command stream's write pointer from thread 0x%x after %u ms (it was taken at 0x%x)", old, (now - wait_start) / 1000, s_nb_stream_owner_site.load());
+				}
+
+				s_nb_stream_site = static_cast<u32>(site);
+				s_nb_stream_owner_site.release(static_cast<u32>(site));
+				break;
+			}
+
+			continue;
+		}
+
+		// Nap through LV2 rather than spin: the owner may have been preempted by the LV2
+		// scheduler, and a spinning thread would keep the slot it needs to finish.
+		sys_timer_usleep(ppu, 30);
+
+		if (ppu.test_stopped())
+		{
+			return;
+		}
+	}
+
+	if (wait_start) [[unlikely]]
+	{
+		if (const u64 n = ++s_nb_stream_waits; n == 1 || n % 10000 == 0)
+		{
+			ppu_log.notice("Naughty Bear: an emitter waited for another thread's command %u time(s)", n);
+		}
+	}
+}
+
+// The frame end's swap exchanges the two buffers' contexts and resets the new current one, which
+// can reallocate it through the game's allocator and so make syscalls: it keeps the pointer
+// through them (ppu_nb_stream_unlock_at_syscall), or an emitter could slip in mid-reset.
+static void ppu_nb_stream_lock_swap(ppu_thread& ppu, u64 site)
+{
+	ppu_nb_stream_lock(ppu, site, s_nb_stream_ptr);
+
+	if (s_nb_stream_owner.load() == ppu.id)
+	{
+		s_nb_stream_swap = true;
+	}
+}
+
+static void ppu_nb_stream_unlock(ppu_thread& ppu, u64 ea)
+{
+	if (static_cast<u32>(ea) != s_nb_stream_ptr || s_nb_stream_owner.load() != ppu.id)
+	{
+		return;
+	}
+
+	s_nb_stream_owner.release(0);
+}
+
+static void ppu_nb_stream_unlock_all(ppu_thread& ppu)
+{
+	if (s_nb_stream_owner.load() != ppu.id)
+	{
+		return;
+	}
+
+	s_nb_stream_swap = false;
+	s_nb_stream_owner.release(0);
+}
+
+// From ppu_execute_syscall: no emitter makes a syscall while it owns the pointer, so if this
+// thread still owns it outside the swap, the static pass missed a release. Let it go rather than
+// block the others, and name the load that took it.
+void ppu_nb_stream_unlock_at_syscall(ppu_thread& ppu)
+{
+	if (s_nb_stream_owner.load() == ppu.id && !s_nb_stream_swap) [[unlikely]]
+	{
+		static atomic_t<u32> s_logged{0};
+
+		if (s_logged++ < 50)
+		{
+			ppu_log.warning("Naughty Bear: the command stream's write pointer, taken at 0x%x, was still owned at a syscall (cia 0x%x)", s_nb_stream_site, ppu.cia);
+		}
+
+		ppu_nb_stream_unlock_all(ppu);
+	}
+}
+
 static void ppu_check(ppu_thread& ppu, u64 addr)
 {
 	ppu.cia = ::narrow<u32>(addr);
@@ -3570,6 +4251,22 @@ static T ppu_load_acquire_reservation(ppu_thread& ppu, u32 addr)
 	{
 		// Reload "cached" reservation of previous succeeded conditional store
 		// This seems like a hardware feature according to cellSpursAddUrgentCommand function
+		//
+		// Deliberately keeps ppu.rtime as-is, which only works because the successful store
+		// below advances it to the value it left in the line's counter. Upstream carries this
+		// branch empty AND without that advance, so rtime stays one increment behind and every
+		// conditional store after the first on the same line fails by exactly 128 -- forever,
+		// because the guest's loop restarts on failure.
+		//
+		// Assassin's Creed is the case: libsre's cellSpursAddUrgentCommand walks four
+		// urgent-command slots inside one reservation loop, stores slot 0 unchanged to release
+		// it, then can never claim slot 1. Measured at 490 million failures of exactly this test on
+		// 0x102ed6b8, res-rtime==128 on every single one, data unchanged. 047f71b43 added a
+		// "-= 128" here to pair with the advance; the two cancel, which is presumably why the
+		// pair was dropped rather than corrected.
+		//
+		// Metal Gear Solid 4 is the exception and keeps upstream's behaviour; see the end of the
+		// success path in ppu_store_reservation.
 	}
 	else
 	{
@@ -3607,6 +4304,9 @@ extern u64 ppu_ldarx(ppu_thread& ppu, u32 addr)
 	return ppu_load_acquire_reservation<u64>(ppu, addr);
 }
 
+int ppu_watch_slot(u32 addr, u32 size);
+void ppu_watch_store(const ppu_thread& ppu, u32 addr, u64 value, u32 size);
+
 template <typename T>
 static bool ppu_store_reservation(ppu_thread& ppu, u32 addr, u64 reg_value)
 {
@@ -3620,6 +4320,20 @@ static bool ppu_store_reservation(ppu_thread& ppu, u32 addr, u64 reg_value)
 
 	// Notify breakpoint handler
 	vm::write<void>(addr, T{0}, &ppu);
+
+	// A conditional store reaches memory through here rather than through the interpreter's
+	// write path, so a flag set with stwcx. is invisible to the plain watch. Log the attempt:
+	// this loop retries on failure, so repeats are failures, and a store that keeps failing
+	// while a thread waits on the word is the thing worth finding.
+	//
+	// Behind the switch like the interpreter's hooks. The recompiler reaches every stwcx. and
+	// stdcx. through here too, and the slot scan is eight ordered loads per conditional store.
+#if ARMSX3_WATCH_HOOKS
+	if (ppu_watch_slot(addr, sizeof(T)) >= 0) [[unlikely]]
+	{
+		ppu_watch_store(ppu, addr, static_cast<u64>(reg_value), sizeof(T) | 0x80);
+	}
+#endif
 
 	auto& data = const_cast<atomic_be_t<u64>&>(vm::_ref<atomic_be_t<u64>>(addr & -8));
 	auto& res = vm::reservation_acquire(addr);
@@ -3671,6 +4385,10 @@ static bool ppu_store_reservation(ppu_thread& ppu, u32 addr, u64 reg_value)
 	{
 		if (ppu.use_full_rdata) [[unlikely]]
 		{
+#if defined(__APPLE__) || defined(__ANDROID__)
+			// Fault before rsrv_unique_lock, as the fault can wait on RSX; fetch_op and cmp_rdata re-check after.
+			data += 0;
+#endif
 			auto [_oldd, _ok] = res.fetch_op([&](u64& r)
 			{
 				if ((r & -128) != rtime || (r & 127))
@@ -3694,7 +4412,9 @@ static bool ppu_store_reservation(ppu_thread& ppu, u32 addr, u64 reg_value)
 			// Cache line data
 			//auto& cline_data = vm::_ref<spu_rdata_t>(addr);
 
+#if !defined(__APPLE__) && !defined(__ANDROID__)
 			data += 0;
+#endif
 			auto range_lock = vm::alloc_range_lock();
 			bool success = false;
 			{
@@ -3805,7 +4525,19 @@ static bool ppu_store_reservation(ppu_thread& ppu, u32 addr, u64 reg_value)
 			{
 				// Postpone notifications if there is no pending one OR if there is likely a complex operation on reservation going on
 				// Which consists of multiple used addresses
-				if (ppu.res_notify_postpone_streak <= 4)
+				// EXPERIMENT (ARMSX3_NO_POSTPONE=1): never postpone, notify immediately.
+				//
+				// A postponed wake is only delivered if no other store touched the line in the
+				// meantime, and the line SPURS keeps its control block on takes millions of
+				// atomic stores, so the timestamp has almost always moved on by the time the
+				// flush checks. Every drop is a wake that an SPU waiting on that line never got.
+				static const bool s_no_postpone = []()
+				{
+					const char* env = std::getenv("ARMSX3_NO_POSTPONE");
+					return env && *env && *env != '0';
+				}();
+
+				if (!s_no_postpone && ppu.res_notify_postpone_streak <= 4)
 				{
 					if (!notify || ((notify & -128) == (addr & -128) && new_data != old_data))
 					{
@@ -3854,6 +4586,23 @@ static bool ppu_store_reservation(ppu_thread& ppu, u32 addr, u64 reg_value)
 
 		ppu.last_faddr = 0;
 		ppu.res_cached = ppu.raddr;
+
+		// The other half of upstream 047f71b43; see the note in ppu_load_acquire_reservation.
+		// Every success path above leaves the line's counter at rtime + 128, so this is what
+		// keeps a cached re-reservation of the same line validating against the right value.
+		//
+		// Except in Metal Gear Solid 4, which keeps upstream's behaviour: no advance, so the next
+		// conditional store on this line through a cached re-reservation fails once. That is what
+		// upstream's fix for MGS4 freezing at the start of a new game relies on (#16907): it lets
+		// cellSpursAddUrgentCommand queue one urgent command at a time. With the advance, MGS4 froze
+		// as Act 1's first stage loaded (tester logs, 10-27): the main and both audio threads stuck
+		// on one lock and the urgent SPURS kernel idle from the same instant. Assassin's Creed needs
+		// the advance, so it stays the default.
+		if (!g_ppu_res_cache_upstream.observe())
+		{
+			ppu.rtime += 128;
+		}
+
 		ppu.raddr = 0;
 		return true;
 	}
@@ -3897,21 +4646,69 @@ struct jit_core_allocator
 	// Initialize global semaphore with the max number of threads
 	::semaphore<0x7fff> sem{std::max<s16>(thread_count, 1)};
 
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(__APPLE__)
+	// Held around a single module's compilation when memory is short, so that workers fall
+	// back to one at a time instead of all of them holding an LLVM context at once.
+	//
+	// thread_count above is decided ONCE, from a reading taken before the emulator has
+	// mapped the PS3 address space or the game has loaded a texture. On a cold cache that
+	// reading goes badly stale: measured on Arkham City, a first boot peaked at 5228MB
+	// against 2636MB once the modules were cached, and the growth was RssAnon, which is the
+	// compilers rather than the GPU caches. By then the worker count is fixed and cannot
+	// respond.
+	//
+	// Rechecking at the point of use is what makes this adaptive. With headroom nothing is
+	// serialised and there is no cost; only under pressure does it become one at a time.
+	// A claim, not a mutex.
+	//
+	// This is held across an LLVM compile, and a worker that hits LLVM's fatal handler leaves
+	// through pthread_exit -- which under bionic unwinds nothing, so an owned std::mutex stays
+	// locked by a thread that no longer exists and every other worker blocks on it for the rest
+	// of the session. That is the reported "PPU cache never finishes, it gets stuck at the end",
+	// and it gets more likely the longer a run goes, because memory only falls.
+	//
+	// Waiting on an atomic with a timeout costs a stranded claim a wait instead of the session.
+	// Same reasoning as the SPU compile claim, and the same failure this fork has already been
+	// bitten by twice.
 	atomic_t<u32> low_memory_claim{0};
 
+	// Set once a module has run out of memory during this boot. From then on every module
+	// compiles alone, whatever the free memory reading says: the reading that let two workers
+	// run was the one that just proved wrong.
+	atomic_t<bool> out_of_memory_seen{false};
+
+	// Modules being compiled right now, across all workers. A worker retrying after running out
+	// of memory waits for this to fall to itself, so the retry really does run alone.
+	atomic_t<u32> compiling{0};
+
+	// Enough left for the emulator plus a single worker. Below that, running two workers is
+	// how the process gets killed rather than how it finishes sooner.
 	static bool memory_is_tight()
 	{
 		const u64 avail = utils::get_avail_memory();
 		return avail != 0 && avail < (2048ull * 1024 * 1024);
 	}
 
+	// Below this the next module should not start at all yet.
+	//
+	// Serialising is not enough on its own. Demon's Souls precompiles for 27 minutes and sat
+	// between 4.3GB and 5.8GB the whole time on a 7GB device, then was killed when the system
+	// wanted memory back: Zygote logged signal 9 for four processes at once, so the pressure
+	// was not ours alone. One worker at a time still walks into that, it just walks slower.
+	//
+	// So a worker about to start a module waits for the system to recover instead of adding
+	// to the pressure. Precompilation writes each object to disk and, because the modules are
+	// not mapped into the VM, links none of them into memory, so pausing costs time and
+	// nothing else.
 	static bool memory_is_critical()
 	{
 		const u64 avail = utils::get_avail_memory();
 		return avail != 0 && avail < (1024ull * 1024 * 1024);
 	}
 
+	// Give the system a chance to reclaim before starting another module. Bounded, because
+	// never compiling is worse than compiling under pressure, and the caller has already
+	// serialised itself by this point.
 	static void wait_for_memory()
 	{
 		for (u32 waited_ms = 0; waited_ms < 10'000 && memory_is_critical(); waited_ms += 100)
@@ -3921,11 +4718,56 @@ struct jit_core_allocator
 				return;
 			}
 
-			thread_ctrl::wait_for(100'000);
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
 		}
 	}
 #endif
 
+#ifdef __APPLE__
+	// As many modules compile at once as fit in what jetsam allows, keeping 1 GiB spare.
+	static constexpr u64 compile_reserve = 1024ull << 20;
+	static constexpr u64 compile_size = 450ull << 20;
+
+	atomic_t<u32> logged_allowed{0};
+
+	u32 allowed_compiles(u64 avail) const
+	{
+		const u32 most = std::max<s16>(thread_count, 1);
+
+		if (!avail)
+		{
+			return most; // No reading (macOS): no brake
+		}
+
+		const u64 room = avail > compile_reserve ? avail - compile_reserve : 0;
+		return static_cast<u32>(std::clamp<u64>(room / compile_size, 1, most));
+	}
+
+	// Gives up (false) after ~10 minutes; with 60 s every waiting worker gave up and started at once.
+	bool take_compile_slot()
+	{
+		for (u32 i = 0; i < 6000 && !Emu.IsStopped(); i++)
+		{
+			const u64 avail = utils::get_avail_memory();
+			const u32 allowed = allowed_compiles(avail);
+
+			if (logged_allowed.exchange(allowed) != allowed)
+			{
+				ppu_log.notice("LLVM: %u MB available, compiling up to %u modules at once", avail >> 20, allowed);
+			}
+
+			if (compiling.fetch_op([&](u32& c) { return c < allowed ? (c++, true) : false; }).second)
+			{
+				return true;
+			}
+
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		}
+
+		return false;
+	}
+
+#endif
 	static s16 limit()
 	{
 		const s32 by_cores = std::min<s32>(0x7fff, utils::get_thread_count());
@@ -4524,7 +5366,7 @@ extern void ppu_precompile(std::vector<std::string>& dir_queue, std::vector<ppu_
 							// Try to read from that address
 							if (const u128 klic_value = read_from_ptr_unsafe<u128>(klic_ptr))
 							{
-								if (!std::count_if(decrypt_klics.begin(), decrypt_klics.end(), FN(std::memcmp(&x, &klic_value, 16) == 0)))
+								if (std::ranges::none_of(decrypt_klics, FN(std::memcmp(&x, &klic_value, 16) == 0)))
 								{
 									decrypt_klics.emplace_back(klic_value);
 								}
@@ -4864,7 +5706,11 @@ extern void ppu_precompile(std::vector<std::string>& dir_queue, std::vector<ppu_
 					_main.name = ' '; // Make ppu_finalize work
 					Emu.ConfigurePPUCache();
 					ppu_initialize(_main, false, file_size);
+#if defined(__APPLE__) && defined(ARCH_ARM64)
+					// JIT pool 2 is not reset before the game runs, so another executable's SPU programs would only take its room.
+#else
 					spu_cache::initialize(false);
+#endif
 					ppu_finalize(_main, true);
 					_main = {};
 					g_fxo->get<spu_cache>() = std::move(current_cache);
@@ -4886,6 +5732,194 @@ extern void ppu_precompile(std::vector<std::string>& dir_queue, std::vector<ppu_
 	});
 
 	exec_worker();
+}
+
+// Compile each startup calloc helper after validating its reachable instructions.
+static void ppu_initialize_patch_helpers()
+{
+	if (g_cfg.core.ppu_decoder != ppu_decoder_type::llvm || !g_fxo->is_init<ppu_patch_block_registry_t>())
+	{
+		return;
+	}
+
+	const auto& ranges = g_fxo->get<ppu_patch_block_registry_t>().code_ranges;
+
+	for (const auto& [start, size, patch] : ranges)
+	{
+		if (Emu.IsStopped())
+		{
+			return;
+		}
+
+		if (!size || start % 4 || size % 4 || u64(start) + size > u32{umax} ||
+			!vm::check_addr(start, vm::page_executable, size))
+		{
+			continue;
+		}
+
+		const u32 end = start + size;
+		enum : u8 { entry = 1, reachable = 2, exit = 4, hook = 8, link = 16 };
+		struct instruction
+		{
+			u32 target = 0;
+			u8 flags = 0;
+		};
+		std::vector<instruction> instructions(size / 4);
+
+		if (g_fxo->is_init<ppu_far_jumps_t>())
+		{
+			auto& jumps = g_fxo->get<ppu_far_jumps_t>();
+			reader_lock lock(jumps.mutex);
+
+			for (auto it = jumps.vals.lower_bound(start); it != jumps.vals.end() && it->first < end; ++it)
+			{
+				const auto& jump = it->second;
+				const bool direct = !jump.with_toc && jump.module_name.empty();
+				auto& inst = instructions[(it->first - start) / 4];
+				inst.target = direct ? jump.target : u32{umax};
+				inst.flags = hook | ((jump.link || !direct) ? link : 0);
+			}
+		}
+
+		std::vector<u32> pending;
+
+		auto enqueue = [&](u32 addr)
+		{
+			if (addr >= start && addr < end && addr % 4 == 0 && !(instructions[(addr - start) / 4].flags & entry))
+			{
+				instructions[(addr - start) / 4].flags |= entry;
+				pending.emplace_back(addr);
+			}
+		};
+
+		enqueue(start);
+
+		for (usz i = 0; i < pending.size(); i++)
+		{
+			for (u32 pc = pending[i]; pc < end; pc += 4)
+			{
+				auto& inst = instructions[(pc - start) / 4];
+				if (inst.flags & hook)
+				{
+					enqueue(inst.target);
+
+					if (inst.flags & link)
+					{
+						enqueue(pc + 4);
+					}
+
+					break;
+				}
+
+				const ppu_opcode_t op{vm::read32(pc)};
+				const auto type = g_ppu_itype.decode(op.opcode);
+
+				// calloc helpers must use instructions supported by the LLVM translator.
+				switch (type)
+				{
+				case ppu_itype::SC:
+					if (op.opcode == ppu_instructions::SC(0))
+					{
+						break;
+					}
+					[[fallthrough]];
+				case ppu_itype::UNK:
+				case ppu_itype::ECIWX:
+				case ppu_itype::ECOWX:
+				case ppu_itype::LSWX:
+				case ppu_itype::STSWX:
+				case ppu_itype::SUBFCO:
+				case ppu_itype::SUBFCO_:
+				case ppu_itype::SUBFEO:
+				case ppu_itype::SUBFEO_:
+				case ppu_itype::ADDEO:
+				case ppu_itype::ADDEO_:
+				case ppu_itype::ADDZEO:
+				case ppu_itype::ADDZEO_:
+				case ppu_itype::SUBFZEO:
+				case ppu_itype::SUBFZEO_:
+				case ppu_itype::SUBFMEO:
+				case ppu_itype::SUBFMEO_:
+				case ppu_itype::MULLDO:
+				case ppu_itype::MULLDO_:
+				case ppu_itype::ADDMEO:
+				case ppu_itype::ADDMEO_:
+				case ppu_itype::MULLWO:
+				case ppu_itype::MULLWO_:
+				{
+					fmt::throw_exception("Unsupported calloc instruction 0x%08x at 0x%x (helper 0x%x, patch '%s')",
+						op.opcode, pc, start, patch);
+				}
+				default: break;
+				}
+
+				if (inst.flags & reachable)
+				{
+					break;
+				}
+
+				inst.flags |= reachable;
+
+				const bool direct_branch = type == ppu_itype::B || type == ppu_itype::BC;
+				const bool indirect_branch = type == ppu_itype::BCLR || type == ppu_itype::BCCTR;
+				const bool exception = type == ppu_itype::SC || (type & ppu_itype::trap);
+				if (direct_branch)
+				{
+					enqueue((op.aa ? 0 : pc) + (type == ppu_itype::B ? +op.bt24 : +op.bt14));
+				}
+
+				if (direct_branch || indirect_branch || exception)
+				{
+					// Calls, conditional branches and exceptions may resume at the next instruction.
+					if (exception || op.lk || (type != ppu_itype::B && (op.bo & 0x14) != 0x14))
+					{
+						enqueue(pc + 4);
+					}
+					inst.flags |= exit;
+					break;
+				}
+			}
+		}
+
+		ppu_module<lv2_obj> helper;
+		helper.name = fmt::format("patch-helper-%x", start);
+		helper.cache = rpcs3::utils::get_cache_dir() + "patches/";
+		if (!fs::create_path(helper.cache))
+		{
+			fmt::throw_exception("Failed to create cache directory: %s (%s)", helper.cache, fs::g_tls_error);
+		}
+		helper.segs.push_back({start, size, 1, 5, size, vm::base(start)});
+		helper.addr_to_seg_index.emplace(start, 0);
+
+		for (u32 i = 0; i < instructions.size();)
+		{
+			if (!(instructions[i].flags & reachable))
+			{
+				i++;
+				continue;
+			}
+
+			ppu_function func;
+			func.addr = start + i * 4;
+			do
+			{
+				func.size += 4;
+				if ((instructions[i++].flags & exit) || i == instructions.size() ||
+					!(instructions[i].flags & reachable) || (instructions[i].flags & entry))
+				{
+					break;
+				}
+			}
+			while (true);
+			helper.funcs.emplace_back(std::move(func));
+		}
+
+		if (!helper.funcs.empty())
+		{
+			ppu_log.notice("Compiling allocated patch helper at 0x%x: %u blocks", start, helper.funcs.size());
+			ppu_initialize(helper);
+		}
+	}
 }
 
 extern void ppu_initialize()
@@ -5027,6 +6061,73 @@ extern void ppu_initialize()
 
 		ppu_initialize(*ptr);
 	}
+
+	ppu_initialize_patch_helpers();
+}
+
+// Run chosen guest functions through the interpreter while everything else stays compiled.
+//
+// The games on RPCS3 issue #5831 all work with the PPU interpreter and break with LLVM, so the bug
+// is in some function the recompiler gets wrong. ARMSX3_PPU_INTERP=start-end[,start-end...] (hex
+// guest addresses, end exclusive; a lone address means just the function starting there) keeps
+// the functions whose entry falls in a range out of compilation. Calls to them go through the jump
+// table to ppu_recompiler_fallback, the same way patched functions do. Halving a range until the
+// bug comes back names the function. Set it in driver_env.txt.
+static bool ppu_interp_requested(u32 addr)
+{
+	static const std::vector<std::pair<u32, u32>> ranges = []()
+	{
+		std::vector<std::pair<u32, u32>> out;
+		const char* env = std::getenv("ARMSX3_PPU_INTERP");
+
+		if (!env || !*env)
+		{
+			return out;
+		}
+
+		const auto parse_hex = [](std::string_view text, u32& value)
+		{
+			while (!text.empty() && text.front() == ' ') text.remove_prefix(1);
+			while (!text.empty() && text.back() == ' ') text.remove_suffix(1);
+			if (text.starts_with("0x") || text.starts_with("0X")) text.remove_prefix(2);
+			const auto res = std::from_chars(text.data(), text.data() + text.size(), value, 16);
+			return !text.empty() && res.ec == std::errc() && res.ptr == text.data() + text.size();
+		};
+
+		std::string_view rest{env};
+
+		while (!rest.empty())
+		{
+			const usz comma = rest.find(',');
+			const std::string_view item = rest.substr(0, comma);
+			rest = comma == umax ? std::string_view{} : rest.substr(comma + 1);
+
+			u32 start = 0, end = 0;
+			const usz dash = item.find('-');
+
+			if (dash == umax ? (parse_hex(item, start) && (end = start + 1)) : (parse_hex(item.substr(0, dash), start) && parse_hex(item.substr(dash + 1), end) && end > start))
+			{
+				out.emplace_back(start, end);
+				ppu_log.warning("ARMSX3_PPU_INTERP: interpreting functions in [0x%x, 0x%x)", start, end);
+			}
+			else if (!item.empty())
+			{
+				ppu_log.error("ARMSX3_PPU_INTERP: could not read '%s', expected start-end in hex", std::string(item));
+			}
+		}
+
+		return out;
+	}();
+
+	for (const auto& [start, end] : ranges)
+	{
+		if (addr >= start && addr < end)
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 template <u32 (*Estimate)(u32, bool)>
@@ -5105,6 +6206,15 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 			{ "__trap", reinterpret_cast<u64>(&ppu_trap) },
 			{ "__error", reinterpret_cast<u64>(&ppu_error) },
 			{ "__check", reinterpret_cast<u64>(&ppu_check) },
+			{ "__kz3_desc_clear", reinterpret_cast<u64>(&ppu_kz3_desc_clear) },
+			{ "__nb_stream_lock", reinterpret_cast<u64>(&ppu_nb_stream_lock) },
+			{ "__nb_stream_lock_swap", reinterpret_cast<u64>(&ppu_nb_stream_lock_swap) },
+			{ "__nb_stream_unlock", reinterpret_cast<u64>(&ppu_nb_stream_unlock) },
+			{ "__nb_stream_unlock_all", reinterpret_cast<u64>(&ppu_nb_stream_unlock_all) },
+			{ "__vrefp", reinterpret_cast<u64>(&ppu_vec_estimate<ppu_vrefp>) },
+			{ "__vrsqrtefp", reinterpret_cast<u64>(&ppu_vec_estimate<ppu_vrsqrtefp>) },
+			{ "__vexptefp", reinterpret_cast<u64>(&ppu_vec_estimate<ppu_vexptefp>) },
+			{ "__vlogefp", reinterpret_cast<u64>(&ppu_vec_estimate<ppu_vlogefp>) },
 			{ "__trace", reinterpret_cast<u64>(&ppu_trace) },
 			{ "__syscall", reinterpret_cast<u64>(ppu_execute_syscall) },
 			{ "__get_tb", reinterpret_cast<u64>(get_timebased_time) },
@@ -5118,10 +6228,6 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 			{ "__escape", reinterpret_cast<u64>(+ppu_escape) },
 			{ "__read_maybe_mmio32", reinterpret_cast<u64>(+ppu_read_mmio_aware_u32) },
 			{ "__write_maybe_mmio32", reinterpret_cast<u64>(+ppu_write_mmio_aware_u32) },
-			{ "__vrefp", reinterpret_cast<u64>(&ppu_vec_estimate<ppu_vrefp>) },
-			{ "__vrsqrtefp", reinterpret_cast<u64>(&ppu_vec_estimate<ppu_vrsqrtefp>) },
-			{ "__vexptefp", reinterpret_cast<u64>(&ppu_vec_estimate<ppu_vexptefp>) },
-			{ "__vlogefp", reinterpret_cast<u64>(&ppu_vec_estimate<ppu_vlogefp>) },
 		};
 
 		for (u64 index = 0; index < 1024; index++)
@@ -5195,17 +6301,14 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 	};
 	std::vector<link_entry> link_workload;
 
-	bool compiled_new = false;
-
-	bool has_mfvscr = false;
-
 	const bool is_being_used_in_emulation = vm::base(info.segs[0].addr) == info.segs[0].ptr;
 
 	const cpu_thread* cpu = cpu_thread::get_current();
 
-	if (g_cfg.core.ppu_set_sat_bit)
+	// MFVSCR only matters for codegen with accurate SAT bit
+	const bool has_mfvscr = g_cfg.core.ppu_set_sat_bit && [&info]()
 	{
-		for (auto& func : info.get_funcs())
+		for (const auto& func : info.get_funcs())
 		{
 			if (func.size == 0)
 			{
@@ -5220,20 +6323,20 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 				}
 
 				auto i_ptr = ensure(info.get_ptr<u32>(addr));
+
 				for (u32 i = addr; i < addr + size; i += 4, i_ptr++)
 				{
 					if (g_ppu_itype.decode(*i_ptr) == ppu_itype::MFVSCR)
 					{
 						ppu_log.warning("MFVSCR found");
-						has_mfvscr = true;
-						break;
+						return true;
 					}
 				}
-				if (has_mfvscr) break;
 			}
-			if (has_mfvscr) break;
 		}
-	}
+
+		return false;
+	}();
 
 	// Limit how many modules are per JIt instance
 	// Advantage to lower the limit:
@@ -5256,7 +6359,7 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 	// mid-compile with no tombstone) and the kernel took the process on a 7GB device. Every
 	// other module in that run reported between 2800 and 4900 functions.
 	//
-	// The resolver\'s cost is linear in the functions it spans, so splitting the group splits
+	// The resolver's cost is linear in the functions it spans, so splitting the group splits
 	// the peak. The cost is the disadvantage described above and nothing else, so the group
 	// is kept as large as the device can afford rather than lowered across the board:
 	// splitting a title that was never going to run out of memory buys nothing and gives up
@@ -5265,7 +6368,7 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 	// Two thresholds matter. A title whose parts all fit in one group gets a single JIT
 	// instance at any setting at or above its part count, so anything below the limit is
 	// completely unaffected: same instances, same codegen. And when there is memory to
-	// spare this stays at upstream\'s 100, so a device with room behaves exactly as before.
+	// spare this stays at upstream's 100, so a device with room behaves exactly as before.
 	const u32 c_modules_per_jit = []() -> u32
 	{
 		// Measured on the Arkham City run: 2.3GB across roughly 457k functions, so about
@@ -5288,7 +6391,7 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 		// most of that is mapped.
 		//
 		// The ceiling is what a full group of 100 costs, so a device with memory to spare
-		// lands on upstream\'s value and is not split at all; there is no point budgeting
+		// lands on upstream's value and is not split at all; there is no point budgeting
 		// past the point where nothing would be split anyway.
 		constexpr u64 c_full_group_cost = 100 * c_funcs_per_module * c_resolver_bytes_per_func;
 		const u64 budget = std::min<u64>(avail_mem / 4, c_full_group_cost);
@@ -5296,6 +6399,11 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 
 		return static_cast<u32>(std::clamp<u64>(by_memory, 8, 100));
 	}();
+#elif defined(__APPLE__) && defined(ARCH_ARM64)
+	// Each jit_compiler's code lives in one pool-3 unit of MemoryManager1::c_max_size (JITLLVM.cpp).
+	// At 100 modules a large title overflowed the unit and allocate() aborted; at 50 the largest
+	// unit seen is about 38 MiB. Change this and c_max_size together.
+	constexpr u32 c_modules_per_jit = 50;
 #else
 	constexpr u32 c_modules_per_jit = 100;
 #endif
@@ -5517,7 +6625,7 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 #endif
 		}, runtime.get(), true);
 
-#ifdef __APPLE__
+#if defined(__APPLE__) && !TARGET_OS_IPHONE && !defined(ARCH_ARM64)
 		// Restore write-protection state (modified by build_function_asm)
 		pthread_jit_write_protect_np(false);
 #endif
@@ -5531,12 +6639,14 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 		return code_ptr;
 	};
 
-	if (has_mfvscr && g_cfg.core.ppu_set_sat_bit)
+	if (has_mfvscr)
 	{
 		info.attr += ppu_attr::has_mfvscr;
 	}
 
-	while (!jit_mod.init && fpos < info.get_funcs().size())
+	const auto all_funcs = info.get_funcs();
+
+	while (!jit_mod.init && fpos < all_funcs.size())
 	{
 		// Copy module information
 		ppu_module<lv2_obj> part;
@@ -5545,10 +6655,11 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 		// Overall block size in bytes
 		usz bsize = 0;
 		usz bcount = 0;
+		usz interp_funcs = 0;
 
-		while (fpos < info.get_funcs().size())
+		while (fpos < all_funcs.size())
 		{
-			auto& func = info.get_funcs()[fpos];
+			auto& func = all_funcs[fpos];
 
 			if (!func.size)
 			{
@@ -5589,6 +6700,15 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 				}
 			}
 
+			if (ppu_interp_requested(func.addr))
+			{
+				// No continue: it still counts toward this module's size below, so the partition,
+				// and with it every other module's hash, stays where it was. Only modules whose
+				// selection changed recompile between bisect steps.
+				part.excluded_funcs.emplace_back(func.addr);
+				interp_funcs++;
+			}
+
 			local_jit_bounds->first = std::min<u32>(local_jit_bounds->first, func.addr);
 			local_jit_bounds->second = std::max<u32>(local_jit_bounds->second, func.addr + func.size);
 
@@ -5599,6 +6719,11 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 
 			fpos++;
 			bcount++;
+		}
+
+		if (interp_funcs)
+		{
+			ppu_log.warning("ARMSX3_PPU_INTERP: %u functions in 0x%x..0x%x left to the interpreter", interp_funcs, part.local_bounds.first, part.local_bounds.second);
 		}
 
 		// Compute module hash to generate (hopefully) unique object name
@@ -5617,7 +6742,7 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 					continue;
 				}
 
-				if (std::count(part.excluded_funcs.begin(), part.excluded_funcs.end(), func.addr))
+				if (std::ranges::contains(part.excluded_funcs, func.addr))
 				{
 					continue;
 				}
@@ -5698,7 +6823,8 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 				sha1_update(&ctx, ensure(info.get_ptr<const u8>(func.addr)), func.size);
 			}
 
-			const bool has_symbol_resolver = fpos >= info.get_funcs().size() || (module_counter % c_modules_per_jit) == (c_modules_per_jit - 1);
+			const bool has_symbol_resolver = fpos >= all_funcs.size() || (module_counter % c_modules_per_jit) == (c_modules_per_jit - 1);
+
 			if (has_symbol_resolver)
 			{
 				// Hash the entire function grouped addresses for the integrity of the symbol resolver function
@@ -5723,6 +6849,14 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 					if (g_fxo->is_init<ppu_far_jumps_t>() && !g_fxo->get<ppu_far_jumps_t>().get_targets(func.addr, func.size).empty())
 					{
 						// Filter out functions with patches
+						part.excluded_funcs.emplace_back(func.addr);
+						continue;
+					}
+
+					if (ppu_interp_requested(func.addr))
+					{
+						// The resolver must not install it either, or the table would point back at
+						// compiled code that was never built.
 						part.excluded_funcs.emplace_back(func.addr);
 						continue;
 					}
@@ -5777,8 +6911,13 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 				arm64_codegen_v10,
 				arm64_codegen_v11,
 				arm64_codegen_v12,
-				accurate_vest,
+#ifdef __APPLE__
+				arm64_codegen_v13,
+				arm64_codegen_v14,
+				arm64_llvm_early_cse,
+#endif
 
+				accurate_vest,
 				__bitset_enum_max
 			};
 
@@ -5798,7 +6937,16 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 			// Add a new value (arm64_codegen_v3, ...) and set that instead whenever ARM64 PPU
 			// codegen changes. Never re-toggle an old one -- that would collide with hashes already
 			// on disk from an earlier build.
+#ifdef __APPLE__
+			// The Large code model and dso_local symbols (JITLLVM.cpp) change every object.
+			settings += ppu_settings::arm64_codegen_v14;
+
+			// Its own bit, so objects built with and without EarlyCSE never share a file.
+			if (g_cfg.core.ppu_llvm_early_cse)
+				settings += ppu_settings::arm64_llvm_early_cse;
+#else
 			settings += ppu_settings::arm64_codegen_v12;
+#endif
 #endif
 			if (g_cfg.core.use_accurate_dfma)
 				settings += ppu_settings::accurate_dfma;
@@ -5808,7 +6956,7 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 				settings += ppu_settings::accurate_cache_line_stores;
 			if (g_cfg.core.ppu_128_reservations_loop_max_length)
 				settings += ppu_settings::reservations_128_byte;
-			if (has_mfvscr && g_cfg.core.ppu_set_sat_bit)
+			if (has_mfvscr)
 				settings += ppu_settings::accurate_sat;
 			if (g_cfg.core.ppu_set_fpcc)
 				settings += ppu_settings::accurate_fpcc, fmt::throw_exception("FPCC Not implemented");
@@ -5832,11 +6980,24 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 			break;
 		}
 
-		module_counter++;
+		// Naughty Bear: the parts that hold the command stream's emitters carry the write pointer
+		// lock (ppu_nb_stream_lock), so they get their own object name and recompile once.
+		if (!reloc && ppu_nb_stream_lock_enabled() && ppu_nb_stream_lock_part(part.local_bounds.first, part.local_bounds.second) && obj_name.ends_with(".obj"))
+		{
+			obj_name.insert(obj_name.size() - 4, "-nbsl2");
+		}
 
-		link_workload.push_back({std::move(obj_name), false, false, false, nullptr, std::move(part)});
+		module_counter++;
+		link_workload.push_back(link_entry{
+			.obj_name = std::move(obj_name),
+			.is_compiled = false,
+			.drop = false,
+			.object = nullptr,
+			.part = std::move(part)
+		});
 	}
 
+	atomic_t<bool> compiled_new = false;
 	atomic_t<bool> needs_compilation = false;
 	const auto load_entry = [&](usz index)
 	{
@@ -5865,6 +7026,7 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 		else
 		{
 			entry.is_compiled = true;
+			compiled_new = true;
 		}
 		entry.processed = true;
 	};
@@ -5891,18 +7053,22 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 		return needs_compilation;
 	}
 
+	// Remove dropped entries
 	std::erase_if(link_workload, [](const link_entry& entry) { return entry.drop; });
+
+	// Fill workload list for compilation
 	std::vector<std::pair<std::string, ppu_module<lv2_obj>>> workload;
+
 	for (link_entry& entry : link_workload)
 	{
 		if (entry.is_compiled)
 		{
-			compiled_new = true;
 			workload.emplace_back(entry.obj_name, std::move(entry.part));
 		}
 	}
 
-	// Start the largest resolver-bearing jobs first to reduce the compilation tail.
+	// Compile the parts containing a symbol resolver first (only those have jit_bounds).
+	// They take by far the longest, so starting them last would leave a long single-threaded tail.
 	std::stable_partition(workload.begin(), workload.end(), FN(!!x.second.jit_bounds));
 
 	if (g_progr_ftotal_bits && file_size)
@@ -5913,6 +7079,22 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 	// Create worker threads for compilation
 	if (!workload.empty())
 	{
+		// ARMSX3: a compile in flight during play, for the app's banner (Emu/android_app_state.h)
+		struct play_compile_scope
+		{
+			bool on;
+
+			explicit play_compile_scope(bool on_) : on(on_)
+			{
+				if (on) g_android_play_compiling++;
+			}
+
+			~play_compile_scope()
+			{
+				if (on) g_android_play_compiling--;
+			}
+		} play_compile{g_fxo->get<progress_dialog_workaround>().show_overlay_message_only};
+
 		// Sync variable to acquire workloads
 		atomic_t<u64> work_cv = 0;
 		atomic_t<u64> work_done = 0;
@@ -5976,9 +7158,54 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 				// Set low priority
 				thread_ctrl::scoped_priority low_prio(-1);
 
-#ifdef __APPLE__
+#if defined(__APPLE__) && !TARGET_OS_IPHONE && !defined(ARCH_ARM64)
 				pthread_jit_write_protect_np(false);
 #endif
+				// One attempt at a module, on a fresh JIT so a failed attempt cannot poison the next.
+				//
+				// The whole attempt runs on a disposable thread, translation included, not only the
+				// codegen try_add already isolates. This core is built without exceptions, so running
+				// out of memory cannot be caught, only survived by the thread it happens on ending.
+				// Translation used to run here on the worker, so when operator new failed under
+				// PPUTranslator::SetGpr the std::bad_alloc had nowhere to go and the app aborted:
+				// Metal Gear Solid V: The Phantom Pain (BLUS31491), 18 minutes into its first compile
+				// on an Odin 3. Now the new_handler in JITLLVM.cpp ends only that disposable thread
+				// and the attempt comes back with out_of_memory set.
+				//
+				// The JIT is made here, not on that thread, so destroying it afterwards frees its
+				// context and every module in it even when the thread died partway through.
+				const auto compile_module = [this](const ppu_module<lv2_obj>& part, const std::string& obj_name, bool& out_of_memory) -> bool
+				{
+					jit_compiler jit({}, g_cfg.core.llvm_cpu.to_string(), 0x1);
+
+					// Thread-local in the translator, so it has to be handed to the thread that
+					// does the translating.
+					const bool avoid_strict_fma = g_ppu_avoid_strict_fma;
+
+					bool result = false;
+					bool module_oom = false;
+					std::string error;
+
+					const bool finished = jit_run_recoverable([&]()
+					{
+						g_ppu_avoid_strict_fma = avoid_strict_fma;
+						g_ppu_module_oom = false;
+
+						result = ppu_initialize2(jit, part, cache_path, obj_name);
+						module_oom = g_ppu_module_oom;
+					}, error);
+
+					if (!finished)
+					{
+						ppu_log.error("LLVM: Failed to translate module %s: %s", obj_name, error);
+						result = false;
+						module_oom = error.find("Out of memory") != umax;
+					}
+
+					out_of_memory = !result && module_oom;
+					return result;
+				};
+
 				for (usz i = (*work_cv)++; i < workload.size(); i = (*work_cv)++, (*work_done)++, g_progr_pdone++)
 				{
 					if (cpu ? cpu->state.all_of(cpu_flag::exit) : Emu.IsStopped())
@@ -5989,67 +7216,164 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 					// Keep allocating workload
 					const auto& [obj_name, part] = std::as_const(workload)[i];
 
-					// EmuCoreC: notice, not warning. This fires once per object
-					// compiled by the live JIT -- including every module a game
-					// loads on demand -- so at warning level it flooded the log
-					// on Android. A user who needs it can raise the PPU channel.
-					ppu_log.notice("LLVM: Compiling module %s%s", cache_path, obj_name);
-
-#ifdef __ANDROID__
-					struct claim_guard_t
-					{
-						atomic_t<u32>* owner = nullptr;
-
-						~claim_guard_t()
-						{
-							if (owner)
-							{
-								owner->release(0);
-								owner->notify_one();
-							}
-						}
-					} serialise_compiles;
-
-					if (jit_core_allocator::memory_is_tight())
-					{
-						auto& claim = g_fxo->get<jit_core_allocator>().low_memory_claim;
-
-						for (u32 i = 0; i < 600; i++)
-						{
-							if (claim.compare_and_swap_test(0, 1))
-							{
-								serialise_compiles.owner = &claim;
-								break;
-							}
-
-							if (Emu.IsStopped())
-							{
-								break;
-							}
-
-							claim.wait(1, atomic_wait_timeout{100'000'000});
-						}
-
-						jit_core_allocator::wait_for_memory();
-					}
-#endif
+					ppu_log.warning("LLVM: Compiling module %s%s", cache_path, obj_name);
 
 					bool compiled_this_module = false;
+					bool out_of_memory = false;
+
 					{
-						// Use another JIT instance
-						jit_compiler jit2({}, g_cfg.core.llvm_cpu.to_string(), 0x1);
-						compiled_this_module = ppu_initialize2(jit2, part, cache_path, obj_name);
+#if defined(__ANDROID__) || defined(__APPLE__)
+						// Compile alone while memory is short. Checked per module rather
+						// than once at startup, because that is exactly the reading that
+						// goes stale: workers are sized before the game has loaded.
+						//
+						// Scoped to the compile and nothing else, so a worker waiting here
+						// is never holding an LLVM context while it waits.
+						// Releases the claim on every path a live thread can leave by. A thread
+						// killed by LLVM's fatal handler leaves by none of them, which is why
+						// the waiters below are bounded rather than trusting this to run.
+						struct claim_guard_t
+						{
+							atomic_t<u32>* owner = nullptr;
+
+							~claim_guard_t()
+							{
+								if (owner)
+								{
+									owner->release(0);
+									owner->notify_one();
+								}
+							}
+						} serialise_compiles;
+
+						auto& allocator = g_fxo->get<jit_core_allocator>();
+
+						// Bounded. A claim still held after the wait is one whose owner died
+						// without releasing it, and compiling anyway is better than a precompile
+						// that never finishes -- the memory back-pressure below is unchanged
+						// either way, so this only bounds the wait.
+						const auto take_claim = [&](u32 tries)
+						{
+							for (u32 i = 0; i < tries && !serialise_compiles.owner; i++)
+							{
+								if (allocator.low_memory_claim.compare_and_swap_test(0, 1))
+								{
+									serialise_compiles.owner = &allocator.low_memory_claim;
+									break;
+								}
+
+								if (Emu.IsStopped())
+								{
+									break;
+								}
+
+								allocator.low_memory_claim.wait(1, atomic_wait_timeout{100'000'000});
+							}
+						};
+
+#ifdef __APPLE__
+						// iOS uses the graduated slots below instead of going alone below 2 GiB.
+						const bool alone = allocator.out_of_memory_seen;
+
+						if (alone)
+						{
+							ppu_log.notice("LLVM: Low memory (%u MB available), compiling %s alone", utils::get_avail_memory() >> 20, obj_name);
+#else
+						if (jit_core_allocator::memory_is_tight() || allocator.out_of_memory_seen)
+						{
+#endif
+							// ~60s normally. After running out of memory the holder may be
+							// compiling a module that takes minutes on its own, so ~10 minutes.
+							take_claim(allocator.out_of_memory_seen ? 6000 : 600);
+
+							// Holding the claim first is deliberate: whoever waits should be the
+							// only one running, otherwise the other worker keeps allocating and
+							// the wait watches memory it is not allowed to influence.
+							jit_core_allocator::wait_for_memory();
+						}
+#ifdef __APPLE__
+
+						const bool slot_taken = !alone && allocator.take_compile_slot();
+
+						// Below 1 GiB only one slot is allowed, so this waits with nothing else running.
+						if (!alone)
+						{
+							jit_core_allocator::wait_for_memory();
+						}
+#endif
+
+						// Counted from here, not while waiting above, so a worker queued for the
+						// claim is never mistaken for one holding compiler memory.
+						struct compiling_guard_t
+						{
+							atomic_t<u32>& count;
+
+#ifdef __APPLE__
+							compiling_guard_t(atomic_t<u32>& c, bool counted_already)
+								: count(c)
+							{
+								if (!counted_already)
+								{
+									count++;
+								}
+							}
+#else
+							explicit compiling_guard_t(atomic_t<u32>& c)
+								: count(c)
+							{
+								count++;
+							}
+#endif
+
+							~compiling_guard_t()
+							{
+								count--;
+							}
+#ifdef __APPLE__
+						} counted(allocator.compiling, slot_taken);
+#else
+						} counted(allocator.compiling);
+#endif
+#endif
+
+						compiled_this_module = compile_module(part, obj_name, out_of_memory);
 
 #if defined(ARCH_ARM64)
-						if (!compiled_this_module && !Emu.IsStopped())
+						// One retry with allocator-friendly codegen before giving the module up.
+						//
+						// Should now be unreachable: the cause was an LLVM bug, fixed in our
+						// vendored tree (AArch64FrameLowering::determineCalleeSaves returned
+						// early for CallingConv::GHC and so never reserved an emergency spill
+						// slot). Kept anyway, because it costs nothing unless a module actually
+						// fails and it is the difference between one slower module and a title
+						// that will not boot. If it ever fires again, the LLVM patch has been
+						// lost in a submodule bump.
+						//
+						// LLVM refuses some modules on AArch64 with "Cannot scavenge register
+						// without an emergency spill slot", triggered by the register pressure of
+						// llvm.fma on <4 x float> in VMADDFP. Losing the module is expensive out of
+						// all proportion to its size: its functions run through
+						// ppu_recompiler_fallback, which interprets a single instruction per
+						// iteration with a dispatcher read and a compare each time, so one lost
+						// module can take a title from full speed to unplayable. Saint Seiya: The
+						// Sanctuary (BLES01421, issue #25) black-screens on it, and was reported at
+						// 7fps before that.
+						//
+						// Retrying only here is what keeps the cost off everyone else: every module
+						// that compiled normally keeps its single fused FMLA, and only a module LLVM
+						// has ALREADY rejected pays for the double-precision form. A fresh jit is
+						// mandatory -- the previous instance is poisoned by the failed add and its
+						// engine cannot be reused.
+						//
+						// Not after running out of memory: this retry changes only how VMADDFP is
+						// emitted, so running it straight away just adds a second large compile to
+						// the pressure that failed the first.
+						if (!compiled_this_module && !out_of_memory && !Emu.IsStopped())
 						{
 							ppu_log.warning("LLVM: Retrying module %s with allocator-friendly codegen", obj_name);
 
 							g_ppu_avoid_strict_fma = true;
-
-							jit_compiler jit3({}, g_cfg.core.llvm_cpu.to_string(), 0x1);
-							compiled_this_module = ppu_initialize2(jit3, part, cache_path, obj_name);
-
+							compiled_this_module = compile_module(part, obj_name, out_of_memory);
 							g_ppu_avoid_strict_fma = false;
 
 							if (compiled_this_module)
@@ -6058,6 +7382,55 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 							}
 						}
 #endif
+
+#if defined(__ANDROID__) || defined(__APPLE__)
+						// Out of memory: one more attempt, alone.
+						//
+						// The module is rarely too big on its own; what failed was the sum of the
+						// modules in flight. So stop new modules from starting (the claim, plus
+						// out_of_memory_seen making every later module ask for it), let the ones
+						// already running finish, give the system time to hand memory back, and
+						// try again with nothing else compiling. Only if that fails too does the
+						// boot stop with the restart message after the workers join. Running on
+						// without the module would be worse: its functions would go through
+						// ppu_recompiler_fallback, which can take a game from full speed to
+						// unplayable.
+						if (!compiled_this_module && out_of_memory && !Emu.IsStopped())
+						{
+							allocator.out_of_memory_seen = true;
+
+							// Not counted while queued for the claim, or two workers that ran out
+							// together would each wait for the other to finish.
+							allocator.compiling--;
+							take_claim(6000);
+							allocator.compiling++;
+
+							// Bounded at ~2 minutes, in case a worker died holding its count.
+							for (u32 i = 0; i < 1200 && allocator.compiling > 1 && !Emu.IsStopped(); i++)
+							{
+								std::this_thread::sleep_for(std::chrono::milliseconds(100));
+							}
+
+							jit_core_allocator::wait_for_memory();
+
+							ppu_log.warning("LLVM: Retrying module %s alone after running out of memory", obj_name);
+
+							compiled_this_module = compile_module(part, obj_name, out_of_memory);
+
+							if (compiled_this_module)
+							{
+								ppu_log.success("LLVM: Module %s compiled on its own", obj_name);
+							}
+						}
+#endif
+
+						// Out of memory is the one compile failure the user can do something about,
+						// and the one that arrives in bulk once the device is short. Flag it for a
+						// single message after the workers join.
+						if (!compiled_this_module && out_of_memory)
+						{
+							g_ppu_compile_oom = true;
+						}
 					}
 
 					if (compiled_this_module)
@@ -6124,6 +7497,40 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 		
 		thread_ctrl::set_name(old_name);
 		g_watchdog_hold_ctr--;
+
+		// One message for the whole run, not one per module: when memory runs out every
+		// remaining module fails the same way, and 200 identical popups would be worse than
+		// silence. Modules that did compile are already written to the cache, so starting the
+		// game again resumes from there rather than beginning afresh -- which is the only
+		// action that actually helps, and so is the only one suggested.
+		if (g_ppu_compile_oom.exchange(false))
+		{
+			// std::string, not a literal: message_item is only instantiated for std::string
+			// and localized_string_id, so a const char* fails to link.
+			//
+			// Queued before the throw below, and it survives it: the overlay is drawn by the RSX
+			// thread, which is not the thread this kills.
+			rsx::overlays::queue_message(
+				std::string("Ran out of memory while compiling.\n"
+					"Close the game and start it again -- what already compiled is kept, so each "
+					"attempt gets further."),
+				30'000'000);
+
+			// Stop rather than limp.
+			//
+			// Everything that failed here would fall back to ppu_recompiler_fallback, which is
+			// correct -- the dispatcher entry interprets, nothing runs garbage -- but it is
+			// per-instruction dispatch, and it is slower than the interpreter outright. Saint
+			// Seiya measured 6fps against 23 with most of its modules missing. A game at that
+			// speed looks broken, and it gets reported as broken, when the real answer is one
+			// restart away.
+			//
+			// So this is a deliberate choice of an honest stop over a degraded run. It kills this
+			// thread the way running out of memory always did; what is different is that the
+			// reason is now on screen instead of being left to guess at.
+			fmt::throw_exception("Out of memory while compiling PPU modules -- restart the game to "
+				"continue compiling. Modules that already compiled are cached.");
+		}
 	}
 
 	// Initialize compiler instance
@@ -6175,7 +7582,7 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 			// This flag used to be sticky and also gated the add() above, so the FIRST object that
 			// would not load stopped every later module from even being attempted. With the
 			// compile side now surviving a module LLVM cannot codegen, that turned one bad module
-			// into a nearly-uncompiled game: Saint Seiya\'s failure sits at index 6 of 134, so 128
+			// into a nearly-uncompiled game: Saint Seiya's failure sits at index 6 of 134, so 128
 			// modules were skipped and the title ran slower with the recompiler than with the
 			// interpreter (6fps vs 23fps reported on issue #25) -- the per-function fallback costs
 			// more than interpreting outright.
@@ -6183,9 +7590,16 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 			// Skipping only the module that failed is safe for the same reason excluded_funcs is:
 			// a guest function with no compiled code keeps its dispatcher entry and is interpreted.
 			// So the cost of a bad module is its own functions, not the whole executable.
+			//
+			// A module the cache check already read is added from that buffer instead of being read from
+			// disk a second time; a module compiled just now is read from its file.
 			auto& jit = jits[mod_index / c_modules_per_jit];
-			const bool loaded = entry.object ? jit->add(std::move(entry.object), cache_path + entry.obj_name) : jit->add(cache_path + entry.obj_name);
-			if (!loaded)
+
+			const bool ok = entry.object
+				? jit->add(std::move(entry.object), cache_path + entry.obj_name)
+				: jit->add(cache_path + entry.obj_name);
+
+			if (!ok)
 			{
 				ppu_log.error("LLVM: Failed to load module %s; its functions will be interpreted", entry.obj_name);
 				failed_module_count++;
@@ -6197,7 +7611,7 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 				g_progr_pdone++;
 			}
 
-			if (loaded && !entry.is_compiled)
+			if (ok && !entry.is_compiled)
 			{
 				ppu_log.success("LLVM: Loaded module #%u %s", mod_index, entry.obj_name);
 			}
@@ -6274,7 +7688,7 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 	}
 
 	// Jit can be null if the loop doesn't ever enter.
-#ifdef __APPLE__
+#if defined(__APPLE__) && !TARGET_OS_IPHONE && !defined(ARCH_ARM64)
 	pthread_jit_write_protect_np(false);
 #endif
 	// Try to patch all single and unregistered BLRs with the same function (TODO: Maybe generalize it into PIC code detection and patching)
@@ -6313,7 +7727,7 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 	{
 		usz index = umax;
 
-#ifdef __APPLE__
+#if defined(__APPLE__) && !TARGET_OS_IPHONE && !defined(ARCH_ARM64)
 		named_thread sym_worker("PPU Symbol Resolver", [&]()
 		{
 			// jit_compiler::get() may write to executable memory (relocations)
@@ -6329,21 +7743,29 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 				{
 					index++;
 
+					ensure(!sim);
 					if (jits[index]->is_poisoned())
 					{
 						ppu_log.warning("LLVM: Skipping symbol resolver for poisoned JIT instance #%u", index);
 						continue;
 					}
+					sim = reinterpret_cast<void(*)(u8*, u64)>(jits[index]->get("__resolve_symbols"));
 
-					const auto addr = jits[index]->get("__resolve_symbols");
-
-					if (!addr)
+					if (!sim)
 					{
-						ppu_log.warning("LLVM: Symbol resolver not found in JIT instance #%u; its functions will be interpreted", index);
+						// NOT fatal, for the same reason a module that fails to load is not: a
+						// guest function with no compiled code keeps its dispatcher entry and is
+						// interpreted. __resolve_symbols lives in the compiled output, so when
+						// every module in a group fails -- Arkham City ran the JIT worker out of
+						// memory and lost 240 of 410 -- the resolver is simply absent.
+						//
+						// ensure() here turned that into a dead main_thread, which threw away the
+						// 170 modules that HAD compiled and surfaced as a boot that never
+						// finishes. Losing one group's speed beats losing the boot.
+						ppu_log.error("LLVM: Symbol resolver #%u is missing; the functions in that "
+							"group will be interpreted", index);
 						continue;
 					}
-
-					sim = reinterpret_cast<void(*)(u8*, u64)>(addr);
 
 					ppu_log.notice("Resolved symbol resolver function #%u", index);
 				}
@@ -6351,7 +7773,7 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 
 			ppu_log.notice("Executing %u symbol resolvers", jit_mod.symbol_resolvers.size());
 
-#ifdef __APPLE__
+#if defined(__APPLE__) && !TARGET_OS_IPHONE && !defined(ARCH_ARM64)
 			// Virtual memory mapped by MAP_JIT cannot be executed until pthread_jit_write_protect_np(true)
 			pthread_jit_write_protect_np(true);
 #endif
@@ -6364,6 +7786,9 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 
 				if (!sim)
 				{
+					// Absent resolver, already reported above. Calling it would be the crash the
+					// ensure() was guarding against; skipping it is what makes the group
+					// interpret instead.
 					continue;
 				}
 
@@ -6372,7 +7797,7 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 				ppu_log.notice("Executed symbol resolver #%u", index);
 			}
 
-#ifndef __APPLE__
+#if !defined(__APPLE__) || TARGET_OS_IPHONE || defined(ARCH_ARM64)
 		}
 #else
 		});
@@ -6415,12 +7840,21 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 		g_progr_pdone++;
 	}
 
+	// ARMSX3: one more module compiled during play, for the app's banner (Emu/android_app_state.h)
+	if (compiled_new && g_fxo->get<progress_dialog_workaround>().show_overlay_message_only)
+	{
+		g_android_play_compile_done++;
+	}
+
 	return compiled_new;
 #else
 	fmt::throw_exception("LLVM is not available in this build.");
 #endif
 }
 
+// Returns false when this module produced no object file, for any reason. The caller must not
+// report it as compiled: the whole point is that a module can now fail without taking the
+// worker, and therefore the boot, with it.
 static bool ppu_initialize2(jit_compiler& jit, const ppu_module<lv2_obj>& module_part, const std::string& cache_path, const std::string& obj_name)
 {
 #ifdef LLVM_AVAILABLE
@@ -6455,7 +7889,7 @@ static bool ppu_initialize2(jit_compiler& jit, const ppu_module<lv2_obj>& module
 	{
 		if (func.size)
 		{
-			if (std::count(module_part.excluded_funcs.begin(), module_part.excluded_funcs.end(), func.addr))
+			if (std::ranges::contains(module_part.excluded_funcs, func.addr))
 			{
 				continue;
 			}
@@ -6515,7 +7949,7 @@ static bool ppu_initialize2(jit_compiler& jit, const ppu_module<lv2_obj>& module
 
 			if (mod_func.size)
 			{
-				if (std::count(module_part.excluded_funcs.begin(), module_part.excluded_funcs.end(), mod_func.addr))
+				if (std::ranges::contains(module_part.excluded_funcs, mod_func.addr))
 				{
 					continue;
 				}
@@ -6531,6 +7965,9 @@ static bool ppu_initialize2(jit_compiler& jit, const ppu_module<lv2_obj>& module
 #ifdef ARCH_X64 // TODO
 					// Run optimization passes
 					fpm.run(*func, fam);
+#elif defined(__APPLE__)
+					if (g_cfg.core.ppu_llvm_early_cse)
+						fpm.run(*func, fam);
 #endif // ARCH_X64
 				}
 				else
@@ -6549,6 +7986,9 @@ static bool ppu_initialize2(jit_compiler& jit, const ppu_module<lv2_obj>& module
 #ifdef ARCH_X64 // TODO
 				// Run optimization passes
 				fpm.run(*func, fam);
+#elif defined(__APPLE__)
+				if (g_cfg.core.ppu_llvm_early_cse)
+					fpm.run(*func, fam);
 #endif // ARCH_X64
 			}
 			else
@@ -6572,7 +8012,9 @@ static bool ppu_initialize2(jit_compiler& jit, const ppu_module<lv2_obj>& module
 		if (g_cfg.core.llvm_logs)
 		{
 			out << *_module; // print IR
+
 			fs::write_file(cache_path + obj_name + ".log", fs::rewrite, out.str());
+
 			result.clear();
 		}
 
@@ -6589,11 +8031,35 @@ static bool ppu_initialize2(jit_compiler& jit, const ppu_module<lv2_obj>& module
 
 	// Load or compile module
 #ifdef ARCH_ARM64
+	// The recoverable variant, for the same reason the SPU recompiler uses it (see
+	// SPULLVMRecompiler.cpp, the ARCH_ARM64 branch): LLVM's AArch64 register allocator can fail
+	// outright on a module, and plain add() routes that through LLVM's fatal handler, which for a
+	// thread with no recovery context throws and kills the thread.
+	//
+	// Killing THIS thread is not a lost module, it is a lost boot. The compile loop increments
+	// g_progr_pdone in its loop INCREMENT, so a worker that dies mid-body never accounts for the
+	// module it was holding; g_progr_ptotal can then never reach zero and ppu_initialize's caller
+	// waits on it forever. Reported against Saint Seiya: The Sanctuary (BLES01421, issue #25) as
+	// "the PPU cache never finishes, it gets stuck at the end" -- it reached 133 of 134 and stopped,
+	// on 'Error while trying to spill X8 from class GPR64: Cannot scavenge register without an
+	// emergency spill slot!'. Interpreter worked because it never enters this path at all. The
+	// death also halved the remaining throughput, one worker of two being gone.
+	//
+	// jit2 is constructed per module at the call site, so a poisoned engine dies with it and cannot
+	// contaminate the next module.
 	std::string llvm_error;
 
 	if (!jit.try_add(std::move(_module), cache_path, llvm_error))
 	{
 		ppu_log.error("LLVM: Failed to compile module %s: %s", obj_name, llvm_error);
+
+		// Out of memory is the one compile failure that waiting can fix. Tell the worker, which
+		// retries the module alone and only then gives up (see thread_op in ppu_initialize).
+		if (llvm_error.find("Out of memory") != umax)
+		{
+			g_ppu_module_oom = true;
+		}
+
 		return false;
 	}
 #else

@@ -2,7 +2,6 @@
 
 #include "simple_array.hpp"
 #include "TextureUtils.h"
-#include "Emu/RSX/RSXThread.h"
 #include "../Utils/rsx_utils.h"
 
 namespace rsx
@@ -83,6 +82,14 @@ namespace rsx
 				return true;
 			}
 
+#ifdef __APPLE__
+			if (samples == 1 && rsx::get_current_renderer()->get_backend_config().requires_copy_for_feedback_reads)
+			{
+				// In-place feedback reads are not coherent on this host, so sample a copy
+				return true;
+			}
+
+#endif
 			if (g_cfg.video.antialiasing_level == msaa_level::none)
 			{
 				// MSAA disabled. All access is fast.
@@ -162,6 +169,7 @@ namespace rsx
 		}
 
 		static inline blit_target_properties get_optimal_blit_target_properties(
+			const rsx::context* ctx,
 			bool src_is_render_target,
 			address_range32 dst_range,
 			u32 dst_pitch,
@@ -174,10 +182,9 @@ namespace rsx
 			{
 				// Check if this is a blit to the output buffer
 				// TODO: This can be used to implement reference tracking to possibly avoid downscaling
-				const auto renderer = rsx::get_current_renderer();
-				for (u32 i = 0; i < renderer->display_buffers_count; ++i)
+				for (u32 i = 0; i < ctx->display_buffers_count; ++i)
 				{
-					const auto& buffer = renderer->display_buffers[i];
+					const auto& buffer = ctx->display_buffers[i];
 
 					if (!buffer.valid())
 					{
@@ -192,7 +199,7 @@ namespace rsx
 						continue;
 					}
 
-					const auto buffer_range = address_range32::start_length(rsx::get_address(buffer.offset, CELL_GCM_LOCATION_LOCAL), pitch * (buffer.height - 1) + (buffer.width * bpp));
+					const auto buffer_range = address_range32::start_length(rsx::get_address(ctx, buffer.offset, CELL_GCM_LOCATION_LOCAL), pitch * (buffer.height - 1) + (buffer.width * bpp));
 					if (dst_range.inside(buffer_range))
 					{
 						// Match found

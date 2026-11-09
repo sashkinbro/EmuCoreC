@@ -153,14 +153,6 @@ namespace vk
 
 		auto compiler = vk::get_pipe_compiler();
 		auto program = compiler->compile(info, vk::pipe_compiler::COMPILE_INLINE, {}, get_vertex_inputs(), get_fragment_inputs());
-		if (!program)
-		{
-			// The driver rejected this pipeline (see program::link). The
-			// overlay using it will be skipped this frame.
-			rsx_log.error("Overlay pipeline compilation failed, skipping.");
-			return nullptr;
-		}
-
 		auto result = program.get();
 		m_program_cache[storage_key] = std::move(program);
 
@@ -177,13 +169,6 @@ namespace vk
 			program = found->second.get();
 		else
 			program = build_pipeline(key, pass);
-
-		if (!program)
-		{
-			// Pipeline compilation failed (see build_pipeline). Skip drawing
-			// this overlay instead of crashing.
-			return nullptr;
-		}
 
 		if (!m_sampler && !src.empty())
 		{
@@ -275,13 +260,6 @@ namespace vk
 		cmd.flags |= vk::command_buffer::cb_reload_dynamic_state;
 
 		auto program = load_program(cmd, render_pass, src);
-		if (!program)
-		{
-			// Pipeline compilation failed (see build_pipeline). Skip drawing
-			// this overlay instead of issuing draws with no pipeline bound.
-			return;
-		}
-
 		set_up_viewport(cmd, viewport.x1, viewport.y1, viewport.width(), viewport.height());
 
 		vk::begin_renderpass(cmd, render_pass, fbo->value, { positionu{0u, 0u}, sizeu{fbo->width(), fbo->height()} });
@@ -549,7 +527,8 @@ namespace vk
 		// 76: float blur_intensity;
 		// 80: vec4 sdf_params;
 		// 96: vec2 sdf_origin;
-		// 104: vec2 reserved;
+		// 104: float sdf_cutoff_angle;
+		// 108: float reserved;
 		// 112: vec4 sdf_border_color;
 
 		usz pos = 0;
@@ -600,7 +579,7 @@ namespace vk
 		push_buf[pos++] = m_sdf_config.bw;
 		push_buf[pos++] = m_sdf_config.cx;
 		push_buf[pos++] = m_sdf_config.cy;
-		push_buf[pos++] = 0.f;
+		push_buf[pos++] = m_sdf_config.ca;
 		push_buf[pos++] = 0.f;
 
 		write_to_ptr(push_buf, pos, m_sdf_config.border_color.rgba);
@@ -656,7 +635,7 @@ namespace vk
 	}
 
 	void ui_overlay_renderer::run(vk::command_buffer& cmd, const areau& viewport, vk::framebuffer* target, VkRenderPass render_pass,
-			vk::data_heap& upload_heap, rsx::overlays::overlay& ui)
+			vk::data_heap& upload_heap, rsx::overlays::overlay& ui, bool advance)
 	{
 		ui.set_render_viewport(
 		    static_cast<u16>(std::min<u32>(viewport.width(), std::numeric_limits<u16>::max())),
@@ -728,7 +707,10 @@ namespace vk
 			overlay_pass::run(cmd, viewport, target, image_views, render_pass);
 		}
 
-		ui.update(get_system_time());
+		if (advance)
+		{
+			ui.update(get_system_time());
+		}
 	}
 
 	attachment_clear_pass::attachment_clear_pass()
@@ -837,6 +819,62 @@ namespace vk
 
 		// Render fullscreen quad
 		overlay_pass::run(cmd, { 0, 0, target->width(), target->height() }, target, std::vector<vk::image_view*>{}, render_pass);
+	}
+
+	present_rotation_pass::present_rotation_pass(u32 quarter_turns)
+	{
+		// Where the swapchain image's pixel at s (normalised, origin top left) takes its colour from in
+		// the upright frame. VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR means the content is turned 90
+		// degrees clockwise: the frame's top left lands in the image's top right, so the image's
+		// (1, 0) reads the frame's (0, 0). Each case is the inverse of a clockwise quarter turn.
+		const char* turn =
+			quarter_turns == 1 ? "vec2(s.y, 1. - s.x)" :
+			quarter_turns == 2 ? "vec2(1. - s.x, 1. - s.y)" :
+			"vec2(1. - s.y, s.x)";
+
+		vs_src =
+			"#version 450\n"
+			"#extension GL_ARB_separate_shader_objects : enable\n"
+			"\n"
+			"layout(location=0) out vec2 tc0;\n"
+			"\n"
+			"void main()\n"
+			"{\n"
+			"	vec2 positions[] = {vec2(-1., -1.), vec2(1., -1.), vec2(-1., 1.), vec2(1., 1.)};\n"
+			"	vec2 coords[] = {vec2(0., 0.), vec2(1., 0.), vec2(0., 1.), vec2(1., 1.)};\n"
+			"	vec2 s = coords[gl_VertexIndex % 4];\n"
+			"	tc0 = " + std::string(turn) + ";\n"
+			"	gl_Position = vec4(positions[gl_VertexIndex % 4], 0., 1.);\n"
+			"}\n";
+
+		fs_src =
+			"#version 420\n"
+			"#extension GL_ARB_separate_shader_objects : enable\n"
+			"layout(set=0, binding=0) uniform sampler2D fs0;\n"
+			"layout(location=0) in vec2 tc0;\n"
+			"layout(location=0) out vec4 ocol;\n"
+			"\n"
+			"void main()\n"
+			"{\n"
+			"	ocol = texture(fs0, tc0);\n"
+			"}\n";
+
+		renderpass_config.set_depth_mask(false);
+		renderpass_config.set_color_mask(0, true, true, true, true);
+		renderpass_config.set_attachment_count(1);
+
+		m_num_usable_samplers = 1;
+		m_num_uniform_buffers = 0;
+
+		// Texel for texel: the frame and the image have the same pixels, only turned.
+		m_sampler_filter = VK_FILTER_NEAREST;
+	}
+
+	void present_rotation_pass::run(vk::command_buffer& cmd, vk::framebuffer* target, vk::viewable_image* src, VkRenderPass render_pass)
+	{
+		// The caller has the frame in SHADER_READ_ONLY_OPTIMAL and the image in COLOR_ATTACHMENT_OPTIMAL.
+		const std::vector<vk::image_view*> views = { src->get_view(rsx::default_remap_vector.with_encoding(VK_REMAP_IDENTITY)) };
+		overlay_pass::run(cmd, { 0, 0, target->width(), target->height() }, target, views, render_pass);
 	}
 
 	stencil_clear_pass::stencil_clear_pass()
@@ -948,7 +986,7 @@ namespace vk
 
 	void video_out_calibration_pass::run(vk::command_buffer& cmd, const areau& viewport, vk::framebuffer* target,
 		const rsx::simple_array<vk::viewable_image*>& src, f32 gamma, bool limited_rgb,
-		bool stereo_enabled, VkRenderPass render_pass)
+		bool stereo_enabled, VkRenderPass render_pass, s32 single_image_eye)
 	{
 		static stereo_config stereo_cfg = stereo_config(true);
 		stereo_cfg.update_from_config(stereo_enabled);
@@ -956,7 +994,8 @@ namespace vk
 
 		config.gamma = gamma;
 		config.limit_range = limited_rgb ? 1 : 0;
-		config.stereo_display_mode = static_cast<u8>(stereo_cfg.stereo_mode());
+		// 100 and 101 are the shader's STEREO_MODE_SINGLE_IMAGE_LEFT_EYE and _RIGHT_EYE.
+		config.stereo_display_mode = single_image_eye >= 0 ? 100 + (single_image_eye ? 1 : 0) : static_cast<u8>(stereo_cfg.stereo_mode());
 		config.stereo_image_count = std::min(::size32(src), 2u);
 
 		for (u32 i = 0; i < 3; i++)

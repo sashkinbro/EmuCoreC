@@ -1,9 +1,17 @@
 #include "stdafx.h"
 #include "swapchain.h"
+#ifdef __APPLE__
+// Forward-declared rather than including Emu/RSX/RSXThread.h, as vkutils/shared.cpp does.
+namespace rsx { void request_device_lost_shutdown(const char* reason); }
+#endif
 #include "Emu/system_config.h"
 
 namespace vk
 {
+	// Whether the WSI images were created with TRANSFER_SRC, so a frame dump can read the screen
+	// buffer back (VKPresent.cpp).
+	bool g_swapchain_transfer_src = false;
+
 	// Swapchain image RPCS3
 	swapchain_image_RPCS3::swapchain_image_RPCS3(render_device& dev, const memory_type_mapping& memory_map, u32 width, u32 height)
 		:image(dev, memory_map.device_local, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_TYPE_2D, VK_FORMAT_B8G8R8A8_UNORM, width, height, 1, 1, 1,
@@ -56,7 +64,7 @@ namespace vk
 	}
 
 	// NATIVE swapchain base
-	VkResult native_swapchain_base::acquire_next_swapchain_image(VkSemaphore /*semaphore*/, u64 /*timeout*/, u32* result)
+	VkResult native_swapchain_base::acquire_next_swapchain_image(VkSemaphore /*semaphore*/, u64 /*timeout*/, u32* result, VkFence /*fence*/)
 	{
 		u32 index = 0;
 		for (auto& p : swapchain_images)
@@ -134,6 +142,15 @@ namespace vk
 		}
 	}
 
+	void swapchain_WSI::destroy_swapchain_only()
+	{
+		if (VkDevice pdev = dev; pdev && m_vk_swapchain)
+		{
+			_vkDestroySwapchainKHR(pdev, m_vk_swapchain, nullptr);
+			m_vk_swapchain = nullptr;
+		}
+	}
+
 	void swapchain_WSI::destroy(bool)
 	{
 		if (VkDevice pdev = dev)
@@ -145,18 +162,6 @@ namespace vk
 
 			dev.destroy();
 		}
-	}
-
-	void swapchain_WSI::reset_surface(VkSurfaceKHR surface)
-	{
-		// The caller has drained the queues and released framebuffers first.
-		if (m_vk_swapchain)
-		{
-			_vkDestroySwapchainKHR(dev, m_vk_swapchain, nullptr);
-			m_vk_swapchain = VK_NULL_HANDLE;
-		}
-		swapchain_images.clear();
-		m_surface = surface;
 	}
 
 	std::pair<VkSurfaceCapabilitiesKHR, bool> swapchain_WSI::init_surface_capabilities()
@@ -200,9 +205,23 @@ namespace vk
 		}
 #endif
 		VkSurfaceCapabilitiesKHR surface_descriptors = {};
-		const auto status = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(dev.gpu(), m_surface, &surface_descriptors);
-		if (status == VK_ERROR_SURFACE_LOST_KHR || status == VK_ERROR_OUT_OF_DATE_KHR) return {};
-		CHECK_RESULT(status);
+		if (const VkResult res = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(dev.gpu(), m_surface, &surface_descriptors);
+			res != VK_SUCCESS)
+		{
+			// Reported through the same flag as the present-mode queries; the caller recreates the
+			// surface before retrying. currentExtent is left zeroed, which init() already reads as
+			// "no usable window" and refuses to build a swapchain from.
+			if (res == VK_ERROR_SURFACE_LOST_KHR)
+			{
+				m_surface_is_lost = true;
+				rsx_log.warning("Swapchain: surface was lost while querying capabilities; it will be recreated.");
+				surface_descriptors = {};
+			}
+			else
+			{
+				vk::die_with_error(res);
+			}
+		}
 		return { surface_descriptors, false };
 	}
 
@@ -213,6 +232,9 @@ namespace vk
 			rsx_log.error("Cannot create WSI swapchain without a present queue");
 			return false;
 		}
+
+		m_surface_is_lost = false;
+		m_pre_rotation = 0;
 
 		VkSwapchainKHR old_swapchain = m_vk_swapchain;
 		vk::physical_device& gpu = const_cast<vk::physical_device&>(dev.gpu());
@@ -241,18 +263,63 @@ namespace vk
 		}
 
 		u32 nb_available_modes = 0;
-		auto mode_status = vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, m_surface, &nb_available_modes, nullptr);
-		if (mode_status == VK_ERROR_SURFACE_LOST_KHR || mode_status == VK_ERROR_OUT_OF_DATE_KHR) return false;
-		CHECK_RESULT(mode_status);
+
+		if (const VkResult res = vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, m_surface, &nb_available_modes, nullptr);
+			res != VK_SUCCESS)
+		{
+			// A lost surface is recoverable and, on Android, routine: the ANativeWindow is destroyed
+			// every time the app leaves the foreground. The acquire and present paths have always
+			// treated it that way; this one called die_with_error and took the process down, which
+			// then tore the RSX thread apart mid-operation and turned a recoverable event into a
+			// heap corruption in ~ZCULL_control.
+			if (res == VK_ERROR_SURFACE_LOST_KHR)
+			{
+				m_surface_is_lost = true;
+				rsx_log.warning("Swapchain: surface was lost while querying present modes; it will be recreated.");
+				return false;
+			}
+
+			vk::die_with_error(res);
+		}
 
 		std::vector<VkPresentModeKHR> present_modes(nb_available_modes);
-		mode_status = vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, m_surface, &nb_available_modes, present_modes.data());
-		if (mode_status == VK_ERROR_SURFACE_LOST_KHR || mode_status == VK_ERROR_OUT_OF_DATE_KHR) return false;
-		CHECK_RESULT(mode_status);
+
+		if (const VkResult res = vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, m_surface, &nb_available_modes, present_modes.data());
+			res != VK_SUCCESS)
+		{
+			if (res == VK_ERROR_SURFACE_LOST_KHR)
+			{
+				m_surface_is_lost = true;
+				rsx_log.warning("Swapchain: surface was lost while reading present modes; it will be recreated.");
+				return false;
+			}
+
+			vk::die_with_error(res);
+		}
 
 		VkPresentModeKHR swapchain_present_mode = VK_PRESENT_MODE_FIFO_KHR;
 		std::vector<VkPresentModeKHR> preferred_modes;
 
+		// Frame generation needs FIFO, whatever vsync is set to.
+		//
+		// Interpolated frames are presented BETWEEN the real ones, so each has to survive to a
+		// vblank of its own to be seen at all. IMMEDIATE tears through them and MAILBOX keeps
+		// only the newest image per vblank -- so the interpolated frame is replaced by the real
+		// one that follows it microseconds later and never reaches the screen. What is left is
+		// the real frames alone, at an interval now disturbed by the generation work: judder
+		// that gets worse the faster the picture changes, which is exactly how it presents when
+		// the camera moves.
+		//
+		// ARMSX2 forces FIFO for the same reason at the same point (VKSwapChain::SelectPresentMode).
+		if (g_cfg.video.frame_generation != frame_generation_mode::off &&
+			g_cfg.video.vsync != vsync_mode::full)
+		{
+			rsx_log.warning("Frame generation is enabled; using FIFO presentation so interpolated "
+				"frames are displayed rather than discarded.");
+
+			preferred_modes = { VK_PRESENT_MODE_FIFO_KHR };
+		}
+		else
 		switch (g_cfg.video.vsync)
 		{
 		case vsync_mode::off:
@@ -289,11 +356,26 @@ namespace vk
 		rsx_log.notice("Swapchain: present mode %d in use.", static_cast<int>(swapchain_present_mode));
 
 		u32 nb_swap_images = surface_descriptors.minImageCount + 1;
+
+		// Frame generation presents TWO images per rendered frame, so it needs a deeper chain.
+		//
+		// With the usual three, the acquire for the interpolated frame finds nothing free and
+		// present_generated_frame returns null -- the frame is computed in full and then dropped.
+		// That presents as frame generation doing nothing except adding judder: the displayed
+		// rate stays exactly what it was without it, because only the real frames ever reach the
+		// screen, at intervals now disturbed by the work done for the ones that did not.
+		//
+		// ARMSX2 gates its own pipelined path on the chain having at least four images for the
+		// same reason.
+		const u32 extra_for_framegen =
+			g_cfg.video.frame_generation != frame_generation_mode::off ? 2u : 0u;
+
 		if (surface_descriptors.maxImageCount > 0)
 		{
 			//Try to negotiate for a triple buffer setup
 			//In cases where the front-buffer isnt available for present, its better to have a spare surface
-			nb_swap_images = std::max(surface_descriptors.minImageCount + 2u, 3u);
+			nb_swap_images = std::max(surface_descriptors.minImageCount + 2u + extra_for_framegen,
+				3u + extra_for_framegen);
 
 			if (nb_swap_images > surface_descriptors.maxImageCount)
 			{
@@ -302,9 +384,83 @@ namespace vk
 			}
 		}
 
+		rsx_log.notice("Swapchain: requesting %u images (surface allows %u..%u)%s.", nb_swap_images,
+			surface_descriptors.minImageCount, surface_descriptors.maxImageCount,
+			extra_for_framegen ? ", deeper for frame generation" : "");
+
+		// Pre-rotation.
+		//
+		// Upstream declares IDENTITY whenever the surface supports it, which on a rotated surface
+		// hands the turning of every frame to the presentation engine. On Android that is
+		// SurfaceFlinger, and where the display hardware cannot turn a linear buffer it composes the
+		// game layer on the GPU instead: bmd measured 16-17% of an RG 55G1's GPU for it in ARMSX2,
+		// which pre-rotates since 2.9.1. Phones in landscape and the Odin 3 (a portrait panel) are
+		// all rotated surfaces, and the presents of such a swapchain come back SUBOPTIMAL for as long
+		// as it lives.
+		//
+		// So when the surface reports a 90 or 180 degree turn, the images are created turned
+		// (preTransform = currentTransform, axes swapped for a quarter turn), and VKGSRender::flip
+		// turns the finished frame into them as its last pass. m_width/m_height stay the window's
+		// shape: the frame is still laid out and assembled in it. A 270 degree turn is left to the
+		// compositor, as PPSSPP leaves it (its issue 15773: corruption on some devices), and so is a
+		// turn the surface's image size limits refuse, and everything when the user turned it off.
+		m_built_for_transform = surface_descriptors.currentTransform;
+
 		VkSurfaceTransformFlagBitsKHR pre_transform = surface_descriptors.currentTransform;
 		if (surface_descriptors.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR)
 			pre_transform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+
+		const u32 surface_turns =
+			surface_descriptors.currentTransform == VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR ? 1u :
+			surface_descriptors.currentTransform == VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR ? 2u : 0u;
+
+		// Not while frame generation runs. A turned swapchain made frame generation hand the screen a
+		// 1080x1920 turned image and copy its generated frames into the swapchain unchanged, with its
+		// game-resolution path off: on the Odin 3, held the usual way (a 90 degree turn), Spider-Man:
+		// Web of Shadows with x2 fell from 30 fps to 18-21 and as low as 12, and the performance overlay
+		// flickered. The same session at a 270 degree turn, which is left to the compositor, held 30
+		// with the overlay steady (11-05). With frame generation on, the compositor turns the frame, as
+		// it did before pre-rotation; the swapchain is rebuilt when frame generation is switched.
+		const bool framegen_on = g_cfg.video.frame_generation != frame_generation_mode::off;
+
+		if (surface_turns && !g_cfg.video.disable_swapchain_prerotation && !framegen_on &&
+			(surface_descriptors.supportedTransforms & surface_descriptors.currentTransform))
+		{
+			const u32 image_w = (surface_turns & 1) ? m_height : m_width;
+			const u32 image_h = (surface_turns & 1) ? m_width : m_height;
+
+			if (image_w >= surface_descriptors.minImageExtent.width && image_w <= surface_descriptors.maxImageExtent.width &&
+				image_h >= surface_descriptors.minImageExtent.height && image_h <= surface_descriptors.maxImageExtent.height)
+			{
+				m_pre_rotation = surface_turns;
+				pre_transform = surface_descriptors.currentTransform;
+			}
+			else
+			{
+				rsx_log.warning("Swapchain: the surface is turned, but %ux%u images are outside %ux%u..%ux%u; leaving the turn to the compositor.",
+					image_w, image_h, surface_descriptors.minImageExtent.width, surface_descriptors.minImageExtent.height,
+					surface_descriptors.maxImageExtent.width, surface_descriptors.maxImageExtent.height);
+			}
+		}
+
+		if (m_pre_rotation)
+		{
+			rsx_log.notice("Swapchain: pre-rotated %u degrees to the surface's currentTransform=0x%x; images are %ux%u for a %ux%u window.",
+				m_pre_rotation * 90, static_cast<u32>(surface_descriptors.currentTransform),
+				get_image_width(), get_image_height(), m_width, m_height);
+		}
+		else if (pre_transform != surface_descriptors.currentTransform)
+		{
+			rsx_log.notice("Swapchain: surface currentTransform=0x%x, overriding with IDENTITY (0x%x). Compositor will rotate%s.",
+				static_cast<u32>(surface_descriptors.currentTransform), static_cast<u32>(pre_transform),
+				g_cfg.video.disable_swapchain_prerotation ? " (pre-rotation is off in Fixes)" :
+				framegen_on && surface_turns ? " (no pre-rotation while frame generation runs)" : "");
+		}
+		else
+		{
+			rsx_log.notice("Swapchain: preTransform matches surface currentTransform=0x%x.",
+				static_cast<u32>(surface_descriptors.currentTransform));
+		}
 
 		VkSwapchainCreateInfoKHR swap_info = {};
 		swap_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -314,14 +470,53 @@ namespace vk
 		swap_info.imageColorSpace = m_color_space;
 
 		swap_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+
+		// Frame generation READS the presented image: FrameGen::Process copies it into the
+		// interpolation chain as TRANSFER_SRC_OPTIMAL. Both that layout and vkCmdCopyImage
+		// require the image to have been created with TRANSFER_SRC, and nothing else in the
+		// renderer ever reads a WSI image, so this was never needed before and was never asked
+		// for -- the copy was reading an image the driver had not prepared for reading.
+		//
+		// Requested only where the surface offers it, since TRANSFER_SRC is not guaranteed on
+		// Android surfaces. Where it is missing, frame generation captures nothing valid, which
+		// is a better failure than an invalid one.
+		if (g_cfg.video.frame_generation != frame_generation_mode::off &&
+			(surface_descriptors.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT))
+		{
+			swap_info.imageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+		}
+		else if (g_cfg.video.frame_generation != frame_generation_mode::off)
+		{
+			rsx_log.warning("Swapchain: surface does not support TRANSFER_SRC; frame generation"
+				" cannot read presented frames on this surface.");
+		}
+
+		// A scripted frame dump (ARMSX3_DUMP_PASSES, see rsx_frame_dump.h) reads the screen buffer back
+		// too. Asked for only then: TRANSFER_SRC is not free on every driver.
+		if (const char* env = std::getenv("ARMSX3_DUMP_PASSES"); env && *env &&
+			(surface_descriptors.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT))
+		{
+			swap_info.imageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+		}
+
+		g_swapchain_transfer_src = !!(swap_info.imageUsage & VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
 		swap_info.preTransform = pre_transform;
 
-		// compositeAlpha must be a bit the surface actually reports in supportedCompositeAlpha
-		// (VUID-VkSwapchainCreateInfoKHR-compositeAlpha-01280). Some Android surfaces do not
-		// include OPAQUE, so pick the first mode the surface offers, opaque preferred. INHERIT
-		// comes second: it means the platform SurfaceView decides the composition, which is the
-		// normal Android arrangement. The mask is printed so a device can be measured instead of
-		// guessed at.
+		// compositeAlpha must be one of the bits in surface_descriptors.supportedCompositeAlpha
+		// (VUID-VkSwapchainCreateInfoKHR-compositeAlpha-01280).
+		//
+		// Observed on Odin 3 / Android 15 (VVL 1.4.357.0): the surface's supportedCompositeAlpha
+		// does not include OPAQUE, so the hardcoded value was an invalid request there. The exact
+		// mask Android reports is NOT assumed here -- the loop below picks whatever the surface
+		// actually offers, and the notice prints the mask so it can be measured rather than
+		// guessed.
+		//
+		// Preference order matters. OPAQUE first, so every desktop surface (Win32, X11/Wayland,
+		// MoltenVK) selects exactly the value that was hardcoded and stays byte-identical. INHERIT
+		// second, ahead of the premultiplied modes: on Android the composition is decided by the
+		// SurfaceView layer, which EmulationSurface.kt leaves opaque (it never calls
+		// holder.setFormat() or setZOrderOnTop()), and INHERIT means precisely "composition
+		// determined by the native platform surface".
 		{
 			constexpr VkCompositeAlphaFlagBitsKHR composite_alpha_preference[] =
 			{
@@ -346,9 +541,11 @@ namespace vk
 
 			if (!composite_alpha_found)
 			{
-				// Nothing usable reported. Keep the historical value rather than refuse to build
-				// a swapchain that used to build; a zero mask means the capabilities query
-				// returned a zeroed struct, which is a separate problem.
+				// Nothing usable reported. This branch deliberately keeps the historical value and
+				// therefore STILL violates 01280 -- an implementation reporting a zero mask is
+				// already out of spec, and refusing to build a swapchain that used to build is the
+				// worse failure. A printed mask of 0x0 means init_surface_capabilities is handing
+				// back a zeroed struct, which is a separate and bigger problem.
 				rsx_log.warning("Swapchain: surface reports no supported composite alpha modes (mask 0x%x); requesting OPAQUE.",
 					static_cast<u32>(surface_descriptors.supportedCompositeAlpha));
 			}
@@ -368,8 +565,8 @@ namespace vk
 		swap_info.oldSwapchain = old_swapchain;
 		swap_info.clipped = true;
 
-		swap_info.imageExtent.width = std::max(m_width, surface_descriptors.minImageExtent.width);
-		swap_info.imageExtent.height = std::max(m_height, surface_descriptors.minImageExtent.height);
+		swap_info.imageExtent.width = std::max(get_image_width(), surface_descriptors.minImageExtent.width);
+		swap_info.imageExtent.height = std::max(get_image_height(), surface_descriptors.minImageExtent.height);
 
 #ifdef _WIN32
 		VkSurfaceFullScreenExclusiveInfoEXT full_screen_exclusive_info = {};
@@ -388,10 +585,14 @@ namespace vk
 		rsx_log.notice("Swapchain: requesting full screen exclusive mode %d.", static_cast<int>(full_screen_exclusive_info.fullScreenExclusive));
 #endif
 
-		VkSwapchainKHR new_swapchain = VK_NULL_HANDLE;
-		const auto create_status = _vkCreateSwapchainKHR(dev, &swap_info, nullptr, &new_swapchain);
-		if (create_status != VK_SUCCESS) return false;
-		m_vk_swapchain = new_swapchain;
+#ifdef __APPLE__
+		const VkResult create_result = _vkCreateSwapchainKHR(dev, &swap_info, nullptr, &m_vk_swapchain);
+
+		// MoltenVK can fail without writing the handle, so clear it before the old swapchain is destroyed.
+		if (create_result != VK_SUCCESS)
+		{
+			m_vk_swapchain = VK_NULL_HANDLE;
+		}
 
 		if (old_swapchain)
 		{
@@ -400,11 +601,85 @@ namespace vk
 				swapchain_images.clear();
 			}
 
+			// Retired by the create call whether it succeeded or not, and ours to destroy either way.
 			_vkDestroySwapchainKHR(dev, old_swapchain, nullptr);
 		}
 
+		if (create_result != VK_SUCCESS)
+		{
+			rsx_log.error("Swapchain: vkCreateSwapchainKHR failed with VkResult %d. The retired swapchain was destroyed and no new one exists.", static_cast<s32>(create_result));
+
+			// The caller rebuilds the surface from the next live window when this is set.
+			if (create_result == VK_ERROR_SURFACE_LOST_KHR)
+			{
+				m_surface_is_lost = true;
+			}
+
+			if (create_result == VK_ERROR_DEVICE_LOST)
+			{
+				rsx::request_device_lost_shutdown("creating a swapchain");
+			}
+
+			return false;
+		}
+
+#else
+		// Into a local, and checked. The result used to be ignored and the handle written straight
+		// into m_vk_swapchain, which a failed create leaves as it was: the OLD swapchain, destroyed
+		// a few lines down. On Android the window can go while this runs. Leaving the app with a game
+		// up destroys it, and the renderer rebuilds the swapchain at that moment; the loader's
+		// dequeueBuffer then fails with ENODEV and the create with VK_ERROR_SURFACE_LOST_KHR. The
+		// dead handle was read for its images ("getting images for non-active swapchain" in
+		// logcat), and on returning to the app the surface rebuild destroyed it a second time:
+		// scudo "corrupted chunk header" inside vkDestroySwapchainKHR, SIGABRT on rsx::thread
+		// (Odin 3, Super Mario 64 with frame generation, 11-05).
+		VkSwapchainKHR new_swapchain = VK_NULL_HANDLE;
+		const VkResult create_result = _vkCreateSwapchainKHR(dev, &swap_info, nullptr, &new_swapchain);
+
+		if (old_swapchain)
+		{
+			if (!swapchain_images.empty())
+			{
+				swapchain_images.clear();
+			}
+
+			// Retired by the create call whether it succeeded or not, and ours to destroy either way.
+			_vkDestroySwapchainKHR(dev, old_swapchain, nullptr);
+		}
+
+		if (create_result != VK_SUCCESS)
+		{
+			m_vk_swapchain = VK_NULL_HANDLE;
+
+			// The caller rebuilds the surface from the next live window when this is set.
+			if (create_result == VK_ERROR_SURFACE_LOST_KHR)
+			{
+				m_surface_is_lost = true;
+			}
+
+			rsx_log.warning("Swapchain: vkCreateSwapchainKHR failed (%d); it will be retried.", static_cast<s32>(create_result));
+			return false;
+		}
+
+		m_vk_swapchain = new_swapchain;
+#endif
 		init_swapchain_images(dev);
 		return true;
+	}
+
+	bool swapchain_WSI::surface_rotation_changed()
+	{
+		VkSurfaceCapabilitiesKHR caps = {};
+
+		if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(dev.gpu(), m_surface, &caps) != VK_SUCCESS)
+		{
+			return false;
+		}
+
+		// Against what the surface asked for when this swapchain was built, not against
+		// m_pre_rotation: a turn that was not applied (270, or switched off) would otherwise read as
+		// a change on every frame.
+		return caps.currentTransform != m_built_for_transform;
 	}
 
 	VkResult swapchain_WSI::present(VkSemaphore semaphore, u32 image)

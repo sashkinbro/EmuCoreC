@@ -1,6 +1,10 @@
 #include "stdafx.h"
 #include "rsx_utils.h"
 #include "Emu/RSX/rsx_methods.h"
+#include "Emu/RSX/rsx_profiler.h"
+#include "Emu/RSX/Core/RSXContext.h"
+#include "Emu/RSX/RSXThread.h"
+#include "Emu/RSX/NV47/HW/context_accessors.define.h"
 #include "Emu/Cell/Modules/cellVideoOut.h"
 #include "Emu/system_config.h"
 
@@ -32,6 +36,11 @@ namespace rsx
 	void convert_scale_image(u8 *dst, AVPixelFormat dst_format, int dst_width, int dst_height, int dst_pitch,
 		const u8 *src, AVPixelFormat src_format, int src_width, int src_height, int src_pitch, int src_slice_h, bool bilinear)
 	{
+		// The software fallback for a 2D blit the GPU did not take. Scoped here rather than at
+		// the call sites because there are four of them in the blit engine alone, and only the
+		// RSX thread's time is ever reported, so calls from elsewhere cost nothing to include.
+		RSX_PROF_SCOPE(blit_scale);
+
 		std::unique_ptr<SwsContext, void(*)(SwsContext*)> sws(sws_getContext(src_width, src_height, src_format,
 			dst_width, dst_height, dst_format, bilinear ? SWS_FAST_BILINEAR : SWS_POINT, nullptr, nullptr, nullptr), sws_freeContext);
 
@@ -75,30 +84,6 @@ namespace rsx
 			std::memcpy(dst, buf, buffer_pitch);
 			dst += dst_pitch;
 			buf += buffer_pitch;
-		}
-	}
-
-	//Convert decoded integer values for CONSTANT_BLEND_FACTOR into f32 array in 0-1 range
-	std::array<float, 4> get_constant_blend_colors()
-	{
-		//TODO: check another color formats (probably all integer formats with > 8-bits wide channels)
-		if (rsx::method_registers.surface_color() == rsx::surface_color_format::w16z16y16x16)
-		{
-			u16 blend_color_r = rsx::method_registers.blend_color_16b_r();
-			u16 blend_color_g = rsx::method_registers.blend_color_16b_g();
-			u16 blend_color_b = rsx::method_registers.blend_color_16b_b();
-			u16 blend_color_a = rsx::method_registers.blend_color_16b_a();
-
-			return { decode_fp16(blend_color_r), decode_fp16(blend_color_g), decode_fp16(blend_color_b), decode_fp16(blend_color_a) };
-		}
-		else
-		{
-			u8 blend_color_r = rsx::method_registers.blend_color_8b_r();
-			u8 blend_color_g = rsx::method_registers.blend_color_8b_g();
-			u8 blend_color_b = rsx::method_registers.blend_color_8b_b();
-			u8 blend_color_a = rsx::method_registers.blend_color_8b_a();
-
-			return { blend_color_r / 255.f, blend_color_g / 255.f, blend_color_b / 255.f, blend_color_a / 255.f };
 		}
 	}
 
@@ -180,6 +165,14 @@ namespace rsx
 
 	double avconf::get_aspect_ratio() const
 	{
+		// A user override wins over whatever the game signalled. Applies to both users of
+		// this value: fitting the virtual display into the physical one (the letterbox the
+		// player actually sees) and aspect_convert_dimensions.
+		if (const s32 permille = g_cfg.video.display_aspect_permille; permille > 0)
+		{
+			return permille / 1000.;
+		}
+
 		switch (aspect)
 		{
 		case CELL_VIDEO_OUT_ASPECT_16_9: return 16. / 9.;
@@ -234,7 +227,253 @@ namespace rsx
 		return static_cast<areau>(static_cast<aread>(area1) * size2d { stretch_x, stretch_y }) + size2u{ area2.x1, area2.y1 };
 	}
 
+	atomic_t<u32> g_render_top_portrait{0};
+	atomic_t<u32> g_render_top_inset{0};
+
+	areau apply_render_position(const areau& region, const size2u& output_dimensions)
+	{
+		if (output_dimensions.height <= output_dimensions.width || !g_render_top_portrait)
+		{
+			return region;
+		}
+
+		// Only the letterbox bar is ours to reclaim. An image already flush to the top has
+		// nowhere to go, and one at least as tall as the window is not letterboxed at all --
+		// moving either would push picture off the screen rather than shift a border.
+		if (region.y1 == 0 || region.height() >= output_dimensions.height)
+		{
+			return region;
+		}
+
+		// Clear the camera cutout, but never by more than the bar being reclaimed: pushing past
+		// where the image already sat would move it DOWN, which is the opposite of the request.
+		const u32 top = std::min<u32>(g_render_top_inset, region.y1);
+		return areau{ region.x1, top, region.x2, top + region.height() };
+	}
+
 #ifdef TEXTURE_CACHE_DEBUG
 	tex_cache_checker_t tex_cache_checker = {};
 #endif
+
+	rsx_state& get_method_registers()
+	{
+		return *REGS(ensure(ensure(get_current_renderer())->get_context()));
+	}
+
+	u32 get_address(const context* ctx, u32 offset, u32 location, u32 size_to_check, std::source_location src_loc)
+	{
+		const auto render = ctx ? ctx->rsxthr : get_current_renderer();
+		std::string_view msg;
+
+		switch (location)
+		{
+		case CELL_GCM_CONTEXT_DMA_MEMORY_FRAME_BUFFER:
+		case CELL_GCM_LOCATION_LOCAL:
+		{
+			if (offset < render->local_mem_size && render->local_mem_size - offset >= size_to_check)
+			{
+				return rsx::constants::local_mem_base + offset;
+			}
+
+			msg = "Local RSX offset out of range!"sv;
+			break;
+		}
+
+		case CELL_GCM_CONTEXT_DMA_MEMORY_HOST_BUFFER:
+		case CELL_GCM_LOCATION_MAIN:
+		{
+			if (const u32 ea = render->iomap_table.get_addr(offset); ea != umax)
+			{
+				if (const u32 main_mem_size = ensure(ctx)->fw.main_mem_size;
+					size_to_check <= 1 || (offset < main_mem_size && main_mem_size - offset >= size_to_check))
+				{
+					bool ok = true;
+
+					for (u32 offs_index = 0x100000;
+						 offs_index < size_to_check + (offset & 0xfffff);
+						 offs_index += 0x100000)
+					{
+						// This check does not check continuity but rather that it's mapped at all
+						if (render->iomap_table.get_addr(offset + offs_index) == umax)
+						{
+							ok = false;
+						}
+					}
+
+					if (ok)
+					{
+						if (!size_to_check || vm::check_addr(ea, 0, size_to_check))
+						{
+							return ea;
+						}
+					}
+				}
+			}
+
+			msg = "RSXIO memory not mapped!"sv;
+			break;
+		}
+
+		case CELL_GCM_CONTEXT_DMA_REPORT_LOCATION_LOCAL:
+		{
+			if (offset < sizeof(RsxReports::report) /*&& (offset % 0x10) == 0*/)
+			{
+				return ensure(ctx)->fw.label_addr + ::offset32(&RsxReports::report) + offset;
+			}
+
+			msg = "Local RSX REPORT offset out of range!"sv;
+			break;
+		}
+
+		case CELL_GCM_CONTEXT_DMA_REPORT_LOCATION_MAIN:
+		{
+			if (const u32 ea = offset < 0x1000000 ? render->iomap_table.get_addr(0x0e000000 + offset) : -1; ea != umax)
+			{
+				if (!size_to_check || vm::check_addr(ea, 0, size_to_check))
+				{
+					return ea;
+				}
+			}
+
+			msg = "RSXIO REPORT memory not mapped!"sv;
+			break;
+		}
+
+		// They are handled elsewhere for targeted methods, so it's unexpected for them to be passed here
+		case CELL_GCM_CONTEXT_DMA_TO_MEMORY_GET_NOTIFY0:
+		case CELL_GCM_CONTEXT_DMA_TO_MEMORY_GET_NOTIFY1:
+		case CELL_GCM_CONTEXT_DMA_TO_MEMORY_GET_NOTIFY2:
+		case CELL_GCM_CONTEXT_DMA_TO_MEMORY_GET_NOTIFY3:
+		case CELL_GCM_CONTEXT_DMA_TO_MEMORY_GET_NOTIFY4:
+		case CELL_GCM_CONTEXT_DMA_TO_MEMORY_GET_NOTIFY5:
+		case CELL_GCM_CONTEXT_DMA_TO_MEMORY_GET_NOTIFY6:
+		case CELL_GCM_CONTEXT_DMA_TO_MEMORY_GET_NOTIFY7:
+			msg = "CELL_GCM_CONTEXT_DMA_TO_MEMORY_GET_NOTIFYx"sv; break;
+
+		case CELL_GCM_CONTEXT_DMA_NOTIFY_MAIN_0:
+		case CELL_GCM_CONTEXT_DMA_NOTIFY_MAIN_1:
+		case CELL_GCM_CONTEXT_DMA_NOTIFY_MAIN_2:
+		case CELL_GCM_CONTEXT_DMA_NOTIFY_MAIN_3:
+		case CELL_GCM_CONTEXT_DMA_NOTIFY_MAIN_4:
+		case CELL_GCM_CONTEXT_DMA_NOTIFY_MAIN_5:
+		case CELL_GCM_CONTEXT_DMA_NOTIFY_MAIN_6:
+		case CELL_GCM_CONTEXT_DMA_NOTIFY_MAIN_7:
+			msg = "CELL_GCM_CONTEXT_DMA_NOTIFY_MAIN_x"sv; break;
+
+		case CELL_GCM_CONTEXT_DMA_SEMAPHORE_RW:
+		case CELL_GCM_CONTEXT_DMA_SEMAPHORE_R:
+		{
+			if (offset < sizeof(RsxReports::semaphore) /*&& (offset % 0x10) == 0*/)
+			{
+				return ensure(ctx)->fw.label_addr + offset;
+			}
+
+			msg = "DMA SEMAPHORE offset out of range!"sv;
+			break;
+		}
+
+		case CELL_GCM_CONTEXT_DMA_DEVICE_RW:
+		case CELL_GCM_CONTEXT_DMA_DEVICE_R:
+		{
+			if (offset < 0x100000 /*&& (offset % 0x10) == 0*/)
+			{
+				return render->device_addr + offset;
+			}
+
+			// TODO: What happens here? It could wrap around or access other segments of rsx internal memory etc
+			// Or can simply throw access violation error
+			msg = "DMA DEVICE offset out of range!"sv;
+			break;
+		}
+
+		default:
+		{
+			msg = "Invalid location!"sv;
+			break;
+		}
+		}
+
+		if (size_to_check)
+		{
+			// Allow failure if specified size
+			// This is to allow accurate recovery for failures
+			rsx_log.warning("rsx::get_address(offset=0x%x, location=0x%x, size=0x%x): %s%s", offset, location, size_to_check, msg, src_loc);
+			return 0;
+		}
+
+		fmt::throw_exception("rsx::get_address(offset=0x%x, location=0x%x): %s%s", offset, location, msg, src_loc);
+	}
+
+	void yield_rsx_ctx_thread() noexcept
+	{
+		if (auto rsxthr = get_current_renderer())
+		{
+			if (g_cfg.core.allow_rsx_cpu_preempt)
+			{
+				rsxthr->state += cpu_flag::yield;
+			}
+		}
+	}
+
+	void set_native_ui_flip()
+	{
+		if (auto rsxthr = rsx::get_current_renderer())
+		{
+			rsxthr->display_ctrl().request_native_ui_flip();
+		}
+	}
+
+	u32 get_vertex_type_size_on_host(vertex_base_type type, u32 size)
+	{
+		switch (type)
+		{
+		case vertex_base_type::s1:
+		case vertex_base_type::s32k:
+			switch (size)
+			{
+			case 1:
+			case 2:
+			case 4:
+				return sizeof(u16) * size;
+			case 3:
+				return sizeof(u16) * 4;
+			default:
+				break;
+			}
+			fmt::throw_exception("Wrong vector size");
+		case vertex_base_type::f: return sizeof(f32) * size;
+		case vertex_base_type::sf:
+			switch (size)
+			{
+			case 1:
+			case 2:
+			case 4:
+				return sizeof(f16) * size;
+			case 3:
+				return sizeof(f16) * 4;
+			default:
+				break;
+			}
+			fmt::throw_exception("Wrong vector size");
+		case vertex_base_type::ub:
+			switch (size)
+			{
+			case 1:
+			case 2:
+			case 4:
+				return sizeof(u8) * size;
+			case 3:
+				return sizeof(u8) * 4;
+			default:
+				break;
+			}
+			fmt::throw_exception("Wrong vector size");
+		case vertex_base_type::cmp: return 4;
+		case vertex_base_type::ub256: ensure(size == 4); return sizeof(u8) * 4;
+		default:
+			break;
+		}
+
+		fmt::throw_exception("Bad vertex data type (%d)!", static_cast<u8>(type));
+	}
 }

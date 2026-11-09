@@ -22,5 +22,5 @@ namespace rsx
 		void set_vertex_texture_dirty_bit(rsx::context* ctx, u32 index);
 	}
 }
- 
+
 #include "context_accessors.undef.h"

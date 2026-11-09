@@ -4,6 +4,7 @@
 #include <cstdarg>
 #include "util/logs.hpp"
 #include "Emu/Audio/audio_device_enumerator.h"
+#include "Emu/system_config.h"
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -24,19 +25,27 @@ CubebBackend::CubebBackend()
 #endif
 
 	cubeb *ctx{};
+	const std::string requested_backend = g_cfg.audio.cubeb_backend.to_string();
 #ifdef __ANDROID__
 	// AAudio is Cubeb's default on modern Android, but some vendor audio
 	// services accept stream creation and then disconnect requestStart().
 	// OpenSL ES is Cubeb's broadly compatible Android backend and preserves
 	// the same buffering/callback contract expected by cellAudio.
-	constexpr const char* backend_name = "opensl";
+	const char* backend_name = requested_backend.empty() ? "opensl" : requested_backend.c_str();
+	const char* fallback_backend = requested_backend.empty() || requested_backend == "opensl" ? nullptr : "opensl";
 #else
-	constexpr const char* backend_name = nullptr;
+	const char* backend_name = nullptr;
+	if (!requested_backend.empty()) backend_name = requested_backend.c_str();
+	const char* fallback_backend = nullptr;
 #endif
 	if (int err = cubeb_init(&ctx, "RPCS3", backend_name))
 	{
-		Cubeb.error("cubeb_init() failed: %i", err);
-		return;
+		Cubeb.error("cubeb_init() failed: %i (backend=%s)", err, backend_name ? backend_name : "auto");
+		if (backend_name == fallback_backend || cubeb_init(&ctx, "RPCS3", fallback_backend))
+		{
+			return;
+		}
+		Cubeb.warning("Requested Cubeb backend unavailable; using %s", fallback_backend ? fallback_backend : "auto");
 	}
 
 	if (int err = cubeb_register_device_collection_changed(ctx, CUBEB_DEVICE_TYPE_OUTPUT, device_collection_changed_cb, this))

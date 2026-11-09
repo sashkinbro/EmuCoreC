@@ -1,6 +1,7 @@
 package com.sbro.emucorec
 
 import android.app.Application
+import com.sbro.emucorec.core.AppVisibility
 import com.sbro.emucorec.core.BackupSessionGate
 import com.sbro.emucorec.core.DeviceGpuInfoProvider
 import com.sbro.emucorec.core.EmulatorStorage
@@ -20,6 +21,9 @@ class EmuCoreCApp : Application() {
         // The Discord SDK runs in its own isolated helper process, which must not
         // build the emulator-side graph.
         if (Application.getProcessName().endsWith(DISCORD_PROCESS_SUFFIX)) return
+        if (Application.getProcessName() == packageName) {
+            registerActivityLifecycleCallbacks(AppVisibility)
+        }
         // Apply the persisted locale before any activity is created so
         // AppCompat can attach the correctly localized resource context.
         AppPreferences(this).applyAppLanguage()

@@ -504,10 +504,14 @@ struct spu_imm_table_t
 
 extern const spu_imm_table_t g_spu_imm;
 
-// True while the local-store watch has a window to watch (see SPUThread.cpp). The
+// True while ARMSX3_WATCH_LS names a local-store window to watch (see SPUThread.cpp). The
 // recompiler asks because its inlined DMA copies would otherwise never reach do_dma_transfer,
 // which is where the watch sits.
 bool spu_ls_watch_enabled();
+
+// Defined in PPUThread.cpp. Same reason as above: the recompiler must route DMA through
+// do_dma_transfer when the Killzone 3 builder-vs-traversal sync probe (ARMSX3_KZ3_SYNC) is armed.
+bool kz3_sync_probe_enabled();
 
 enum FPSCR_EX
 {
@@ -694,6 +698,8 @@ public:
 	u32 mfc_barrier = -1;
 	u32 mfc_fence = -1;
 
+	// MFC shuffling: SPU instructions left before queued commands run (upstream's replacement for
+	// mfc_last_timestamp). ARMSX3: kept in that member's slot, so spu_thread's layout does not move.
 	u64 mfc_queued_ops_timeout = 0;
 
 	// MFC proxy command data
@@ -758,8 +764,8 @@ public:
 	std::pair<u32, u32> read_dec() const; // Read decrementer
 	u64 dec_intr_armed = umax; // Underflow time last handed to the decrementer interrupt timer
 
-	// Operands of a SHUFB that took the insert fold, kept for the checking helper, which
-	// recomputes the real shuffle and logs any disagreement.
+	// ARMSX3_SHUFB_CHECK: operands of a SHUFB that took the insert fold, left here for the
+	// checking helper, which recomputes the real shuffle and logs any disagreement.
 	v128 shufb_dbg_a{};
 	v128 shufb_dbg_b{};
 	v128 shufb_dbg_c{};
@@ -805,6 +811,9 @@ public:
 	std::unique_ptr<class spu_recompiler_base> jit; // Recompiler instance
 
 	bool interp_fallback = false;
+	// Extent of the uncompilable block this thread is interpreting, cached so the interpreter loop
+	// can test it without touching the failed-block map. Looking it up per instruction put
+	// shared_mutex::imp_lock_shared at 28% of the whole process.
 	u32 interp_fallback_begin = 0;
 	u32 interp_fallback_end = 0;
 
@@ -812,11 +821,40 @@ public:
 	u64 block_recover = 0;
 	u64 block_failure = 0;
 
-	// Diagnostics counters for SPU reservation contention.
+	// Reservation-loop diagnostics for the Borderlands 2 hang. block_counter says an SPU is
+	// executing nothing, but not what it is doing instead, and a livelocked PUTLLC retry looks
+	// identical from outside to a thread that is simply idle. Plain counters, read only by the
+	// stall dump on another thread -- a torn read costs nothing there.
 	u64 putllc_calls = 0;
 	u64 putllc_fails = 0;
+	u64 putllc_barrier = 0; // conditional stores that reached the heavyweight vm::writer_lock
+	u64 putllc_barrier_spurs = 0; // ...of those, ones on this thread's own SPURS control block
+
 	u64 putllc_notify = 0;
-	u64 putllc_suppressed = 0;
+	u64 putllc_suppressed = 0; // SPURS heuristic decided the waiters did not need waking
+
+	// Where the host thread last was in cpu_task. Borderlands 2 leaves one SPURS kernel with
+	// every counter frozen -- no blocks, no conditional stores -- while it is still marked
+	// runnable, in userspace, and burning CPU. block_counter is bumped from inside the JIT'd
+	// code, so a frozen one cannot distinguish "the gateway never came back" from "the loop is
+	// spinning without ever reaching guest code", and those are different bugs.
+	enum : u32
+	{
+		spu_at_loop_top = 1,
+		spu_at_check_state = 2,
+		spu_at_stop_signal = 3,
+		spu_at_gateway_enter = 4,
+		spu_at_gateway_exit = 5,
+	};
+
+	u32 dbg_where = 0;
+	u64 dbg_loops = 0;
+
+	// SPU -> PPU notifications issued through SPU_WrOutIntrMbox. There is a once-per-(port,kind)
+	// log at that site, but "it signalled at some point" and "it is still signalling now" are
+	// different facts and only the second one distinguishes a worker that has stopped notifying
+	// from one whose notifications are not being delivered.
+	u64 events_sent = 0;
 
 	rpcs3::hypervisor_context_t hv_ctx; // NOTE: The offset within the class must be within the first 1MiB
 
@@ -833,12 +871,21 @@ public:
 	u32 last_getllar_gpr1 = umax;
 	u32 last_getllar_addr = umax;
 	u32 last_getllar_lsa = umax;
+	u32 getllar_spin_count = 0;
+
+	// Memo for the out-buffer check in the GETLLAR spin detector. That check needs only the
+	// innermost frame, but derives it from dump_callstack_list, which walks the whole stack and
+	// runs a code-flow scan per candidate. The answer is a function of pc, the stack pointer and
+	// the link register, so it is recomputed only when one of those moves.
 	u32 getllar_cs_pc = umax;
 	u32 getllar_cs_sp = umax;
 	u32 getllar_cs_lr = umax;
 	u32 getllar_cs_first = umax;
+
+	// Consecutive "not a loop" verdicts from that check at the same site. The verdict suppresses
+	// both the busy-wait and the sleep, so believing it forever leaves the SPU re-entering
+	// GETLLAR at full rate; repetition is the evidence that it is wrong.
 	u32 getllar_outbuf_hits = 0;
-	u32 getllar_spin_count = 0;
 	u32 getllar_busy_waiting_switch = umax; // umax means the test needs evaluation, otherwise it's a boolean
 	u64 getllar_evaluate_time = 0;
 
@@ -870,12 +917,10 @@ public:
 	std::array<v128, 0x4000> stack_mirror; // Return address information
 	std::array<u32, 8> raddr_busy_wait_addr{}; // Return address information
 
-	// Consecutive failed conditional stores against the same line, for the notifier park in
-	// do_putllc. Runtime scheduling state only; deliberately not serialized.
-	u32 putllc_fail_streak{};
-	u64 putllc_parks{}; // Times the notifier park below actually engaged
-	u32 putllc_fail_addr{};
 
+	u32 putllc_fail_streak{};
+	u64 putllc_parks{};
+	u32 putllc_fail_addr{};
 	const char* current_func{}; // Current STOP or RDCH blocking function
 	u64 start_time{}; // Starting time of STOP or RDCH bloking function
 	bool unsavable = false; // Flag indicating whether saving the spu thread state is currently unsafe
@@ -1023,3 +1068,6 @@ public:
 		}
 	}
 };
+
+// The lines that actually reach do_putllc's vm::writer_lock, most-hammered first.
+std::string spu_putllc_barrier_sites();

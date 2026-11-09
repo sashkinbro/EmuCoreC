@@ -82,6 +82,9 @@ enum class BootResult {
 class Ps3Core {
     external fun openLibrary(path: String): Boolean
     external fun setSocInfo(socInfo: String)
+    external fun setPrivateCacheDir(directory: String)
+    external fun setAppBackgrounded(backgrounded: Boolean)
+    external fun setCardboardVr(enabled: Boolean, size: Int, spacing: Int, vertical: Int)
     external fun setLogLevelFloor(level: Int)
     external fun initialize(rootDir: String, user: String): Boolean
     external fun installFw(fd: Int, progressId: Long): Boolean
@@ -157,6 +160,7 @@ class Ps3Core {
                 return false
             }
 
+            AppVisibility.coreLoaded { backgrounded -> instance.setAppBackgrounded(backgrounded) }
             activeLibrary.value = path
             return true
         }

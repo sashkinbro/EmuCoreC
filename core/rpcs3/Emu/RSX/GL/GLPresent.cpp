@@ -11,10 +11,14 @@
 
 #include "util/video_provider.h"
 
+#include "Emu/RSX/NV47/HW/context_accessors.define.h"
+
 LOG_CHANNEL(screenshot_log, "SCREENSHOT");
 
 extern atomic_t<bool> g_user_asked_for_screenshot;
 extern atomic_t<recording_mode> g_recording_mode;
+// android/src/armsx3-core.cpp: Cardboard VR, packed (see _armsx3_setCardboardVr)
+extern atomic_t<u32> g_cardboard_vr;
 
 namespace gl
 {
@@ -58,7 +62,7 @@ gl::texture* GLGSRender::get_present_source(gl::present_surface_info* info, cons
 	// Check the surface store first
 	gl::command_context cmd = { gl_state };
 	const auto format_bpp = rsx::get_format_block_size_in_bytes(info->format);
-	const auto overlap_info = m_rtts.get_merged_texture_memory_region(cmd,
+	const auto overlap_info = res()->surface_cache.get_merged_texture_memory_region(cmd,
 		info->address, info->width, info->height, info->pitch, format_bpp, rsx::surface_access::transfer_read);
 
 	if (!overlap_info.empty())
@@ -95,13 +99,13 @@ gl::texture* GLGSRender::get_present_source(gl::present_surface_info* info, cons
 				image = section.surface->get_surface(rsx::surface_access::transfer_read);
 
 				std::tie(info->width, info->height) = rsx::apply_resolution_scale<true>(
-					resolution_scaling_config,
+					RSX(m_ctx)->resolution_scaling_config,
 					std::min(surface_width, info->width),
 					std::min(surface_height, info->height));
 			}
 		}
 	}
-	else if (auto surface = m_gl_texture_cache.find_texture_from_dimensions<true>(info->address, info->format);
+	else if (auto surface = res()->texture_cache.find_texture_from_dimensions<true>(info->address, info->format);
 			 surface && surface->get_width() >= info->width && surface->get_height() >= info->height)
 	{
 		// Hack - this should be the first location to check for output
@@ -110,21 +114,13 @@ gl::texture* GLGSRender::get_present_source(gl::present_surface_info* info, cons
 	}
 
 	const GLenum expected_format = gl::RSX_display_format_to_gl_format(avconfig.format);
-	#ifdef RSX_GLES
-	// GL_BGRA8 plus the packed desktop transfer types is not a portable GLES
-	// upload combination. Keep fallback presentation storage in core RGBA8;
-	// the CPU fallback below performs the explicit PS3 channel conversion.
-	const GLenum scratch_format = GL_RGBA8;
-	#else
-	const GLenum scratch_format = expected_format;
-	#endif
 	std::unique_ptr<gl::texture>& flip_image = m_flip_tex_color[info->eye];
 
 	auto initialize_scratch_image = [&]()
 	{
 		if (!flip_image || flip_image->size2D() != sizeu{ info->width, info->height })
 		{
-			flip_image = std::make_unique<gl::texture>(GL_TEXTURE_2D, info->width, info->height, 1, 1, 1, scratch_format, RSX_FORMAT_CLASS_COLOR);
+			flip_image = std::make_unique<gl::texture>(GL_TEXTURE_2D, info->width, info->height, 1, 1, 1, expected_format, RSX_FORMAT_CLASS_COLOR);
 		}
 	};
 
@@ -132,54 +128,17 @@ gl::texture* GLGSRender::get_present_source(gl::present_surface_info* info, cons
 	{
 		rsx_log.warning("Flip texture was not found in cache. Uploading surface from CPU");
 
+		gl::pixel_unpack_settings unpack_settings;
+		unpack_settings.alignment(1).row_length(info->pitch / 4);
+
 		initialize_scratch_image();
 
 		gl::command_context cmd{ gl_state };
 		const auto range = utils::address_range32::start_length(info->address, info->pitch * info->height);
-		m_gl_texture_cache.invalidate_range(cmd, range, rsx::invalidation_cause::read);
+		res()->texture_cache.invalidate_range(cmd, range, rsx::invalidation_cause::read);
 
-		#ifdef RSX_GLES
-		// PS3 scanout memory is big-endian XRGB/XBGR. Desktop GL's packed
-		// transfer types describe that byte order, but they are outside the
-		// GLES 3 core contract and fail on Adreno. Convert only this uncommon
-		// CPU presentation fallback to tightly packed RGBA8. The normal render
-		// target path remains entirely on the GPU.
-		std::vector<u8> rgba(static_cast<usz>(info->width) * info->height * 4);
-		const auto* src = static_cast<const u8*>(vm::base(info->address));
-		for (u32 y = 0; y < info->height; ++y)
-		{
-			const auto* src_row = src + static_cast<usz>(y) * info->pitch;
-			auto* dst_row = rgba.data() + static_cast<usz>(y) * info->width * 4;
-			for (u32 x = 0; x < info->width; ++x)
-			{
-				const auto* pixel = src_row + static_cast<usz>(x) * 4;
-				auto* out = dst_row + static_cast<usz>(x) * 4;
-				if (avconfig.format == CELL_VIDEO_OUT_BUFFER_COLOR_FORMAT_X8B8G8R8)
-				{
-					out[0] = pixel[3];
-					out[1] = pixel[2];
-					out[2] = pixel[1];
-				}
-				else
-				{
-					out[0] = pixel[1];
-					out[1] = pixel[2];
-					out[2] = pixel[3];
-				}
-				out[3] = 0xff;
-			}
-		}
-
-		gl::pixel_unpack_settings unpack_settings;
-		unpack_settings.alignment(1).row_length(info->width);
-		const rsx::io_buffer read_buf = { rgba.data(), rgba.size() };
-		flip_image->copy_from(read_buf, gl::texture::format::rgba, gl::texture::type::ubyte, unpack_settings);
-		#else
-		gl::pixel_unpack_settings unpack_settings;
-		unpack_settings.alignment(1).row_length(info->pitch / 4);
 		const rsx::io_buffer read_buf = { vm::base(info->address), range.length() };
 		flip_image->copy_from(read_buf, static_cast<gl::texture::format>(expected_format), gl::texture::type::uint_8_8_8_8, unpack_settings);
-		#endif
 		image = flip_image.get();
 	}
 	else if (image->get_internal_format() != static_cast<gl::texture::internal_format>(expected_format))
@@ -204,20 +163,31 @@ gl::texture* GLGSRender::get_present_source(gl::present_surface_info* info, cons
 	return image;
 }
 
-void GLGSRender::flip(const rsx::display_flip_info_t& info)
+bool GLGSRender::present_frame(const rsx::display_flip_info_t& info)
 {
+	// The frame boundary is where a GPU reset gets noticed
+	// TODO: What would a lost OpenGL context cost us? Can we reuse the gl_gs_frame window?
+	if (gl::command_context::is_lost(true))
+	{
+		RSX(m_ctx)->raise_backend_interrupt();
+		return false;
+	}
+
+	// Frame dumps (GLFrameDump.cpp) start and finish on flips
+	frame_dump_on_flip(info);
+
 	if (info.skip_frame)
 	{
 		m_frame->flip(m_context, true);
-		rsx::thread::flip(info);
-		return;
+		return false;
 	}
 
 	gl::command_context cmd{ gl_state };
 
-	u32 buffer_width = display_buffers[info.buffer].width;
-	u32 buffer_height = display_buffers[info.buffer].height;
-	u32 buffer_pitch = display_buffers[info.buffer].pitch;
+	const auto& display_buffer = m_ctx->display_buffers[info.buffer];
+	u32 buffer_width = display_buffer.width;
+	u32 buffer_height = display_buffer.height;
+	u32 buffer_pitch = display_buffer.pitch;
 
 	u32 av_format;
 	const auto& avconfig = g_fxo->get<rsx::avconf>();
@@ -253,13 +223,15 @@ void GLGSRender::flip(const rsx::display_flip_info_t& info)
 
 	gl::texture* image_to_flip = nullptr;
 	gl::texture* image_to_flip2 = nullptr;
+	// ARMSX3 Cardboard VR: the game drew both eyes of a stereo pair into the one image_to_flip.
+	bool stereo_single_image = false;
 
-	if (info.buffer < display_buffers_count && buffer_width && buffer_height)
+	if (res() && info.buffer < m_ctx->display_buffers_count && buffer_width && buffer_height)
 	{
 		// Find the source image
 		gl::present_surface_info present_info
 		{
-			.address = rsx::get_address(display_buffers[info.buffer].offset, CELL_GCM_LOCATION_LOCAL),
+			.address = rsx::get_address(m_ctx, display_buffer.offset, CELL_GCM_LOCATION_LOCAL),
 			.format = av_format,
 			.width = buffer_width,
 			.height = buffer_height,
@@ -271,14 +243,14 @@ void GLGSRender::flip(const rsx::display_flip_info_t& info)
 
 		if (avconfig.stereo_enabled) [[unlikely]]
 		{
-			const auto [unused, min_expected_height] = rsx::apply_resolution_scale<true>(resolution_scaling_config, RSX_SURFACE_DIMENSION_IGNORED, buffer_height + 30);
+			const auto [unused, min_expected_height] = rsx::apply_resolution_scale<true>(RSX(m_ctx)->resolution_scaling_config, RSX_SURFACE_DIMENSION_IGNORED, buffer_height + 30);
 			if (image_to_flip->height() < min_expected_height)
 			{
 				// Get image for second eye
-				const u32 image_offset = (buffer_height + 30) * buffer_pitch + display_buffers[info.buffer].offset;
+				const u32 image_offset = (buffer_height + 30) * buffer_pitch + display_buffer.offset;
 				present_info.width = buffer_width;
 				present_info.height = buffer_height;
-				present_info.address = rsx::get_address(image_offset, CELL_GCM_LOCATION_LOCAL);
+				present_info.address = rsx::get_address(m_ctx, image_offset, CELL_GCM_LOCATION_LOCAL);
 				present_info.eye = 1;
 
 				image_to_flip2 = get_present_source(&present_info, avconfig);
@@ -286,8 +258,9 @@ void GLGSRender::flip(const rsx::display_flip_info_t& info)
 			else
 			{
 				// Account for possible insets
-				const auto [unused2, scaled_buffer_height] = rsx::apply_resolution_scale<true>(resolution_scaling_config, RSX_SURFACE_DIMENSION_IGNORED, buffer_height);
+				const auto [unused2, scaled_buffer_height] = rsx::apply_resolution_scale<true>(RSX(m_ctx)->resolution_scaling_config, RSX_SURFACE_DIMENSION_IGNORED, buffer_height);
 				buffer_height = std::min<u32>(image_to_flip->height() - min_expected_height, scaled_buffer_height);
+				stereo_single_image = true;
 			}
 		}
 
@@ -295,9 +268,26 @@ void GLGSRender::flip(const rsx::display_flip_info_t& info)
 		buffer_height = present_info.height;
 	}
 
+	if (m_frame_dump.take_final) [[unlikely]]
+	{
+		m_frame_dump.take_final = false;
+
+		if (image_to_flip)
+		{
+			fmt::append(m_frame_dump.index, "The final image is display buffer %u (offset 0x%x), %ux%u, pitch %u, format %u.\n",
+				info.buffer, display_buffer.offset, buffer_width, buffer_height, buffer_pitch, av_format);
+			frame_dump_save(image_to_flip, "final", "final image",
+				fmt::format("the image this flip shows (%ux%u)", image_to_flip->width(), image_to_flip->height()), umax, 0);
+		}
+		else
+		{
+			m_frame_dump.index += "This flip had no image to show.\n";
+		}
+	}
+
 	if (info.emu_flip)
 	{
-		evaluate_cpu_usage_reduction_limits();
+		RSX(m_ctx)->display_ctrl().evaluate_cpu_usage_reduction_limits();
 		update_swap_interval();
 	}
 
@@ -310,7 +300,8 @@ void GLGSRender::flip(const rsx::display_flip_info_t& info)
 	if (!g_cfg.video.stretch_to_display_area)
 	{
 		const sizeu csize(width, height);
-		const auto converted = avconfig.aspect_convert_region(size2u{ buffer_width, buffer_height }, csize);
+		const auto converted = rsx::apply_render_position(
+			avconfig.aspect_convert_region(size2u{ buffer_width, buffer_height }, csize), csize);
 		aspect_ratio = static_cast<areai>(converted);
 	}
 	else
@@ -318,33 +309,66 @@ void GLGSRender::flip(const rsx::display_flip_info_t& info)
 		aspect_ratio = { 0, 0, width, height };
 	}
 
-	if (!image_to_flip || aspect_ratio.x1 || aspect_ratio.y1)
+	// Cardboard VR: the picture twice, one in each half of the screen. Same layout as VKPresent.cpp's:
+	// each picture fitted to its half as the whole one is to the window, scaled, then moved apart or
+	// together across the space beside it and up or down. Only with a game image.
+	const u32 cardboard = g_cardboard_vr.load();
+	const bool cardboard_on = (cardboard & 0x8000'0000u) && image_to_flip && width >= 2;
+	areai cardboard_eye[2]{};
+
+	if (cardboard_on)
+	{
+		const s32 half = width / 2;
+		const s32 size = s32(cardboard & 0xff);
+		const s32 spacing = s32((cardboard >> 8) & 0xff) - 128;
+		const s32 vertical = s32((cardboard >> 16) & 0xff) - 128;
+
+		areai fit = { 0, 0, half, height };
+
+		if (!g_cfg.video.stretch_to_display_area)
+		{
+			fit = static_cast<areai>(avconfig.aspect_convert_region(size2u{ buffer_width, buffer_height }, sizeu(half, height)));
+		}
+
+		const s32 w = std::max(1, fit.width() * size / 100);
+		const s32 h = std::max(1, fit.height() * size / 100);
+		const s32 room_x = std::max(0, half - w) / 2;
+		const s32 room_y = std::max(0, height - h) / 2;
+		const s32 shift_x = room_x * spacing / 100;
+		const s32 y = room_y - room_y * vertical / 100;
+
+		cardboard_eye[0] = { room_x - shift_x, y, room_x - shift_x + w, y + h };
+		cardboard_eye[1] = { half + room_x + shift_x, y, half + room_x + shift_x + w, y + h };
+	}
+
+	if (!image_to_flip || cardboard_on || aspect_ratio.x1 || aspect_ratio.y1)
 	{
 		// Clear the window background to opaque black
 		gl_state.clear_color(0, 0, 0, 255);
 		gl::screen.clear(gl::buffers::color);
 	}
 
-	if (m_overlay_manager && m_overlay_manager->has_dirty())
+	const auto overlay_manager = RSX(m_ctx)->overlay_manager();
+	if (overlay_manager && overlay_manager->has_dirty())
 	{
-		m_overlay_manager->lock_shared();
+		overlay_manager->lock_shared();
 
 		std::vector<u32> uids_to_dispose;
-		uids_to_dispose.reserve(m_overlay_manager->get_dirty().size());
+		uids_to_dispose.reserve(overlay_manager->get_dirty().size());
 
-		for (const auto& view : m_overlay_manager->get_dirty())
+		for (const auto& view : overlay_manager->get_dirty())
 		{
 			m_ui_renderer.remove_temp_resources(view->uid);
 			uids_to_dispose.push_back(view->uid);
 		}
 
-		m_overlay_manager->unlock_shared();
-		m_overlay_manager->dispose(uids_to_dispose);
+		overlay_manager->unlock_shared();
+		overlay_manager->dispose(uids_to_dispose);
 	}
 
-	const auto render_overlays = [this, &cmd](gl::texture* dst, const areau& aspect_ratio, bool flip_vertically = false)
+	const auto render_overlays = [this, &cmd, overlay_manager](gl::texture* dst, const areau& aspect_ratio, bool flip_vertically = false)
 	{
-		if (m_overlay_manager && m_overlay_manager->has_visible())
+		if (overlay_manager && overlay_manager->has_visible())
 		{
 			GLuint target = 0;
 
@@ -360,10 +384,10 @@ void GLGSRender::flip(const rsx::display_flip_info_t& info)
 			}
 
 			// Lock to avoid modification during run-update chain
-			std::lock_guard lock(*m_overlay_manager);
+			std::lock_guard lock(*overlay_manager);
 
 			const areau display_area = {0, 0, static_cast<u32>(m_frame->client_width()), static_cast<u32>(m_frame->client_height())};
-			for (const auto& view : m_overlay_manager->get_views())
+			for (const auto& view : overlay_manager->get_views())
 			{
 				const areau render_area = view->use_window_space ? display_area : aspect_ratio;
 				m_ui_renderer.run(cmd, render_area, target, *view.get(), flip_vertically);
@@ -418,8 +442,7 @@ void GLGSRender::flip(const rsx::display_flip_info_t& info)
 			std::vector<u8> sshot_frame(buffer_height * buffer_width * 4);
 			glGetError();
 
-			const coord3u region = { {}, { buffer_width, buffer_height, 1 } };
-			tex->copy_to(std::span<const u8>(sshot_frame), gl::texture::format::rgba, gl::texture::type::ubyte, 0, region, pack_settings);
+			tex->copy_to(std::span<const u8>(sshot_frame), gl::texture::format::rgba, gl::texture::type::ubyte, pack_settings);
 
 			m_sshot_tex.reset();
 
@@ -460,27 +483,36 @@ void GLGSRender::flip(const rsx::display_flip_info_t& info)
 			}
 		}
 
-		#ifdef RSX_GLES
-		// The desktop output passes rely on texture-view and sampler behavior
-		// that varies across Android drivers. Present the already-rendered RSX
-		// color target through the GLES 3 framebuffer blit path first. Besides
-		// being the native GLES operation, this keeps scanout independent from
-		// the shader translation layer used by game rendering.
-		m_sshot_fbo.create();
-		m_sshot_fbo.color = *image_to_flip;
-		m_sshot_fbo.read_buffer(m_sshot_fbo.color);
-		if (m_sshot_fbo.check())
+		if (cardboard_on)
 		{
-			m_sshot_fbo.blit(gl::screen, screen_area, aspect_ratio.flipped_vertical(), gl::buffers::color, gl::filter::linear);
+			// Each eye through the video output pass, which samples its source, so the picture can be
+			// drawn twice; a game drawing in stereo 3D gives each eye its own view, from its two
+			// images or from the two parts of its one image. FSR scales to the eye's size first (not
+			// for a pair in one image, which it would scale as one picture); the pass filters for
+			// the other modes.
+			const auto filter = m_output_scaling == output_scaling_mode::nearest ? gl::filter::nearest : gl::filter::linear;
+			const bool stereo_pair = avconfig.stereo_enabled && image_to_flip2;
+			const bool stereo_one_image = avconfig.stereo_enabled && stereo_single_image;
+			gl::texture* eye_source[2] = { image_to_flip, stereo_pair ? image_to_flip2 : image_to_flip };
+
+			if (m_output_scaling == output_scaling_mode::fsr && !stereo_one_image)
+			{
+				eye_source[0] = m_upscaler->scale_output(cmd, image_to_flip, screen_area, cardboard_eye[0].flipped_vertical(), UPSCALE_LEFT_VIEW);
+				eye_source[1] = stereo_pair
+					? m_upscaler->scale_output(cmd, image_to_flip2, screen_area, cardboard_eye[1].flipped_vertical(), UPSCALE_RIGHT_VIEW)
+					: eye_source[0];
+			}
+
+			gl::screen.bind();
+
+			for (u32 eye = 0; eye < 2; ++eye)
+			{
+				rsx::simple_array<GLuint> source{ eye_source[eye] ? eye_source[eye]->id() : GL_NONE, GL_NONE };
+				m_video_output_pass.run(cmd, areau(cardboard_eye[eye]), source, avconfig.gamma, !use_full_rgb_range_output, false, filter,
+					stereo_one_image ? s32(eye) : -1);
+			}
 		}
-		else
-		{
-			rsx_log.error("OpenGL ES present source framebuffer is incomplete (texture=%u, %ux%u)",
-				image_to_flip->id(), image_to_flip->width(), image_to_flip->height());
-		}
-		m_sshot_fbo.remove();
-		#elif !defined(RSX_GLES)
-		if (!backbuffer_has_alpha && use_full_rgb_range_output && rsx::fcmp(avconfig.gamma, 1.f) && !avconfig.stereo_enabled)
+		else if (!backbuffer_has_alpha && use_full_rgb_range_output && rsx::fcmp(avconfig.gamma, 1.f) && !avconfig.stereo_enabled)
 		{
 			// Blit source image to the screen
 			m_upscaler->scale_output(cmd, image_to_flip, screen_area, aspect_ratio.flipped_vertical(), UPSCALE_AND_COMMIT | UPSCALE_DEFAULT_VIEW);
@@ -504,25 +536,49 @@ void GLGSRender::flip(const rsx::display_flip_info_t& info)
 			gl::screen.bind();
 			m_video_output_pass.run(cmd, areau(aspect_ratio), images.map(FN(x ? x->id() : GL_NONE)), gamma, limited_range, avconfig.stereo_enabled, filter);
 		}
-		#endif
 	}
 
-	render_overlays(nullptr, areau(aspect_ratio));
-
-	if (g_cfg.video.debug_overlay)
+	if (cardboard_on)
 	{
-		const auto num_dirty_textures = m_gl_texture_cache.get_unreleased_textures_count();
-		const auto texture_memory_size = m_gl_texture_cache.get_texture_memory_in_use() / (1024 * 1024);
-		const auto num_flushes = m_gl_texture_cache.get_num_flush_requests();
-		const auto num_mispredict = m_gl_texture_cache.get_num_cache_mispredictions();
-		const auto num_speculate = m_gl_texture_cache.get_num_cache_speculative_writes();
-		const auto num_misses = m_gl_texture_cache.get_num_cache_misses();
-		const auto num_unavoidable = m_gl_texture_cache.get_num_unavoidable_hard_faults();
-		const auto cache_miss_ratio = static_cast<u32>(ceil(m_gl_texture_cache.get_cache_miss_ratio() * 100));
-		const auto num_texture_upload = m_gl_texture_cache.get_texture_upload_calls_this_frame();
-		const auto num_texture_upload_miss = m_gl_texture_cache.get_texture_upload_misses_this_frame();
-		const auto texture_upload_miss_ratio = m_gl_texture_cache.get_texture_upload_miss_percentage();
-		const auto texture_copies_ellided = m_gl_texture_cache.get_texture_copies_ellided_this_frame();
+		// The picture's overlays in each eye, the window-space ones once; the second eye does not step them.
+		if (overlay_manager && overlay_manager->has_visible())
+		{
+			gl::screen.bind();
+			std::lock_guard lock(*overlay_manager);
+
+			const areau display_area = {0, 0, static_cast<u32>(m_frame->client_width()), static_cast<u32>(m_frame->client_height())};
+			for (const auto& view : overlay_manager->get_views())
+			{
+				if (view->use_window_space)
+				{
+					m_ui_renderer.run(cmd, display_area, 0, *view.get(), false);
+					continue;
+				}
+
+				m_ui_renderer.run(cmd, areau(cardboard_eye[0]), 0, *view.get(), false);
+				m_ui_renderer.run(cmd, areau(cardboard_eye[1]), 0, *view.get(), false, false);
+			}
+		}
+	}
+	else
+	{
+		render_overlays(nullptr, areau(aspect_ratio));
+	}
+
+	if (g_cfg.video.debug_overlay && res())
+	{
+		const auto num_dirty_textures = res()->texture_cache.get_unreleased_textures_count();
+		const auto texture_memory_size = res()->texture_cache.get_texture_memory_in_use() / (1024 * 1024);
+		const auto num_flushes = res()->texture_cache.get_num_flush_requests();
+		const auto num_mispredict = res()->texture_cache.get_num_cache_mispredictions();
+		const auto num_speculate = res()->texture_cache.get_num_cache_speculative_writes();
+		const auto num_misses = res()->texture_cache.get_num_cache_misses();
+		const auto num_unavoidable = res()->texture_cache.get_num_unavoidable_hard_faults();
+		const auto cache_miss_ratio = static_cast<u32>(ceil(res()->texture_cache.get_cache_miss_ratio() * 100));
+		const auto num_texture_upload = res()->texture_cache.get_texture_upload_calls_this_frame();
+		const auto num_texture_upload_miss = res()->texture_cache.get_texture_upload_misses_this_frame();
+		const auto texture_upload_miss_ratio = res()->texture_cache.get_texture_upload_miss_percentage();
+		const auto texture_copies_ellided = res()->texture_cache.get_texture_copies_ellided_this_frame();
 		const auto vertex_cache_hit_count = (info.stats.vertex_cache_request_count - info.stats.vertex_cache_miss_count);
 		const auto vertex_cache_hit_ratio = info.stats.vertex_cache_request_count
 			? (vertex_cache_hit_count * 100) / info.stats.vertex_cache_request_count
@@ -547,8 +603,8 @@ void GLGSRender::flip(const rsx::display_flip_info_t& info)
 			"Texture uploads: %11u (%u from CPU - %02u%%, %u copies avoided)\n"
 			"Vertex cache hits: %9u/%u (%u%%)\n"
 			"Program cache lookup ellision: %u/%u (%u%%)",
-			info.stats.framebuffer_stats.to_string(resolution_scaling_config, !backend_config.supports_hw_msaa),
-			get_load(), info.stats.draw_calls, info.stats.setup_time, info.stats.vertex_upload_time,
+			info.stats.framebuffer_stats.to_string(RSX(m_ctx)->resolution_scaling_config, !m_config.supports_hw_msaa),
+			RSX(m_ctx)->get_load(), info.stats.draw_calls, info.stats.setup_time, info.stats.vertex_upload_time,
 			info.stats.textures_upload_time, info.stats.draw_exec_time, num_dirty_textures, texture_memory_size,
 			num_flushes, num_misses, cache_miss_ratio, num_unavoidable, num_mispredict, num_speculate,
 			num_texture_upload, num_texture_upload_miss, texture_upload_miss_ratio, texture_copies_ellided,
@@ -581,8 +637,20 @@ void GLGSRender::flip(const rsx::display_flip_info_t& info)
 		m_vis_buffer.remove();
 	}
 
+	if (m_frame_dump.take_screen) [[unlikely]]
+	{
+		m_frame_dump.take_screen = false;
+		frame_dump_screen(static_cast<u32>(width), static_cast<u32>(height));
+		frame_dump_finish();
+	}
+
 	m_frame->flip(m_context);
-	rsx::thread::flip(info);
+	return true;
+}
+
+void GLGSRender::post_present()
+{
+	gl::command_context cmd{ gl_state };
 
 	// Data sync
 	const rsx::surface_scaling_config_t active_res_scaling_config =
@@ -591,17 +659,21 @@ void GLGSRender::flip(const rsx::display_flip_info_t& info)
 		.min_scalable_dimension = static_cast<u16>(g_cfg.video.min_scalable_dimension),
 	};
 
-	if (active_res_scaling_config != this->resolution_scaling_config)
+	if (res() && active_res_scaling_config != res()->surface_cache.scaling_config())
 	{
-		m_rtts.sync_scaling_config(cmd, active_res_scaling_config);
-		this->resolution_scaling_config = active_res_scaling_config;
+		res()->surface_cache.sync_scaling_config(cmd, active_res_scaling_config);
+		RSX(m_ctx)->resolution_scaling_config = active_res_scaling_config;
 	}
 
 	// Cleanup
-	m_gl_texture_cache.on_frame_end();
-	m_vertex_cache->purge();
+	std::vector<GLuint> removed_textures;
+	if (const auto resources = res())
+	{
+		resources->texture_cache.on_frame_end();
+		resources->vertex_cache->purge();
+		removed_textures = resources->surface_cache.trim(cmd);
+	}
 
-	auto removed_textures = m_rtts.trim(cmd);
 	m_framebuffer_cache.remove_if([&](auto& fbo)
 	{
 		if (fbo.unused_check_count() >= 2) return true; // Remove if stale
@@ -610,11 +682,11 @@ void GLGSRender::flip(const rsx::display_flip_info_t& info)
 		return false;
 	});
 
-	if (m_draw_fbo && !m_graphics_state.test(rsx::rtt_config_dirty))
+	if (m_draw_fbo && !m_ctx->graphics_state.test(rsx::rtt_config_dirty))
 	{
 		// Always restore the active framebuffer
 		m_draw_fbo->bind();
 		set_viewport();
-		set_scissor(m_graphics_state & rsx::pipeline_state::scissor_setup_clipped);
+		set_scissor(true);
 	}
 }

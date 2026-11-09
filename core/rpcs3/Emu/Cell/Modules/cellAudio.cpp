@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "Emu/emu_callbacks.h"
 #include "Emu/System.h"
+#include "Emu/android_app_state.h"
 #include "Emu/system_config.h"
 #include "Emu/Audio/audio_utils.h"
 #include "Emu/Cell/PPUModule.h"
@@ -98,7 +99,6 @@ void cell_audio_config::reset(bool backend_changed)
 	audio_sample_size = static_cast<u32>(sample_size);
 	audio_min_buffer_duration = cb_frame_len + u32{AUDIO_BUFFER_SAMPLES} * 2.0 / audio_sampling_rate; // Add 2 blocks to allow jitter compensation
 
-	audio_buffer_length = AUDIO_BUFFER_SAMPLES * audio_channels;
 
 	desired_buffer_duration = std::max(static_cast<s64>(audio_min_buffer_duration * 1000), raw.desired_buffer_duration) * 1000llu;
 	buffering_enabled = raw.buffering_enabled && raw.renderer != audio_renderer::null;
@@ -311,7 +311,19 @@ void audio_ringbuffer::commit_data(f32* buf, u32 sample_cnt)
 		AudioBackend::convert_to_s16(sample_cnt_out, buf, buf);
 	}
 
-	cb_ringbuf.push(buf, sample_cnt_out * cfg.audio_sample_size);
+	// A dropped block is audible, so it should not be invisible. push() returns 0 when the block
+	// does not fit and force is false; ignoring that return is why whole blocks could disappear
+	// with underruns=0 and nothing in the log to explain the crunch.
+	const u64 want = sample_cnt_out * cfg.audio_sample_size;
+
+	if (cb_ringbuf.push(buf, want) != want)
+	{
+		if ((m_dropped_blocks++ & 0x3f) == 0)
+		{
+			cellAudio.warning("Audio: dropped %u blocks that did not fit the ring (%.1f ms queued)",
+				m_dropped_blocks.load(), get_enqueued_playtime() / 1000.0);
+		}
+	}
 }
 
 void audio_ringbuffer::play()
@@ -898,27 +910,41 @@ void cell_audio_thread::operator()()
 
 	u32 untouched_expected = 0;
 
-	// A port the game feeds irregularly - the audio port of a movie that has just been started and whose
-	// decoder is still spinning up, typically - makes untouched oscillate. Without hysteresis the
-	// expectation follows it straight back down, so the next period re-arms the wait below and the thread
-	// stalls again, up to partially_untouched_timeout every time. Hold the expectation for a while instead:
-	// keeping it high only ever means "I already know that port is quiet, do not wait for it".
-	u64 untouched_hold_until = 0;
+	// Consecutive periods the instantaneous count has sat below the baseline.
+	u32 untouched_below_streak = 0;
 
-	// Long enough to outlast the few-period oscillation a decoder produces while it spins up, short enough
-	// that a port going quiet for good is noticed promptly.
-	const u64 untouched_hold_periods = 340'000 / std::max<u32>(1, cfg.audio_block_period);
+	// Raise the baseline at once, lower it only once the lower count has held.
+	//
+	// A plain high-water mark (what this was) never comes back down inside a stable port
+	// configuration: the fast path below runs whenever untouched == active_ports, which pins the
+	// baseline at its maximum on the first fully silent period a title has. After that
+	// `untouched > untouched_expected` can never be true again and the loop stops waiting for
+	// late ports for the rest of the session.
+	//
+	// Storing the instantaneous count instead -- which is what upstream does -- is not the
+	// answer either: a port a game leaves started while writing only zeros still flips the -0.0f
+	// tags, so it reads as touched on the few periods a write lands in and untouched on the
+	// rest. Following that dip drops the baseline, the next period looks newly untouched, and
+	// the loop waits out the full timeout every flicker. Measured on H.A.W.X. 2 as an audio
+	// clock at 55% of real time with the ring buffer permanently empty.
+	//
+	// Hysteresis covers both, because the two cases differ in duration and not in shape: the
+	// flicker is one period wide, while a game that genuinely starts filling its ports stays
+	// filled. Eight periods is far longer than any flicker and still a small fraction of the
+	// untouched timeouts this feeds.
+	constexpr u32 untouched_lower_after = 8;
 
-	const auto expect_untouched = [&](u32 count)
+	auto note_untouched = [&](u32 count, u32 ports)
 	{
-		if (count >= untouched_expected)
+		// A port going away lowers it immediately -- there is nothing left to wait for.
+		untouched_expected = std::min(untouched_expected, ports);
+
+		const u32 capped = std::min(count, ports);
+
+		if (capped >= untouched_expected || ++untouched_below_streak >= untouched_lower_after)
 		{
-			untouched_expected = count;
-			untouched_hold_until = m_counter + untouched_hold_periods;
-		}
-		else if (m_counter >= untouched_hold_until)
-		{
-			untouched_expected = count;
+			untouched_expected = capped;
+			untouched_below_streak = 0;
 		}
 	};
 
@@ -948,7 +974,7 @@ void cell_audio_thread::operator()()
 		{
 			m_audio_should_restart = true;
 			ringbuffer->flush();
-			thread_ctrl::wait_for(10000);
+			thread_ctrl::wait_for(g_android_app_backgrounded ? 250'000 : 10000);
 			continue;
 		}
 
@@ -982,6 +1008,7 @@ void cell_audio_thread::operator()()
 				finish_port_volume_stepping();
 				m_average_playtime = static_cast<f32>(ringbuffer->get_enqueued_playtime());
 				untouched_expected = 0;
+				untouched_below_streak = 0;
 			}
 
 			m_audio_should_restart = false;
@@ -1097,6 +1124,46 @@ void cell_audio_thread::operator()()
 				m_dynamic_period = cfg.minimum_block_period + static_cast<u64>((cfg.audio_block_period - cfg.minimum_block_period) * multiplier);
 			}
 
+			// Say how much audio is queued, once every 10s.
+			//
+			// Progressive audio delay is reported repeatedly (#87: Guitar Hero, where the audio
+			// starts synchronised and falls further behind the notes the longer a song runs, and
+			// pausing resets it). Every theory about it is unfalsifiable from the logs we get,
+			// because how full this ring is -- the thing that IS the delay -- was never recorded.
+			// It reproduces on both Cubeb and Oboe, so it is not the backend.
+			//
+			// One line per 10s: enough to see the curve across a song, few enough that the log
+			// volume cannot itself become the stall. Queued is the latency the player hears;
+			// target is what the algorithm is aiming for; period vs the nominal block period is
+			// how hard it is correcting (>100% throttles the guest, <100% hurries it).
+			if (timestamp - m_last_buffer_report >= 10'000'000)
+			{
+				m_last_buffer_report = timestamp;
+
+				// Underruns SINCE THE LAST LINE, not since boot: what matters is whether the
+				// output is breaking up now, and a running total from a rough patch minutes ago
+				// hides that. Non-zero here is crackling, measured rather than inferred.
+				// A backend opened again (Oboe after ErrorDisconnected) counts from 0, so the
+				// total can drop below the last one; the difference then wrapped and printed
+				// underruns=18446744073709551612.
+				const u64 underruns_total = cfg.backend ? cfg.backend->get_underruns() : 0;
+				const u64 underruns = underruns_total >= m_last_underruns ? underruns_total - m_last_underruns : underruns_total;
+				m_last_underruns = underruns_total;
+
+				cellAudio.notice("Audio buffer: queued=%.1fms target=%.1fms (%.0f%%) period=%.0f%% "
+					"blocks=%u ports=%u untouched=%u avg=%.2f ratio=%.2f underruns=%u",
+					enqueued_playtime / 1000.0,
+					desired_duration_adjusted / 1000.0,
+					desired_duration_rate * 100.0f,
+					cfg.audio_block_period ? (m_dynamic_period * 100.0 / cfg.audio_block_period) : 0.0,
+					static_cast<u32>(enqueued_buffers),
+					active_ports,
+					untouched,
+					average_playtime_ratio,
+					frequency_ratio,
+					underruns);
+			}
+
 			const s64 time_left = m_dynamic_period - time_since_last_period;
 			if (time_left > cfg.period_comparison_margin)
 			{
@@ -1111,6 +1178,7 @@ void cell_audio_thread::operator()()
 				cellAudio.trace("enqueuing silence: no active ports, enqueued_buffers=%llu", enqueued_buffers);
 				ringbuffer->enqueue_silence();
 				untouched_expected = 0;
+				untouched_below_streak = 0;
 				advance(timestamp);
 				continue;
 			}
@@ -1128,7 +1196,7 @@ void cell_audio_thread::operator()()
 					(time_since_last_period > cfg.partially_untouched_timeout) || g_cfg.audio.disable_sampling_skip
 				   )
 				{
-					expect_untouched(untouched);
+					note_untouched(untouched, active_ports);
 
 					if (untouched >= active_ports)
 					{
@@ -1160,7 +1228,7 @@ void cell_audio_thread::operator()()
 				// There's no audio in the buffers, simply advance time
 				cellAudio.trace("enqueuing silence: untouched=%u/%u (expected=%u), enqueued_buffers=%llu", untouched, active_ports, untouched_expected, enqueued_buffers);
 				ringbuffer->enqueue_silence();
-				expect_untouched(untouched);
+				note_untouched(untouched, active_ports);
 				advance(timestamp);
 				continue;
 			}
@@ -1176,7 +1244,7 @@ void cell_audio_thread::operator()()
 			//cellAudio.error("active=%u, untouched=%u, in_progress=%d, incomplete=%d, enqueued_buffers=%u", active_ports, untouched, in_progress, incomplete, enqueued_buffers);
 
 			// Store number of untouched buffers for future reference
-			expect_untouched(untouched);
+			note_untouched(untouched, active_ports);
 
 			// Log if we enqueued untouched/incomplete buffers
 			if (untouched > 0 || incomplete > 0)

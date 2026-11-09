@@ -48,6 +48,9 @@ vec4 apply_zclip_xform(
 	}
 	else if (d < 0.f && d > -0.000002)
 	{
+		// Rounding put a layer drawn right on the near or far plane a hair outside [0, 1], where
+		// it would be clipped. Back onto the edge, as the fp64 path above snaps it; the margin is
+		// the value that path started from (one float step at 1.0 is already 0.00000012).
 		d = 0.f;
 	}
 	else if (d > 1.f && d < 1.000002)
@@ -79,7 +82,10 @@ vec4 apply_depth_range_xform(const in vec4 pos, const in vec2 range)
 
 #if defined(_ENABLE_INSTANCED_CONSTANTS)
 // Workaround for GL vs VK builtin variable naming
-#ifdef VULKAN
+#if defined(VULKAN) && defined(_VK_DRAW_ID_FROM_BASE_INSTANCE)
+// The instance base carries the draw parameters index
+#define _gl_InstanceID (gl_InstanceIndex - gl_BaseInstanceARB)
+#elif defined(VULKAN)
 #define _gl_InstanceID gl_InstanceIndex
 #else
 #define _gl_InstanceID gl_InstanceID

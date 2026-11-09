@@ -1,13 +1,29 @@
 #include "device.h"
+#include <cstdlib>
+#include <algorithm>
+#include <string_view>
+#include "Utilities/File.h"
+#include "util/sysinfo.hpp"
+#ifdef __APPLE__
+#include "util/vm.hpp"
+#include "util/asm.hpp"
+#endif
 #include "instance.h"
 #include "util/logs.hpp"
-#include "util/sysinfo.hpp"
-#include "Utilities/File.h"
 #include "Emu/system_config.h"
-#include <algorithm>
 #include <vulkan/vulkan_core.h>
+#ifdef __ANDROID__
+#include "Emu/RSX/VK/vk_android_loader.h"
+#endif
 #ifdef __APPLE__
 #include <vulkan/vulkan_beta.h>
+#endif
+#ifdef __APPLE__
+// Included directly: an undefined TARGET_OS_IPHONE would silently read as 0 below.
+#include <TargetConditionals.h>
+#if TARGET_OS_IPHONE
+#include <mach/mach.h>
+#endif
 #endif
 
 namespace vk
@@ -39,6 +55,7 @@ namespace vk
 		VkPhysicalDeviceFaultFeaturesEXT device_fault_info{};
 		VkPhysicalDeviceMultiDrawFeaturesEXT multidraw_info{};
 		VkPhysicalDeviceProvokingVertexFeaturesEXT provoking_vertex_info{};
+		VkPhysicalDeviceShaderDrawParametersFeatures shader_draw_parameters_info{};
 
 		// Core features
 		shader_support_info.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES;
@@ -48,6 +65,10 @@ namespace vk
 		descriptor_indexing_info.pNext = features2.pNext;
 		features2.pNext                = &descriptor_indexing_info;
 		descriptor_indexing_support    = true;
+
+		shader_draw_parameters_info.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETERS_FEATURES;
+		shader_draw_parameters_info.pNext = features2.pNext;
+		features2.pNext                   = &shader_draw_parameters_info;
 
 		// Optional features
 		if (device_extensions.is_supported(VK_EXT_ATTACHMENT_FEEDBACK_LOOP_LAYOUT_EXTENSION_NAME))
@@ -110,13 +131,50 @@ namespace vk
 			features2.pNext         = &device_fault_info;
 		}
 
+		if (device_extensions.is_supported(VK_EXT_MULTI_DRAW_EXTENSION_NAME))
+		{
+			multidraw_info.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTI_DRAW_FEATURES_EXT;
+			multidraw_info.pNext = features2.pNext;
+			features2.pNext      = &multidraw_info;
+		}
+
+		// Presence of the extension string is not enough on its own -- the feature bit is what
+		// says the vkCmdSet* entry points actually do anything, and a driver may advertise the
+		// extension for the sake of a dependency and report the bit false.
 		VkPhysicalDeviceExtendedDynamicStateFeaturesEXT extended_dynamic_state_info{};
+
 		if (device_extensions.is_supported(VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME))
 		{
 			extended_dynamic_state_info.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT;
 			extended_dynamic_state_info.pNext = features2.pNext;
 			features2.pNext                   = &extended_dynamic_state_info;
 		}
+
+#ifdef __ANDROID__
+		// What the Lossless Scaling shaders require, asked for directly.
+		//
+		// Adopted from Eden's implementation (CamilleLaVey, eden PR #4263), which gates on these
+		// two rather than on a GPU family. That is the better test: "Adreno 7xx or newer" is a
+		// proxy and it is wrong in both directions -- it excludes capable non-Adreno parts and
+		// admits an Adreno 7xx whose driver does not implement the memory model.
+		//
+		// vulkanMemoryModel is core in 1.2 and nullDescriptor comes from robustness2, so both are
+		// queried through their own structs rather than assumed from the API version.
+		VkPhysicalDeviceVulkan12Features vk12_info{};
+		vk12_info.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+		vk12_info.pNext = features2.pNext;
+		features2.pNext = &vk12_info;
+
+		VkPhysicalDeviceRobustness2FeaturesEXT robustness2_info{};
+
+		if (device_extensions.is_supported(VK_EXT_ROBUSTNESS_2_EXTENSION_NAME))
+		{
+			robustness2_info.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT;
+			robustness2_info.pNext = features2.pNext;
+			features2.pNext        = &robustness2_info;
+		}
+#endif
+
 
 		if (device_extensions.is_supported(VK_EXT_PROVOKING_VERTEX_EXTENSION_NAME))
 		{
@@ -143,6 +201,28 @@ namespace vk
 		optional_features_support.extended_device_fault = !!device_fault_info.deviceFault;
 		optional_features_support.extended_dynamic_state = !!extended_dynamic_state_info.extendedDynamicState;
 		optional_features_support.provoking_vertex_last = !!provoking_vertex_info.provokingVertexLast;
+		optional_features_support.shader_draw_parameters = !!shader_draw_parameters_info.shaderDrawParameters;
+
+		// ARMSX3: Mali r44p1 faults on the attachment feedback loop path.
+		//
+		// This driver blob (Mali-G615, driverInfo 'v1.r44p1-...') loses the GPU inside the
+		// in-tile feedback-loop blend path. On Android the fault is inside the blob itself,
+		// so the process dies with no VK_ERROR_DEVICE_LOST and nothing in the log -- it just
+		// stops mid-line, which reads as an out-of-memory kill and gets reported as one.
+		// ARMSX2 hit the same blob (its issue #390) and fixed it the same way; the
+		// per-primitive barrier fallback measured no slower there.
+		//
+		// Narrow by DRIVER BUILD, never by vendor: other Mali-G615 units on different driver
+		// builds take this path correctly, so blocking ARM outright would cost all of them
+		// for one bad blob. driver_properties is already populated here --
+		// get_physical_device_properties_0() runs before this function.
+		if (optional_features_support.framebuffer_loops &&
+			props.vendorID == 0x13B5 &&
+			std::string_view(driver_properties.driverInfo).find("r44p1") != umax)
+		{
+			rsx_log.warning("Mali r44p1 detected; disabling attachment feedback loops (this driver faults on that path).");
+			optional_features_support.framebuffer_loops = false;
+		}
 
 		features = features2.features;
 
@@ -159,16 +239,30 @@ namespace vk
 
 		optional_features_support.shader_stencil_export    = device_extensions.is_supported(VK_EXT_SHADER_STENCIL_EXPORT_EXTENSION_NAME);
 		optional_features_support.conditional_rendering    = device_extensions.is_supported(VK_EXT_CONDITIONAL_RENDERING_EXTENSION_NAME);
+
 		optional_features_support.external_memory_host     = device_extensions.is_supported(VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME);
 		optional_features_support.memory_budget            = device_extensions.is_supported(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
 		optional_features_support.synchronization_2        = device_extensions.is_supported(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
 		optional_features_support.unrestricted_depth_range = device_extensions.is_supported(VK_EXT_DEPTH_RANGE_UNRESTRICTED_EXTENSION_NAME);
+#ifdef __ANDROID__
+		// Remote play's frame sharing. Both or neither, and requested at vkCreateDevice whenever
+		// true -- see the note there.
+		optional_features_support.external_memory_ahb      = device_extensions.is_supported(VK_ANDROID_EXTERNAL_MEMORY_ANDROID_HARDWARE_BUFFER_EXTENSION_NAME) &&
+			device_extensions.is_supported(VK_EXT_QUEUE_FAMILY_FOREIGN_EXTENSION_NAME);
+		optional_features_support.vulkan_memory_model      = !!vk12_info.vulkanMemoryModel;
+		optional_features_support.null_descriptor          = !!robustness2_info.nullDescriptor;
+
+		// Reported unconditionally because these decide whether frame generation can exist at all
+		// on this device, and the answer is otherwise invisible until something fails much later.
+		rsx_log.notice("Vulkan: frame generation requirements -- vulkanMemoryModel: %s, nullDescriptor: %s"
+			" (AHardwareBuffer external memory, for remote play: %s)",
+			optional_features_support.vulkan_memory_model ? "yes" : "NO",
+			optional_features_support.null_descriptor ? "yes" : "NO",
+			optional_features_support.external_memory_ahb ? "yes" : "no");
+#endif
 #ifdef __APPLE__
 		optional_features_support.portability              = device_extensions.is_supported(VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME);
 #endif
-
-		unsized_array_support                              = device_extensions.is_supported(VK_EXT_SHADER_UNIFORM_BUFFER_UNSIZED_ARRAY_EXTENSION_NAME);
-		max_ubo_range                                      = props.limits.maxUniformBufferRange;
 
 		optional_features_support.debug_utils              = instance_extensions.is_supported(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 		optional_features_support.surface_capabilities_2   = instance_extensions.is_supported(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME);
@@ -180,24 +274,31 @@ namespace vk
 			custom_border_color_support.require_border_color_remap = get_driver_vendor() != driver_vendor::AMD;
 		}
 
-		// Some v3dv and PanVK devices support BC1-BC3 without the full BC feature.
-		// Others, including PanVK on Android Mali, cannot sample these formats.
+		// v3dv and PanVK can sample BC1-BC3, which is all we require, while reporting the feature as
+		// false because the rest of BC is missing. Ask for those formats instead of trusting the
+		// driver's name: PanVK built for Android Mali (on Arm's kbase kernel driver) has no BC at
+		// all, and taking it on trust would hand the GPU DXT textures it cannot sample instead of
+		// decoding them on the CPU.
 		optional_features_support.texture_compression_bc = features.textureCompressionBC;
+
 		if (!features.textureCompressionBC &&
 			(get_driver_vendor() == driver_vendor::V3DV || get_driver_vendor() == driver_vendor::PANVK))
 		{
-			bool supported = true;
+			bool bc1_3_sampled = true;
+
 			for (const VkFormat format : { VK_FORMAT_BC1_RGBA_UNORM_BLOCK, VK_FORMAT_BC1_RGBA_SRGB_BLOCK,
 				VK_FORMAT_BC2_UNORM_BLOCK, VK_FORMAT_BC2_SRGB_BLOCK, VK_FORMAT_BC3_UNORM_BLOCK, VK_FORMAT_BC3_SRGB_BLOCK })
 			{
 				VkFormatProperties props{};
 				vkGetPhysicalDeviceFormatProperties(dev, format, &props);
-				supported = supported && (props.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT);
+				bc1_3_sampled = bc1_3_sampled && (props.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT);
 			}
-			optional_features_support.texture_compression_bc = supported;
-			if (!supported)
+
+			optional_features_support.texture_compression_bc = bc1_3_sampled;
+
+			if (!bc1_3_sampled)
 			{
-				rsx_log.notice("Vulkan: BC1-BC3 sampling unavailable; DXT textures will be decoded on the CPU.");
+				rsx_log.notice("Vulkan: this driver cannot sample BC1-BC3; DXT textures are decoded on the CPU.");
 			}
 		}
 
@@ -300,6 +401,42 @@ namespace vk
 
 		rsx_log.always()("Found Vulkan-compatible GPU: '%s' running on driver %s", get_name(), get_driver_version());
 
+		// ARMSX3: say WHICH driver this is, not just its version.
+		//
+		// The version alone does not identify a driver, and on Android it is actively
+		// misleading: adrenotools' hook falls back to the system driver when its dlopen
+		// fails, so a session that silently ran the system driver looks here exactly like
+		// one that ran the custom driver it was asked for. Every report naming a custom
+		// driver is untrustworthy without this.
+		if (driver_properties.driverID)
+		{
+			rsx_log.always()("Vulkan driver identity: '%s' (driverID %u), info '%s', conformance %u.%u.%u.%u",
+				driver_properties.driverName,
+				static_cast<u32>(driver_properties.driverID),
+				driver_properties.driverInfo,
+				static_cast<u32>(driver_properties.conformanceVersion.major),
+				static_cast<u32>(driver_properties.conformanceVersion.minor),
+				static_cast<u32>(driver_properties.conformanceVersion.subminor),
+				static_cast<u32>(driver_properties.conformanceVersion.patch));
+		}
+		else
+		{
+			rsx_log.always()("Vulkan driver identity: VK_KHR_driver_properties unavailable, inferred from the GPU name only");
+		}
+
+#ifdef __ANDROID__
+		// A custom driver was asked for, and the driver that answered is Qualcomm's own.
+		// adrenotools installs Mesa/Turnip builds, so this combination means the load
+		// failed and the fallback took over. It reports that here because the only other
+		// trace is a logcat line from hook_impl, which never reaches a bug report.
+		if (vk::android::using_custom_driver() && get_driver_vendor() == driver_vendor::ADRENO)
+		{
+			rsx_log.error("A custom Vulkan driver was requested, but the driver in use is Qualcomm's own. "
+				"It most likely failed to load and fell back silently; `adb logcat | grep hook_impl` has the reason. "
+				"Treat this session as running the SYSTEM driver.");
+		}
+#endif
+
 		if (get_driver_vendor() == driver_vendor::RADV && get_name().find("LLVM 8.0.0") != umax)
 		{
 			// Serious driver bug causing black screens
@@ -328,14 +465,89 @@ namespace vk
 			shader_types_support.allow_float16 = (driver_properties.driverID == VK_DRIVER_ID_AMD_PROPRIETARY_KHR);
 		}
 
+		// Qualcomm's compiler stopped rejecting native float16 at some point, and the blanket
+		// disable below now costs more than it saves: emulating fp16 with fp32 does NOT "render
+		// correctly" as claimed -- Oblivion's water simply does not draw on Vulkan, while the GL
+		// backend (which has no such workaround) draws it. Verified fixed by allowing fp16 on
+		// driver 512.676.53.
+		//
+		// Gated on the version rather than removed. The original failure is a bad one to
+		// reintroduce -- every pipeline rejected, so the game is black while audio and the
+		// compile overlay keep working, which reads as a renderer bug rather than a shader one --
+		// and older Adreno drivers may still be affected. Only Adreno is opened up: no other
+		// mobile vendor has been tested either way, so they keep the safe path.
+		//
+		// The version threshold is QUALCOMM'S numbering and means nothing anywhere else.
+		// is_ADRENO() is true for Turnip as well, and Turnip reports Mesa's scheme -- 25.99.99
+		// on an 8 Gen 2 -- which packs to a far smaller integer than 512.676.53 and can never
+		// pass it. Every Turnip user has therefore been running fp16 emulated in fp32 no matter
+		// how new their driver is, which is the configuration these handhelds actually ship in.
+		//
+		// Turnip should not have been gated at all: the failure being worked around is
+		// Qualcomm's shader compiler rejecting the SPIR-V generated with float16_t in it, and
+		// Mesa's compiler is a different compiler. Keep the version check for the proprietary
+		// driver, where it was measured, and let Turnip through on its own account.
 		constexpr u32 s_adreno_fp16_min_driver = (512u << 22) | (676u << 12) | 53u; // 512.676.53
-		const bool adreno_fp16_ok = is_ADRENO(get_driver_vendor()) &&
-			props.driverVersion >= s_adreno_fp16_min_driver;
+		const auto fp16_vendor = get_driver_vendor();
+		const bool adreno_fp16_ok =
+			fp16_vendor == driver_vendor::TURNIP ||
+			(fp16_vendor == driver_vendor::ADRENO && props.driverVersion >= s_adreno_fp16_min_driver);
 
 		if (!adreno_fp16_ok && is_MOBILE(get_driver_vendor()) && shader_types_support.allow_float16)
 		{
+			// Adreno advertises shaderFloat16, but its shader compiler rejects the
+			// SPIR-V RPCS3 generates with native float16_t in it -- every game
+			// pipeline came back VK_ERROR_UNKNOWN from vkCreateGraphicsPipelines,
+			// which killed the async shader-compiler workers. The result looked
+			// like a renderer bug rather than a shader one: the compile-progress
+			// overlay drew fine (built on the RSX thread) while the game itself
+			// stayed black, with sound and a working performance overlay.
+			//
+			// Same shape as the AMD Vega case above -- the capability bit is
+			// honest about the hardware and wrong about the compiler. Emulating
+			// float16 with float32 costs some bandwidth and renders correctly.
 			rsx_log.warning("Mobile GPU: disabling native float16 shader types (driver shader compiler rejects them).");
 			shader_types_support.allow_float16 = false;
+		}
+
+		// Not on the Qualcomm proprietary driver: using it leaks driver memory until the
+		// process is killed.
+		//
+		// begin_conditional_rendering inserts a buffer memory barrier, which ends the render
+		// pass, and every vkCmdEndRenderPass makes the driver allocate memory it does not
+		// give back. A heap profile of a Skate 3 session put the top allocation stacks, 157,
+		// 152 and 150MB and more, all on that one path, through qglinternal::vkCmdEndRenderPass
+		// into calloc. The process reached 4.3GB of anonymous memory, drove the device to
+		// 54MB free with 3GB in swap, and was killed. Roughly 2.4GB of that arrived in eight
+		// seconds.
+		//
+		// Not our heap and not something we can free, so the only lever is to stop asking.
+		// Without the extension RSX falls back to thread::begin_conditional_rendering, which
+		// simply performs the draws: occlusion results stop culling them, which costs some
+		// GPU work in exchange for the session surviving.
+		//
+		// Turnip now has its own evidence, for a different failure. Spider-Man: Web of Shadows
+		// loses the Vulkan device a minute into gameplay on Turnip 26.0 / Adreno 740, reported
+		// against poke_query -- the first call that reads a result, not the one at fault.
+		//
+		// This path is the only place we record vkCmdCopyQueryPoolResults with
+		// VK_QUERY_RESULT_WAIT_BIT, which makes the GPU itself block until the query resolves.
+		// A query that never resolves therefore hangs the GPU rather than the caller, and the
+		// watchdog takes the device out. The same session logged 169 "Dubious query data pushed
+		// to cond render" warnings, which is this code being handed queries that are still
+		// pending, so the unresolved case is not hypothetical here.
+		//
+		// It is also the source of the render pass churn on this hardware: the aggregation
+		// barriers closed 42 of the 91 render passes in a measured frame, and closing a pass on
+		// a tiler costs a tile store and reload.
+		//
+		// Both drivers therefore fall back to thread::begin_conditional_rendering, which is what
+		// desktop already does wherever the extension is absent.
+		if (optional_features_support.conditional_rendering &&
+			(get_driver_vendor() == driver_vendor::ADRENO || get_driver_vendor() == driver_vendor::TURNIP))
+		{
+			rsx_log.notice("Conditional rendering disabled: unreliable on this driver (device loss on Turnip, unbounded render pass allocations on Adreno).");
+			optional_features_support.conditional_rendering = false;
 		}
 	}
 
@@ -414,18 +626,17 @@ namespace vk
 				return driver_vendor::ARM_MALI;
 			}
 
+			// ARMSX3: mobile. Names are what old Android drivers report when
+			// VK_KHR_driver_properties is missing, which is common on the
+			// pre-Vulkan-1.2 devices this most needs to work on.
 			if (gpu_name.find("Turnip") != umax)
-			{
+			{ // "Turnip Adreno (TM) 740" -- check before Adreno, the name contains both
 				return driver_vendor::TURNIP;
 			}
 
 			if (gpu_name.find("Adreno") != umax)
 			{
-#if defined(_WIN32) || defined(ANDROID)
-				return driver_vendor::QUALCOMM;
-#else
-				return driver_vendor::TURNIP;
-#endif
+				return driver_vendor::ADRENO;
 			}
 
 			if (gpu_name.find("PowerVR") != umax || gpu_name.find("Imagination") != umax)
@@ -469,8 +680,9 @@ namespace vk
 				return driver_vendor::PANVK;
 			case VK_DRIVER_ID_ARM_PROPRIETARY:
 				return driver_vendor::ARM_MALI;
+			// ARMSX3: the mobile IDs upstream's "// Mobile?" default was swallowing.
 			case VK_DRIVER_ID_QUALCOMM_PROPRIETARY:
-				return driver_vendor::QUALCOMM;
+				return driver_vendor::ADRENO;
 			case VK_DRIVER_ID_MESA_TURNIP:
 				return driver_vendor::TURNIP;
 			case VK_DRIVER_ID_IMAGINATION_PROPRIETARY:
@@ -571,7 +783,10 @@ namespace vk
 		// Unified memory: the "VRAM" figure is system RAM, most of which belongs to the OS
 		// and everything else running. Budget against what is actually free, keeping back
 		// room for the emulator itself, and clamp so the answer stays sane whether the phone
-		// is idle or loaded. Cached because both cache implementations ask periodically.
+		// is idle or loaded.
+		//
+		// Cached because both cache implementations ask on a periodic check and reading
+		// /proc/meminfo each time is not free.
 		static const u64 android_budget = []() -> u64
 		{
 			constexpr u64 mb = 0x100000;
@@ -590,6 +805,25 @@ namespace vk
 		}();
 
 		return std::min(device_local, android_budget);
+#elif defined(__APPLE__) && TARGET_OS_IPHONE
+		// MoltenVK reports the one shared pool as device-local, so budget half the process's jetsam limit instead.
+		static const u64 ios_budget = []() -> u64
+		{
+			constexpr u64 mb = 0x100000;
+			constexpr u64 floor_bytes = 1024 * mb;
+			constexpr u64 ceiling_bytes = 2560 * mb;
+
+			task_vm_info_data_t info{};
+			mach_msg_type_number_t count = TASK_VM_INFO_COUNT;
+			if (task_info(mach_task_self(), TASK_VM_INFO, reinterpret_cast<task_info_t>(&info), &count) != KERN_SUCCESS)
+			{
+				return floor_bytes;
+			}
+
+			return std::clamp<u64>((info.phys_footprint + info.limit_bytes_remaining) / 2, floor_bytes, ceiling_bytes);
+		}();
+
+		return std::min(device_local, ios_budget);
 #else
 		return device_local;
 #endif
@@ -597,11 +831,39 @@ namespace vk
 
 	void render_device::create(vk::physical_device& pdev, u32 graphics_queue_idx, u32 present_queue_idx, u32 transfer_queue_idx)
 	{
-		float queue_priorities[1] = { 0.f };
+		// vkCreateDevice reads exactly queueCount floats through pQueuePriorities, so this
+		// array must be sized for the LARGEST queueCount we ever ask of a single family.
+		// On a GPU with no dedicated transfer+compute family we bump the graphics entry to
+		// two queues below, and a one-element array made the driver read uninitialised stack
+		// for the second priority (VUID-VkDeviceQueueCreateInfo-pQueuePriorities-00383).
+		constexpr u32 max_queues_per_family = 2;
+		float queue_priorities[max_queues_per_family] = { 0.f, 0.f };
 		pgpu = &pdev;
+
+		// Verdict for the adapter actually in use. Logged here rather than where the
+		// flag is resolved, because physical_device::create() runs for every GPU of
+		// every VkInstance (system-info queries make their own), and rather than in
+		// TextureUtils, whose fallback branches run per texture and per mip level.
+		// Reads the resolved flag, so the V3DV/PanVK exceptions still apply.
+		if (get_texture_compression_bc_support())
+		{
+			rsx_log.notice("BC1-BC3 texture compression supported; compressed DXT uploads use the GPU path.");
+		}
+		else
+		{
+			rsx_log.warning("BC1-BC3 texture compression unavailable; compressed DXT textures use CPU decoding.");
+		}
 
 		ensure(graphics_queue_idx == present_queue_idx || present_queue_idx == umax); // TODO
 		std::vector<VkDeviceQueueCreateInfo> device_queues;
+
+		// graphics_queue below is a REFERENCE into this vector and a second entry may be
+		// emplaced further down. The two branches are mutually exclusive today (the
+		// transfer_queue_idx == umax path assigns transfer_queue_idx = graphics_queue_idx,
+		// which makes the graphics_queue_idx != transfer_queue_idx test below false) and the
+		// reference is not touched after that point, so nothing dangles -- but reserving
+		// removes the footgun for free.
+		device_queues.reserve(max_queues_per_family);
 
 		auto& graphics_queue = device_queues.emplace_back();
 		graphics_queue.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
@@ -624,6 +886,12 @@ namespace vk
 				rsx_log.notice("Will use a spare graphics queue to push transfer operations.");
 				graphics_queue.queueCount++;
 				transfer_queue_sub_index = 1;
+
+				// Every requested queue needs its own priority entry. This is provably true
+				// where it stands (queueCount is 1, then 2) -- it is documentation of the
+				// coupling, not a live guard. If a third queue is ever requested from one
+				// family, widen queue_priorities to match rather than clamping the read.
+				ensure(graphics_queue.queueCount <= max_queues_per_family);
 			}
 		}
 
@@ -652,6 +920,10 @@ namespace vk
 		VkPhysicalDeviceFeatures enabled_features{};
 		if (pgpu->unsized_array_support)
 		{
+			// Must go in HERE, not next to the feature struct further down: the
+			// list is handed to VkDeviceCreateInfo well before that point, so a
+			// later push_back is both invisible to vkCreateDevice and able to
+			// reallocate the vector out from under ppEnabledExtensionNames.
 			requested_extensions.push_back(VK_EXT_SHADER_UNIFORM_BUFFER_UNSIZED_ARRAY_EXTENSION_NAME);
 		}
 
@@ -675,11 +947,42 @@ namespace vk
 			requested_extensions.push_back(VK_EXT_DEPTH_RANGE_UNRESTRICTED_EXTENSION_NAME);
 		}
 
+		// nullDescriptor lives in robustness2, so the extension has to be REQUESTED here and not
+		// merely found supported when the physical device was probed. Frame generation's shaders
+		// need it; nothing else in the renderer does.
+		if (pgpu->optional_features_support.null_descriptor)
+		{
+			requested_extensions.push_back(VK_EXT_ROBUSTNESS_2_EXTENSION_NAME);
+		}
+
+#ifdef __ANDROID__
+		// AHardwareBuffer sharing, for ARMSX3 remote play: captured frames go to the video encoder
+		// without a copy through the CPU (VKPresent.cpp).
+		//
+		// It was requested once before, for frame generation, and dropped when framegen moved onto
+		// this device. That request violated VUID-vkCreateDevice-ppEnabledExtensionNames-01387:
+		// VK_EXT_queue_family_foreign, one of its dependencies, was never promoted to core and was
+		// not requested with it. Drivers did not enforce the VUID, so the only symptom was a
+		// validation-layer error. It is requested alongside now, and external_memory_ahb is only
+		// true when the device offers both.
+		if (pgpu->optional_features_support.external_memory_ahb)
+		{
+			requested_extensions.push_back(VK_ANDROID_EXTERNAL_MEMORY_ANDROID_HARDWARE_BUFFER_EXTENSION_NAME);
+			requested_extensions.push_back(VK_EXT_QUEUE_FAMILY_FOREIGN_EXTENSION_NAME);
+		}
+#endif
+
 		if (pgpu->optional_features_support.external_memory_host)
 		{
 			requested_extensions.push_back(VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME);
 		}
 
+		// Without this, VMA has no idea how much memory the driver will actually
+		// part with, and falls back to reporting the heap size -- or, where we set
+		// one, our own configured cap. Every eviction decision is made from that
+		// number, so on a device whose real ceiling is far below the cap the load
+		// reads low right up until an allocation fails outright. See the note on
+		// VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT in memory.cpp.
 		if (pgpu->optional_features_support.memory_budget)
 		{
 			requested_extensions.push_back(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
@@ -864,8 +1167,32 @@ namespace vk
 		VkPhysicalDeviceVulkan12Features vulkan12_features{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
 		vulkan12_features.runtimeDescriptorArray = VK_TRUE;
 		vulkan12_features.uniformBufferStandardLayout = VK_TRUE;
+
+		// Frame generation's shaders declare the Vulkan memory model and rely on null
+		// descriptors. Both were already PROBED above (optional_features_support) but never
+		// enabled, and a shader that declares the memory model on a device where it was not
+		// enabled is invalid usage, not a soft fallback -- desktop drivers tend to shrug it off
+		// while Adreno takes the device down mid-frame, so it would have looked like it worked
+		// until it did not. Enabled only where the device reported them, so a part without
+		// either simply does not get frame generation.
+		if (pgpu->optional_features_support.vulkan_memory_model)
+		{
+			vulkan12_features.vulkanMemoryModel = VK_TRUE;
+		}
+
 		vulkan12_features.pNext = const_cast<void*>(device.pNext);
 		device.pNext = &vulkan12_features;
+
+		VkPhysicalDeviceRobustness2FeaturesEXT robustness2_features{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT };
+
+		if (pgpu->optional_features_support.null_descriptor)
+		{
+			// ONLY nullDescriptor. robustBufferAccess2/robustImageAccess2 are the expensive half
+			// of this extension and nothing here wants them.
+			robustness2_features.nullDescriptor = VK_TRUE;
+			robustness2_features.pNext = const_cast<void*>(device.pNext);
+			device.pNext = &robustness2_features;
+		}
 
 		if (pgpu->descriptor_indexing_support)
 		{
@@ -891,7 +1218,16 @@ namespace vk
 			rsx_log.notice("GPU/driver lacks support for float16 data types. All float16_t arithmetic will be emulated with float32_t.");
 		}
 
-		// Runtime-sized arrays inside uniform blocks
+		// Runtime-sized arrays inside uniform blocks.
+		//
+		// Upstream chained this feature struct UNCONDITIONALLY and never added the
+		// extension to requested_extensions -- enabling a feature whose extension
+		// is not enabled is a spec violation. Desktop drivers shrug it off; Adreno
+		// does not, and since every vertex/fragment program emits
+		// "#extension GL_EXT_uniform_buffer_unsized_array : require", every single
+		// game pipeline came back VK_ERROR_UNKNOWN from vkCreateGraphicsPipelines.
+		// Overlays do not use these blocks, so the compile-progress screen and the
+		// performance overlay drew fine while the game stayed black.
 		VkPhysicalDeviceShaderUniformBufferUnsizedArrayFeaturesEXT ubo_unsized_array_feature{};
 		if (pgpu->unsized_array_support)
 		{
@@ -902,7 +1238,8 @@ namespace vk
 		}
 		else
 		{
-			rsx_log.notice("VK_EXT_shader_uniform_buffer_unsized_array is NOT supported by this driver. Concrete array bounds will be used.");
+			rsx_log.error("VK_EXT_shader_uniform_buffer_unsized_array is NOT supported by this driver. "
+				"Shaders that declare unsized uniform arrays cannot be compiled here.");
 		}
 
 		VkPhysicalDeviceCustomBorderColorFeaturesEXT custom_border_color_features{};
@@ -913,6 +1250,15 @@ namespace vk
 			custom_border_color_features.customBorderColorWithoutFormat = VK_TRUE;
 			custom_border_color_features.pNext = const_cast<void*>(device.pNext);
 			device.pNext = &custom_border_color_features;
+		}
+
+		VkPhysicalDeviceShaderDrawParametersFeatures shader_draw_parameters_features{};
+		if (pgpu->optional_features_support.shader_draw_parameters)
+		{
+			shader_draw_parameters_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETERS_FEATURES;
+			shader_draw_parameters_features.shaderDrawParameters = VK_TRUE;
+			shader_draw_parameters_features.pNext = const_cast<void*>(device.pNext);
+			device.pNext = &shader_draw_parameters_features;
 		}
 
 		VkPhysicalDeviceMultiDrawFeaturesEXT multidraw_features{};
@@ -961,6 +1307,10 @@ namespace vk
 			device.pNext = &conditional_rendering_info;
 		}
 
+		// Enabling the extension is not enough -- a driver is entitled to ignore the vkCmdSet*
+		// calls unless the feature bit is asked for at device creation, and the failure mode is
+		// silent: the pipeline's stale static topology/cull/depth are used and geometry renders
+		// with the wrong facing.
 		VkPhysicalDeviceExtendedDynamicStateFeaturesEXT extended_dynamic_state_info{};
 		if (pgpu->optional_features_support.extended_dynamic_state)
 		{
@@ -1013,8 +1363,6 @@ namespace vk
 		memory_map = vk::get_memory_mapping(pdev);
 		m_formats_support = vk::get_optimal_tiling_supported_formats(pdev);
 
-		load_pipeline_cache();
-
 		if (g_cfg.video.disable_vulkan_mem_allocator)
 		{
 			m_allocator = std::make_unique<vk::mem_allocator_vk>(*this, pdev);
@@ -1027,37 +1375,19 @@ namespace vk
 		// Useful for debugging different VRAM configurations
 		const u64 vram_allocation_limit = g_cfg.video.vk.vram_allocation_limit * 0x100000ull;
 		memory_map.device_local_total_bytes = std::min(memory_map.device_local_total_bytes, vram_allocation_limit);
-	}
 
-	void render_device::destroy()
-	{
-		if (g_render_device == this)
-		{
-			g_render_device = nullptr;
-		}
-
-		if (dev && pgpu)
-		{
-			if (m_allocator)
-			{
-				m_allocator->destroy();
-				m_allocator.reset();
-			}
-
-			save_and_destroy_pipeline_cache();
-
-			vkDestroyDevice(dev, nullptr);
-			dev = nullptr;
-			memory_map = {};
-			m_formats_support = {};
-		}
+		load_pipeline_cache();
 	}
 
 	namespace
 	{
+		// On-disk format and invalidation key from sashkinbro's EmuCoreC (47220b153): the
+		// length/version/vendorID/deviceID/pipelineCacheUUID header is his design, used as-is.
+		// His copy was never handed to vkCreate*Pipelines, so it cached nothing; the wiring in
+		// VKProgramPipeline and the sharing with the shader interpreter are ours.
 		struct pipeline_cache_disk_header
 		{
-			u32 length;   // sizeof(header), guards against layout drift
+			u32 length;   // sizeof(header); guards against layout drift
 			u32 version;
 			u32 vendorID;
 			u32 deviceID;
@@ -1065,11 +1395,60 @@ namespace vk
 		};
 
 		constexpr u32 k_pipeline_cache_disk_version = 1;
+
+		// A blob larger than this is refused on load and dropped on save. The cache is
+		// shared by every title, so without a bound it only ever grows. Dropping it
+		// costs one cold run and is self-healing; letting it stop updating silently is
+		// the worse failure.
+		constexpr u64 k_pipeline_cache_size_limit = 128ull << 20;
+#ifdef __APPLE__
+		// The blobs get pages of their own, since libmalloc keeps a freed large block in phys_footprint.
+		struct page_buffer
+		{
+			u8* data = nullptr;
+			usz size = 0;
+
+			page_buffer() = default;
+			page_buffer(const page_buffer&) = delete;
+			page_buffer& operator=(const page_buffer&) = delete;
+
+			~page_buffer()
+			{
+				if (data)
+				{
+					utils::memory_release(data, size);
+				}
+			}
+
+			bool allocate(usz bytes)
+			{
+				size = utils::align(bytes, static_cast<usz>(utils::get_page_size()));
+				data = static_cast<u8*>(utils::memory_reserve(size));
+
+				if (!data)
+				{
+					size = 0;
+					return false;
+				}
+
+				if (!utils::try_memory_commit(data, size))
+				{
+					utils::memory_release(data, size);
+					data = nullptr;
+					size = 0;
+					return false;
+				}
+
+				return true;
+			}
+		};
+#endif
 	}
 
 	std::string render_device::get_pipeline_cache_path() const
 	{
-		return fs::get_cache_dir() + "vk_pipeline_cache.bin";
+		const std::string& cache_dir = fs::get_cache_dir();
+		return cache_dir.empty() ? std::string{} : cache_dir + "vk_pipeline_cache.bin";
 	}
 
 	void render_device::load_pipeline_cache()
@@ -1077,44 +1456,100 @@ namespace vk
 		m_pipeline_cache = VK_NULL_HANDLE;
 		m_pipeline_cache_saved_size = 0;
 
-		std::vector<u8> initial_data;
-
-		if (fs::file f{ get_pipeline_cache_path(), fs::read })
+		// ARMSX3_PIPELINE_CACHE=0 turns this off, via driver_env.txt, so a suspected regression
+		// can be A/B'd on one build instead of bisecting releases.
+		//
+		// The reason it is worth being able to switch off: the cache is shared by every thread
+		// that creates a pipeline, and there are up to eight of them during a shader cache load
+		// plus the async compiler workers during play. The spec permits concurrent use, but a
+		// driver still has to serialise its own inserts, and before this existed those threads
+		// shared no structure at all. If a build regresses on pipeline-heavy titles this is the
+		// first thing to eliminate.
+		if (const char* const env = std::getenv("ARMSX3_PIPELINE_CACHE"); env && env[0] == '0')
 		{
-			const u64 file_size = f.size();
+			rsx_log.warning("vk: driver pipeline cache disabled by ARMSX3_PIPELINE_CACHE=0.");
+			return;
+		}
 
-			if (file_size > sizeof(pipeline_cache_disk_header) && file_size < (256ull << 20))
+#ifdef __APPLE__
+		// MoltenVK compiles every Metal library in the seed inside vkCreatePipelineCache, which held boot for minutes.
+		rsx_log.notice("vk: driver pipeline cache off on Apple.");
+		return;
+
+		page_buffer blob;
+		const u8* seed = nullptr;
+		usz seed_size = 0;
+#else
+		std::vector<u8> initial_data;
+#endif
+		const std::string path = get_pipeline_cache_path();
+
+		if (!path.empty())
+		{
+			if (fs::file f{path, fs::read})
 			{
-				std::vector<u8> blob(file_size);
-				if (f.read(blob.data(), file_size) == file_size)
+				const u64 file_size = f.size();
+
+				if (file_size > sizeof(pipeline_cache_disk_header) && file_size <= k_pipeline_cache_size_limit)
 				{
-					pipeline_cache_disk_header hdr{};
-					std::memcpy(&hdr, blob.data(), sizeof(hdr));
+#ifdef __APPLE__
+					if (blob.allocate(file_size) && f.read(blob.data, file_size) == file_size)
+#else
+					std::vector<u8> blob(file_size);
 
-					const auto& props = pgpu->props;
-					const bool header_ok =
-						hdr.length == sizeof(pipeline_cache_disk_header) &&
-						hdr.version == k_pipeline_cache_disk_version &&
-						hdr.vendorID == props.vendorID &&
-						hdr.deviceID == props.deviceID &&
-						std::memcmp(hdr.uuid, props.pipelineCacheUUID, VK_UUID_SIZE) == 0;
+					if (f.read(blob.data(), file_size) == file_size)
+#endif
+					{
+						pipeline_cache_disk_header hdr{};
+#ifdef __APPLE__
+						std::memcpy(&hdr, blob.data, sizeof(hdr));
+#else
+						std::memcpy(&hdr, blob.data(), sizeof(hdr));
+#endif
 
-					if (header_ok)
-					{
-						initial_data.assign(blob.begin() + sizeof(pipeline_cache_disk_header), blob.end());
+						const auto& props = pgpu->props;
+
+						// pipelineCacheUUID is required to change whenever the driver can no
+						// longer consume its own old blobs, so this also covers a driver
+						// update or an adrenotools driver swap without any version of ours.
+						const bool header_ok =
+							hdr.length == sizeof(pipeline_cache_disk_header) &&
+							hdr.version == k_pipeline_cache_disk_version &&
+							hdr.vendorID == props.vendorID &&
+							hdr.deviceID == props.deviceID &&
+							std::memcmp(hdr.uuid, props.pipelineCacheUUID, VK_UUID_SIZE) == 0;
+
+						if (header_ok)
+						{
+#ifdef __APPLE__
+							seed = blob.data + sizeof(pipeline_cache_disk_header);
+							seed_size = file_size - sizeof(pipeline_cache_disk_header);
+#else
+							initial_data.assign(blob.begin() + sizeof(pipeline_cache_disk_header), blob.end());
+#endif
+						}
+						else
+						{
+							rsx_log.notice("vk: on-disk pipeline cache rejected (driver or device changed); rebuilding.");
+						}
 					}
-					else
-					{
-						rsx_log.notice("vk: on-disk pipeline cache rejected (driver or device changed); rebuilding.");
-					}
+				}
+				else if (file_size > k_pipeline_cache_size_limit)
+				{
+					rsx_log.notice("vk: on-disk pipeline cache is oversized (%llu bytes); rebuilding.", file_size);
 				}
 			}
 		}
 
 		VkPipelineCacheCreateInfo create_info{};
 		create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+#ifdef __APPLE__
+		create_info.initialDataSize = seed_size;
+		create_info.pInitialData = seed;
+#else
 		create_info.initialDataSize = initial_data.size();
 		create_info.pInitialData = initial_data.empty() ? nullptr : initial_data.data();
+#endif
 
 		VkPipelineCache cache = VK_NULL_HANDLE;
 		const VkResult res = vkCreatePipelineCache(dev, &create_info, nullptr, &cache);
@@ -1122,40 +1557,135 @@ namespace vk
 		if (res == VK_SUCCESS && cache != VK_NULL_HANDLE)
 		{
 			m_pipeline_cache = cache;
+#ifdef __APPLE__
+			m_pipeline_cache_saved_size = seed_size;
+			rsx_log.notice("vk: driver pipeline cache active (seeded with %zu bytes).", seed_size);
+#else
+			m_pipeline_cache_saved_size = initial_data.size();
 			rsx_log.notice("vk: driver pipeline cache active (seeded with %zu bytes).", initial_data.size());
+#endif
 		}
 		else
 		{
+			// Not fatal. Pipeline creation takes VK_NULL_HANDLE perfectly happily.
 			rsx_log.warning("vk: vkCreatePipelineCache failed (0x%x); continuing without a driver pipeline cache.", static_cast<u32>(res));
 		}
 	}
 
+#ifdef __APPLE__
+	void render_device::save_pipeline_cache(std::chrono::steady_clock::duration min_interval) const
+#else
 	void render_device::save_pipeline_cache() const
+#endif
 	{
 		if (m_pipeline_cache == VK_NULL_HANDLE)
 		{
 			return;
 		}
 
+#ifdef __APPLE__
+		// The RSX thread saves during play and teardown once more; the lock keeps two saves apart.
+		std::lock_guard lock(m_pipeline_cache_save_lock);
+
+		const auto now = std::chrono::steady_clock::now();
+
+		if (now - m_pipeline_cache_save_time < min_interval)
+		{
+			return;
+		}
+
+		m_pipeline_cache_save_time = now;
+
+#endif
+		const std::string path = get_pipeline_cache_path();
+
+		if (path.empty())
+		{
+			return;
+		}
+
+		// Called on the RSX thread (flush_pipeline_cache, on a pause request) and from destroy(),
+		// which only runs once the RSX thread has exited, so the two never overlap. Pipeline
+		// compiler threads may still add to the cache meanwhile; the driver synchronises that.
 		usz data_size = 0;
+
 		if (vkGetPipelineCacheData(dev, m_pipeline_cache, &data_size, nullptr) != VK_SUCCESS || !data_size)
 		{
 			return;
 		}
 
+		// Nothing new was compiled since the last write.
 		if (data_size == m_pipeline_cache_saved_size)
 		{
 			return;
 		}
 
+		if (data_size > k_pipeline_cache_size_limit)
+		{
+#ifdef __APPLE__
+			// Keep the file on disk: deleting it made the next boot compile every pipeline cold again.
+			static bool s_reported = false;
+
+			if (!s_reported)
+			{
+				s_reported = true;
+				rsx_log.notice("vk: pipeline cache grew past %llu bytes; keeping the one on disk and not saving more.", k_pipeline_cache_size_limit);
+			}
+#else
+			rsx_log.notice("vk: pipeline cache grew past %llu bytes; dropping it rather than letting it grow unbounded.", k_pipeline_cache_size_limit);
+			fs::remove_file(path);
+#endif
+			return;
+		}
+
+#ifdef __APPLE__
+		// A routine save writes only after a quarter more growth, at least 4 MiB, or 30 minutes.
+		if (min_interval >= std::chrono::seconds(60))
+		{
+			static std::chrono::steady_clock::time_point s_routine_write{};
+
+			if (s_routine_write == std::chrono::steady_clock::time_point{})
+			{
+				s_routine_write = now;
+			}
+
+			const usz step = std::max<usz>(4ull << 20, m_pipeline_cache_saved_size / 4);
+
+			if (data_size < m_pipeline_cache_saved_size + step && now - s_routine_write < std::chrono::minutes(30))
+			{
+				return;
+			}
+
+			s_routine_write = now;
+		}
+
+		page_buffer blob;
+
+		if (!blob.allocate(data_size))
+		{
+			return;
+		}
+#else
 		std::vector<u8> blob(data_size);
-		if (vkGetPipelineCacheData(dev, m_pipeline_cache, &data_size, blob.data()) != VK_SUCCESS)
+#endif
+
+		// The cache can grow between the two calls while compiler threads add pipelines. The driver
+		// then returns VK_INCOMPLETE with as many whole entries as fit, which is still valid initial
+		// data; the size check above makes the next save write the rest.
+#ifdef __APPLE__
+		if (const VkResult res = vkGetPipelineCacheData(dev, m_pipeline_cache, &data_size, blob.data);
+#else
+		if (const VkResult res = vkGetPipelineCacheData(dev, m_pipeline_cache, &data_size, blob.data());
+#endif
+			(res != VK_SUCCESS && res != VK_INCOMPLETE) || !data_size)
 		{
 			return;
 		}
 
+#ifndef __APPLE__
 		blob.resize(data_size);
 
+#endif
 		pipeline_cache_disk_header hdr{};
 		hdr.length = sizeof(pipeline_cache_disk_header);
 		hdr.version = k_pipeline_cache_disk_version;
@@ -1165,14 +1695,48 @@ namespace vk
 
 		fs::create_path(fs::get_cache_dir());
 
-		if (fs::file out{get_pipeline_cache_path(), fs::rewrite})
+#ifdef __APPLE__
+		// A kill mid-write keeps the old file, since the temp is renamed over it only when complete.
+		fs::pending_file out(path);
+
+		if (out.file &&
+			out.file.write(&hdr, sizeof(hdr)) == sizeof(hdr) &&
+			(data_size == 0 || out.file.write(blob.data, data_size) == data_size) &&
+			out.commit())
 		{
-			if (out.write(&hdr, sizeof(hdr)) == sizeof(hdr) &&
-				(blob.empty() || out.write(blob.data(), blob.size()) == blob.size()))
+			m_pipeline_cache_saved_size = data_size;
+			rsx_log.notice("vk: wrote %zu bytes of driver pipeline cache.", data_size);
+		}
+#else
+		// Write a temporary file and rename it over the old one, so a process killed in the
+		// middle of the write leaves the previous cache intact instead of a truncated one. Synced
+		// before the rename, as fs::pending_file does, so the rename cannot reach the disk ahead
+		// of the data.
+		const std::string tmp_path = path + ".tmp";
+		bool written = false;
+
+		if (fs::file out{tmp_path, fs::rewrite})
+		{
+			written = out.write(&hdr, sizeof(hdr)) == sizeof(hdr) &&
+				(blob.empty() || out.write(blob.data(), blob.size()) == blob.size());
+
+			if (written)
 			{
-				m_pipeline_cache_saved_size = data_size;
+				out.sync();
 			}
 		}
+
+		if (written && fs::rename(tmp_path, path, true))
+		{
+			m_pipeline_cache_saved_size = data_size;
+			rsx_log.notice("vk: wrote %zu bytes of driver pipeline cache.", data_size);
+		}
+		else
+		{
+			rsx_log.warning("vk: could not write the driver pipeline cache to '%s' (%s).", path, fs::g_tls_error);
+			fs::remove_file(tmp_path);
+		}
+#endif
 	}
 
 	void render_device::save_and_destroy_pipeline_cache()
@@ -1186,6 +1750,32 @@ namespace vk
 
 		vkDestroyPipelineCache(dev, m_pipeline_cache, nullptr);
 		m_pipeline_cache = VK_NULL_HANDLE;
+		m_pipeline_cache_saved_size = 0;
+	}
+
+	void render_device::destroy()
+	{
+		if (g_render_device == this)
+		{
+			g_render_device = nullptr;
+		}
+
+		if (dev && pgpu)
+		{
+			// Must happen while the device is still alive -- it reads back through it.
+			save_and_destroy_pipeline_cache();
+
+			if (m_allocator)
+			{
+				m_allocator->destroy();
+				m_allocator.reset();
+			}
+
+			vkDestroyDevice(dev, nullptr);
+			dev = nullptr;
+			memory_map = {};
+			m_formats_support = {};
+		}
 	}
 
 	const VkFormatProperties render_device::get_format_properties(VkFormat format) const
@@ -1230,6 +1820,17 @@ namespace vk
 	{
 		// Rebalance device local memory types
 		memory_map.device_local.rebalance();
+	}
+
+	bool render_device::device_lost() const
+	{
+		if (m_is_lost.exchange(true))
+			return false;
+
+		if (m_error_handler)
+			m_error_handler();
+
+		return true;
 	}
 
 	bool render_device::get_debug_utils_support() const
@@ -1471,6 +2072,20 @@ namespace vk
 		result.d24_unorm_s8 = test_format_features(VK_FORMAT_D24_UNORM_S8_UINT, required_zbuffer_features, VK_FALSE);
 		result.d32_sfloat_s8 = test_format_features(VK_FORMAT_D32_SFLOAT_S8_UINT, required_zbuffer_features, VK_FALSE);
 
+#ifdef __APPLE__
+		// Logs whether the driver filters depth formats linearly, as the driver reports it.
+		{
+			VkFormatProperties d16, d24s8, d32, d32s8;
+			vkGetPhysicalDeviceFormatProperties(dev, VK_FORMAT_D16_UNORM, &d16);
+			vkGetPhysicalDeviceFormatProperties(dev, VK_FORMAT_D24_UNORM_S8_UINT, &d24s8);
+			vkGetPhysicalDeviceFormatProperties(dev, VK_FORMAT_D32_SFLOAT, &d32);
+			vkGetPhysicalDeviceFormatProperties(dev, VK_FORMAT_D32_SFLOAT_S8_UINT, &d32s8);
+			const auto lin = [](const VkFormatProperties& p) { return (p.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT) ? 1 : 0; };
+			rsx_log.notice("vk: depth format linear filtering: D16_UNORM=%d D24_UNORM_S8_UINT=%d D32_SFLOAT=%d D32_SFLOAT_S8_UINT=%d (optimalTilingFeatures 0x%x 0x%x 0x%x 0x%x)",
+				lin(d16), lin(d24s8), lin(d32), lin(d32s8), d16.optimalTilingFeatures, d24s8.optimalTilingFeatures, d32.optimalTilingFeatures, d32s8.optimalTilingFeatures);
+		}
+
+#endif
 		// Hide d24_s8 if force high precision z buffer is enabled
 		if (g_cfg.video.force_high_precision_z_buffer && result.d32_sfloat_s8)
 		{

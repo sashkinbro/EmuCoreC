@@ -28,6 +28,8 @@ object Ps3Runtime {
     @Volatile private var mainPumpThread: Thread? = null
     @Volatile private var compilePumpThread: Thread? = null
     @Volatile private var currentSurface: Surface? = null
+    @Volatile internal var currentLaunch: Pair<String, String?>? = null
+        private set
 
     fun ensureInitialized(context: Context): Boolean = synchronized(this) {
         if (Ps3Core.initialized) {
@@ -68,6 +70,7 @@ object Ps3Runtime {
 
         // Exact SoC identity for the startup banner; must precede initialize().
         runCatching { Ps3Core.instance.setSocInfo(MobileSocNameMapper.currentDeviceName()) }
+        runCatching { Ps3Core.instance.setPrivateCacheDir(appContext.cacheDir.absolutePath) }
 
         // Keep the on-device log useful without letting periodic channels fill
         // flash: debug apps keep warnings and errors, release apps keep errors
@@ -236,7 +239,12 @@ object Ps3Runtime {
         ensurePumpsRunning()
         UsbPortals.prepareForGame(context)
         Ps3CoreSettingOverrides.applyForGame(context, titleId)
-        return Ps3Core.boot(path)
+        return Ps3Core.boot(path).also { result ->
+            if (result == BootResult.NoErrors || result == BootResult.AlreadyAdded) {
+                currentLaunch = path to titleId
+                CoreSettingsTreeCache.invalidateTree()
+            }
+        }
     }
 
     fun attachSurface(surface: Surface, width: Int, height: Int, refreshRate: Double) {

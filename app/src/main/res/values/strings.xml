@@ -459,6 +459,8 @@
     <string name="emulation_menu_paused_badge">Paused</string>
     <string name="emulation_menu_badge_live">Live</string>
     <string name="emulation_menu_badge_restart">Restart required</string>
+    <string name="ps3_core_pending_restart">Saved changes will apply when the game restarts.</string>
+    <string name="ps3_core_apply_restart">Apply &amp; Restart</string>
     <string name="emulation_menu_section_now">Now</string>
     <string name="emulation_menu_section_now_desc">Changes apply to the running game instantly.</string>
     <string name="emulation_menu_section_touch">Touch controls</string>
@@ -2022,4 +2024,48 @@ This setting is only applied when SPU Decoder is set to Dynamic or LLVM.</string
     <string name="settings_gamepad_action_right_stick_down">Right Stick Down</string>
     <string name="settings_gamepad_action_right_stick_left">Right Stick Left</string>
     <string name="settings_gamepad_action_right_stick_right">Right Stick Right</string>
+
+    <string name="core_label_snapdragon_game_super_resolution">Snapdragon Game Super Resolution</string>
+    <string name="core_label_snapdragon_game_super_resolution_edge_direction">Snapdragon Game Super Resolution (Edge Direction)</string>
+
+    <string name="core_label_oboe">Oboe</string>
+    <string name="core_label_x2">x2</string>
+    <string name="core_label_x3">x3</string>
+    <string name="core_label_x4">x4</string>
+
+    <!-- Current Android renderer, audio and presentation settings. -->
+    <string name="core_label_frame_generation" formatted="false">Frame generation</string>
+    <string name="core_help_video_frame_generation" formatted="false">Inserts generated frames between game frames. Uses shaders from your own Lossless Scaling file; increases GPU work and latency.</string>
+    <string name="core_label_frame_generation_performance_mode" formatted="false">Performance mode</string>
+    <string name="core_help_video_frame_generation_performance_mode" formatted="false">Uses lighter shaders. Restart frame generation after changing this.</string>
+    <string name="core_label_frame_generation_flow_scale" formatted="false">Motion detail (%)</string>
+    <string name="core_help_video_frame_generation_flow_scale" formatted="false">Motion-analysis resolution in percent. Lower values are faster and softer. Restart frame generation to apply.</string>
+    <string name="core_label_frame_generation_target_rate" formatted="false">Target refresh rate (Hz)</string>
+    <string name="core_help_video_frame_generation_target_rate" formatted="false">Target output rate in Hz. 0 uses the selected fixed multiplier.</string>
+    <string name="core_label_frame_generation_lossless_path" formatted="false">Lossless Scaling file</string>
+    <string name="core_help_video_frame_generation_lossless_path" formatted="false">Absolute path to your own Lossless Scaling DLL. The shader cache is built from this file when needed.</string>
+    <string name="core_label_cubeb_backend" formatted="false">Cubeb backend</string>
+    <string name="core_help_audio_cubeb_backend" formatted="false">Cubeb system audio path: leave empty for OpenSL ES on Android, or enter aaudio or opensl. Restart to apply.</string>
+    <string name="core_label_recording_compatible" formatted="false">Recording-compatible audio</string>
+    <string name="core_help_audio_recording_compatible" formatted="false">Allows screen recorders to capture Oboe audio through the system mixer. Can add latency.</string>
+    <string name="core_label_sgsr_edge_sharpness" formatted="false">SGSR edge sharpness</string>
+    <string name="core_help_video_sgsr_edge_sharpness" formatted="false">Edge sharpness for SGSR output scaling. Higher values make edges sharper.</string>
+    <string name="core_label_early_submit_draw_threshold" formatted="false">Early submission draw threshold</string>
+    <string name="core_help_video_vulkan_early_submit_draw_threshold" formatted="false">Submit GPU commands after this many draws. 0 disables early submission. Restart to apply.</string>
+    <string name="core_label_vertex_fetch_specialization" formatted="false">Vertex fetch specialization</string>
+    <string name="core_help_video_vulkan_vertex_fetch_specialization" formatted="false">Specialize vertex reads for this game. May improve GPU performance. Restart to apply.</string>
+    <string name="core_label_disable_swap_chain_pre_rotation" formatted="false">Disable Swap Chain Pre-Rotation</string>
+    <string name="core_help_video_disable_swap_chain_pre_rotation" formatted="false">Vulkan: leaves turning the picture for a sideways-mounted screen to the system, as in earlier versions. Troubleshooting only; costs GPU time on those screens.</string>
+    <string name="core_label_shader_preset_resolution" formatted="false">Shader Resolution</string>
+    <string name="core_help_video_shader_preset_resolution" formatted="false">Runs the shader at a lower resolution, then scales its picture up to the screen. Lower is much faster with heavy presets and looks a little softer.</string>
+    <string name="core_label_cardboard_vr" formatted="false">Cardboard VR</string>
+    <string name="core_help_video_cardboard_vr" formatted="false">Shows the game twice, side by side, one picture for each eye, for a phone in a Cardboard-style VR viewer. Hold the phone in landscape. Games with stereo 3D give each eye its own view when 3D Display Enabled is on in All Core Settings and the PS3 resolution is 1280x720. RetroArch shaders and SGSR are skipped while this is on; FSR still works.</string>
+    <string name="core_label_vr_picture_size" formatted="false">VR Picture Size</string>
+    <string name="core_help_video_vr_picture_size" formatted="false">How much of its half of the screen each picture fills.</string>
+    <string name="core_label_vr_eye_spacing" formatted="false">VR Eye Spacing</string>
+    <string name="core_help_video_vr_eye_spacing" formatted="false">Higher values move the two pictures apart, lower values bring them closer together, to line them up with the viewer\'s lenses.</string>
+    <string name="core_label_vr_height" formatted="false">VR Height</string>
+    <string name="core_help_video_vr_height" formatted="false">Higher values move both pictures up, lower values move them down, to line them up with the viewer\'s lenses.</string>
+    <string name="core_label_show_spu_compilation_hint" formatted="false">Show SPU compilation hint</string>
+    <string name="core_help_miscellaneous_show_spu_compilation_hint" formatted="false">Shows \'Compiling SPU modules\' hint using the native overlay.</string>
 </resources>

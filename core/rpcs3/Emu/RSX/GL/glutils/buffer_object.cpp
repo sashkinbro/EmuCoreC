@@ -50,14 +50,7 @@ namespace gl
 		}
 		else
 		{
-			// Mutable storage is the GLES/legacy fallback for every regular memory
-			// type, including device-local buffers. data() is intentionally limited
-			// to later host-visible reallocations and therefore rejects local memory.
-			// Calling it here made every local buffer allocation fail when immutable
-			// ARB_buffer_storage was unavailable (the normal Android path).
-			ensure(type != memory_type::userptr, "User-pointer buffers require immutable or pinned-memory support");
-			DSA_CALL2(NamedBufferData, m_id, size, data_, GL_STREAM_COPY);
-			m_size = size;
+			data(size, data_, GL_STREAM_COPY);
 		}
 	}
 

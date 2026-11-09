@@ -203,7 +203,7 @@ namespace vk
 			return *this;
 		}
 
-		bool program::link(VkPipelineCache pipeline_cache, bool separate_objects)
+		program& program::link(VkPipelineCache pipeline_cache, bool separate_objects)
 		{
 			auto p_graphics_info = std::get_if<VkGraphicsPipelineCreateInfo>(&m_info);
 			auto p_compute_info = !p_graphics_info ? std::get_if<VkComputePipelineCreateInfo>(&m_info) : nullptr;
@@ -267,56 +267,32 @@ namespace vk
 			create_pipeline_layout();
 			ensure(m_pipeline_layout);
 
-		if (is_graphics_pipe)
-		{
-			VkGraphicsPipelineCreateInfo create_info = *p_graphics_info;
-			create_info.layout = m_pipeline_layout;
-#ifdef __ANDROID__
-			// Stock Adreno drivers reject some guest shaders at link time
-			// (VK_ERROR_UNKNOWN after "Failed to link shaders"). That must not
-			// kill the emulator: report failure so the pipe compiler can skip
-			// the draw (or fall back to the shader interpreter).
-			// NOTE: exceptions are disabled in this build (-fno-exceptions),
-			// hence the bool return instead of throw/catch.
-			if (const VkResult link_result = vkCreateGraphicsPipelines(m_device, pipeline_cache, 1, &create_info, nullptr, &m_pipeline);
-				link_result != VK_SUCCESS)
-			{
-				rsx_log.error("vkCreateGraphicsPipelines failed with code 0x%x. The draw using this pipeline will be skipped.", static_cast<s32>(link_result));
-				if (m_pipeline != VK_NULL_HANDLE)
-				{
-					vkDestroyPipeline(m_device, m_pipeline, nullptr);
-					m_pipeline = VK_NULL_HANDLE;
-				}
-				return false;
-			}
-#else
-			CHECK_RESULT(vkCreateGraphicsPipelines(m_device, pipeline_cache, 1, &create_info, nullptr, &m_pipeline));
-#endif
-		}
-		else
-		{
-			VkComputePipelineCreateInfo create_info = *p_compute_info;
-			create_info.layout = m_pipeline_layout;
-#ifdef __ANDROID__
-			if (const VkResult link_result = vkCreateComputePipelines(m_device, pipeline_cache, 1, &create_info, nullptr, &m_pipeline);
-				link_result != VK_SUCCESS)
-			{
-				rsx_log.error("vkCreateComputePipelines failed with code 0x%x. The dispatch using this pipeline will be skipped.", static_cast<s32>(link_result));
-				if (m_pipeline != VK_NULL_HANDLE)
-				{
-					vkDestroyPipeline(m_device, m_pipeline, nullptr);
-					m_pipeline = VK_NULL_HANDLE;
-				}
-				return false;
-			}
-#else
-			CHECK_RESULT(vkCreateComputePipelines(m_device, pipeline_cache, 1, &create_info, nullptr, &m_pipeline));
-#endif
-		}
+			// Hand the driver its persistent cache so a pipeline it has compiled before --
+			// in this run or a previous one -- costs a lookup instead of a compile. The pipe
+			// compilers pass it in (g_pipeline_cache borrows it); any other caller falls back to
+			// it here. A cache is owned by the device that created it, so check identity rather
+			// than assuming there is only ever one. VK_NULL_HANDLE simply means "no cache".
+			const VkPipelineCache cache = pipeline_cache ? pipeline_cache :
+				(g_render_device && static_cast<VkDevice>(*g_render_device) == m_device)
+					? g_render_device->get_pipeline_cache()
+					: VK_NULL_HANDLE;
 
-		m_linked = true;
-		return true;
-	}
+			if (is_graphics_pipe)
+			{
+				VkGraphicsPipelineCreateInfo create_info = *p_graphics_info;
+				create_info.layout = m_pipeline_layout;
+				CHECK_RESULT(vkCreateGraphicsPipelines(m_device, cache, 1, &create_info, nullptr, &m_pipeline));
+			}
+			else
+			{
+				VkComputePipelineCreateInfo create_info = *p_compute_info;
+				create_info.layout = m_pipeline_layout;
+				CHECK_RESULT(vkCreateComputePipelines(m_device, cache, 1, &create_info, nullptr, &m_pipeline));
+			}
+
+			m_linked = true;
+			return *this;
+		}
 
 		bool program::has_uniform(program_input_type type, std::string_view uniform_name)
 		{

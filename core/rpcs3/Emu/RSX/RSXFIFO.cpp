@@ -7,11 +7,16 @@
 #include "Core/RSXReservationLock.hpp"
 #include "Emu/Memory/vm_reservation.h"
 #include "Emu/Cell/lv2/sys_rsx.h"
+#include "util/sysinfo.hpp"
 #include "NV47/HW/context.h"
+#include "rsx_profiler.h"
 
 #include "util/asm.hpp"
 
 #include <thread>
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#endif
 
 using spu_rdata_t = std::byte[128];
 
@@ -36,20 +41,61 @@ namespace rsx
 
 		void FIFO_control::sync_get() const
 		{
-			if (m_fifo_pos - m_cache_addr <= m_cache_size)
+			// Every 8th packet. The guest reads GET to work out how much ring space is
+			// free, and it is far ahead of us here (FIFO stalls measure 0.1/frame), so a
+			// bounded lag is invisible to it. Anything that can idle or block publishes
+			// immediately via sync_get_force so a waiting producer is never held up.
+			// With the atomic puller the value only moves when a refill lands, and the
+			// refill publishes it at once.
+			if (++m_get_sync_counter & 7)
+			{
+				return;
+			}
+
+			m_ctrl->get.release(m_published_get = reported_get());
+		}
+
+		u32 FIFO_control::reported_get() const
+		{
+			// GET is the RSX read pointer, not its execution pointer (RPCS3 #19606, elad335).
+			// With the atomic puller that is the end of the window fetched around the command
+			// being executed; with nothing fetched (the fast puller) it is the position itself.
+			if (m_fifo_pos - m_cache_addr <= m_hit_size)
 			{
 				// Atomic FIFO only path
-				m_ctrl->get.release(m_cache_addr + m_cache_size);
+				return m_cache_addr + m_hit_size;
 			}
-			else
-			{
-				m_ctrl->get.release(m_fifo_pos);
-			}
+
+			return m_fifo_pos;
 		}
 
 		void FIFO_control::sync_get_force() const
 		{
-			sync_get();
+			m_get_sync_counter = 0;
+
+			// Publish real progress only. The drain paths call this every time they are entered,
+			// and while the ring is empty or blocked that is once per run loop iteration with GET
+			// unmoved: measured at ~91000 of 137000 iterations per frame in Spider-Man: Web of
+			// Shadows, every one of them a coherence miss on the line holding put.
+			//
+			// The cost lands on the guest rather than on us, which is why it reads as a freeze
+			// with sound: the PPU feeding the ring is the thread contending for that line, so it
+			// stops producing while threads that never touch it carry on.
+			const u32 get = reported_get();
+
+			if (m_published_get == get)
+			{
+				return;
+			}
+
+			m_ctrl->get.release(m_published_get = get);
+		}
+
+		std::string FIFO_control::debug_snapshot() const
+		{
+			return fmt::format("fifo: get=0x%06x put=0x%06x internal=0x%06x published=0x%06x remaining=%u cmd=0x%08x memwatch=0x%06x",
+				m_ctrl ? +m_ctrl->get : 0u, m_ctrl ? +m_ctrl->put : 0u,
+				m_fifo_pos, m_published_get, m_remaining_commands, m_cmd, m_memwatch_addr);
 		}
 
 		void FIFO_control::restore_state(u32 cmd, u32 count, u32 position)
@@ -60,7 +106,17 @@ namespace rsx
 			m_fifo_pos = position - (count ? 4 : 0);
 			m_args_ptr = m_iotable->get_addr(m_fifo_pos);
 			m_command_reg = (m_cmd & 0xffff) + m_command_inc * (((m_cmd >> 18) - count) & 0x7ff) - m_command_inc;
-			m_next_cmd_entry = m_fifo_pos + m_remaining_commands * 4;
+			m_next_cmd_entry = position + m_remaining_commands * 4;
+		}
+
+		void FIFO_control::set_channel(RsxDmaControl* ctrl)
+		{
+			invalidate_cache();
+
+			m_ctrl = ctrl;
+			m_memwatch_addr = 0;
+			m_memwatch_cmp = 0;
+			m_remaining_commands = 0;
 		}
 
 		void FIFO_control::inc_get(bool wait)
@@ -71,10 +127,11 @@ namespace rsx
 			{
 				// NOTE: Only supposed to be invoked to wait for a single arg on command[0] (4 bytes)
 				// Wait for put to allow us to procceed execution
-				sync_get();
+				sync_get_force();
 				invalidate_cache();
 
-				while (read_put() == m_fifo_pos && !Emu.IsStopped())
+				// NOTE: lv2 waits for a freed context to go away, which only happens once this command returns
+				while (read_put() == m_fifo_pos && !Emu.IsStopped() && !m_thread->get_context()->fw.free_requested)
 				{
 					m_thread->cpu_wait({});
 				}
@@ -99,9 +156,14 @@ namespace rsx
 			}
 		}
 
-		std::pair<bool, u32> FIFO_control::fetch_u32(u32 addr)
+		std::pair<bool, u32> FIFO_control::fetch_u32_refill(u32 addr)
 		{
-			if (addr - m_cache_addr >= m_cache_size)
+			const u32 window_addr = addr & -128;
+
+			// Refill when addr is outside the data we hold, or when the window starting at it
+			// would run past that data: upstream refills at every window, so that is where it
+			// would pick up a PUT that moved since our fetch.
+			if (addr - m_cache_addr >= m_cache_size || (window_addr - m_cache_addr) + fetch_window_size > m_cache_size)
 			{
 				const u32 put = read_put();
 
@@ -110,7 +172,8 @@ namespace rsx
 					return {false, FIFO_EMPTY};
 				}
 
-				m_cache_addr = addr & -128;
+				m_hit_size = 0;
+				m_cache_addr = window_addr;
 
 				const u32 addr1 = m_iotable->get_addr(m_cache_addr);
 
@@ -124,8 +187,14 @@ namespace rsx
 				{
 					if (const u32 cmd = vm::read32(addr1 | (addr & 127)); cmd & RSX_METHOD_NON_METHOD_CMD_MASK)
 					{
+						// The next command is flow control (or invalid): hand it over by itself, with
+						// nothing past it fetched and GET left where it is. GET past a JUMP claims the
+						// RSX read memory it will never run, and a guest that frees command buffer
+						// space by GET then overwrites commands the RSX has not run yet: the "possible
+						// desync" behind Uncharted 2's black screen and Armored Core 4's freeze.
 						m_cache_addr = addr;
 						m_cache_size = 4;
+						m_hit_size = 4;
 						write_to_ptr<be_t<u32>>(m_cache[0], cmd);
 						return {true, cmd};
 					}
@@ -144,7 +213,11 @@ namespace rsx
 				}
 
 				// Make mask of cache lines to fetch
-				u8 to_fetch = static_cast<u8>((1u << (m_cache_size / 128)) - 1);
+				// A full mask cannot be built by shifting, since 1u << 32 is undefined.
+				const u32 lines_to_fetch = m_cache_size / 128;
+				u32 to_fetch = (lines_to_fetch >= cache_line_count)
+					? ~0u
+					: ((1u << lines_to_fetch) - 1);
 
 				if (addr < put && put < m_cache_addr + m_cache_size)
 				{
@@ -156,19 +229,38 @@ namespace rsx
 				const bool force_cache_fill = g_cfg.core.rsx_fifo_accuracy == rsx_fifo_mode::atomic_ordered;
 				const bool strict_fetch_ordering = g_cfg.core.rsx_fifo_accuracy >= rsx_fifo_mode::atomic_ordered;
 
+				if (rsx::prof::enabled()) [[unlikely]]
+				{
+					rsx::prof::g_fifo_refills++;
+					rsx::prof::g_fifo_refill_bytes += m_cache_size;
+				}
+
+				// Covers the reservation lock and the line fetch loop below. Refills run a few
+				// hundred times a frame rather than per command, so unlike a per-command scope
+				// this costs nothing measurable. Each one copies and then re-compares every
+				// 128-byte line, so it moves twice the bytes it fetches, against memory the
+				// guest PPU is actively writing.
+				RSX_PROF_SCOPE(fifo_refill);
+
 				rsx::reservation_lock<true, 1> rsx_lock(addr1, m_cache_size, true);
 				const auto src = vm::_ptr<spu_rdata_t>(addr1);
 
 				u64 start_time = 0;
 				u32 bytes_read = 0;
+
+				// The command stream is followed through the lines as they arrive, and the fetch
+				// stops just past the first flow control command (RPCS3 #19820, elad335). Upstream
+				// asserts the next header is within the 8KB one command can span; here a value
+				// outside it, which means the position moved without it, only skips the walk.
 				u32 fifo_code_path = m_next_cmd_entry;
+
 				if (fifo_code_path - m_fifo_pos >= 8192)
 				{
 					fifo_code_path = umax;
 				}
 
 				// Find the next set bit after every iteration
-				for (int i = 0;; i = (std::countr_zero<u32>(std::rotl<u8>(to_fetch, 0 - i - 1)) + i + 1) % 8)
+				for (int i = 0;; i = (std::countr_zero<u32>(std::rotl<u32>(to_fetch, 0 - i - 1)) + i + 1) % cache_line_count)
 				{
 					// If a reservation is being updated, try to load another
 					const auto& res = vm::reservation_acquire(addr1 + i * 128);
@@ -183,22 +275,32 @@ namespace rsx
 							// The fetch of the cache line content has been successful, unset its bit
 							to_fetch &= ~(1u << i);
 
+							// Every line below this one is in, so the commands up to the first line
+							// still missing can be read.
 							if (fifo_code_path != umax && (to_fetch & ((1u << i) - 1)) == 0)
 							{
-								const u32 held = to_fetch ? std::countr_zero<u32>(to_fetch) * 128 : bytes_read + 128;
+								const u32 held = to_fetch ? std::countr_zero(to_fetch) * 128 : bytes_read + 128;
 								const u32 high_addr = m_cache_addr + std::min<u32>(m_cache_size, held);
 								bool flow_control = false;
+
 								while (fifo_code_path < high_addr)
 								{
 									const u32 cmd = read_from_ptr_unsafe<be_t<u32>>(+m_cache[0], fifo_code_path - m_cache_addr);
 									fifo_code_path += 4;
+
 									if (cmd & RSX_METHOD_NON_METHOD_CMD_MASK) [[unlikely]]
 									{
 										flow_control = true;
 										break;
 									}
+
 									fifo_code_path += ((cmd >> 18) & 0x7ff) * 4;
 								}
+
+								// A flag rather than upstream's fifo_code_path < high_addr: a JUMP in
+								// the last word of the lines held so far ends the walk exactly at
+								// high_addr, which that test takes for no JUMP, and the lines after it
+								// were then fetched and walked as if they ran next.
 								if (flow_control)
 								{
 									m_cache_size = std::max<u32>(fifo_code_path, addr + 4) - m_cache_addr;
@@ -227,6 +329,11 @@ namespace rsx
 						}
 
 						start_time = get_system_time();
+
+						if (rsx::prof::enabled()) [[unlikely]]
+						{
+							rsx::prof::g_fifo_refill_stalls++;
+						}
 					}
 
 					auto now = get_system_time();
@@ -237,7 +344,10 @@ namespace rsx
 							return {};
 						}
 
-						m_thread->cpu_wait({});
+						{
+							RSX_PROF_SCOPE(idle_pause);
+							m_thread->cpu_wait({});
+						}
 
 						const auto then = std::exchange(now, get_system_time());
 						start_time = now;
@@ -250,14 +360,25 @@ namespace rsx
 
 					if (strict_fetch_ordering)
 					{
-						i = (i - 1) % 8;
+						i = (i - 1) % cache_line_count;
 					}
 				}
 
-				// Update FIFO GET
-				sync_get();
-				atomic_fence_seq_cst();
+				// start_time is only set once the refill has had to wait, so this charges
+				// exactly the spin and nothing else.
+				if (start_time && rsx::prof::enabled()) [[unlikely]]
+				{
+					rsx::prof::g_fifo_refill_stall_us += (get_system_time() - start_time);
+				}
 			}
+
+			m_hit_size = std::min<u32>(m_cache_size, (window_addr - m_cache_addr) + fetch_window_size);
+
+			// Update FIFO GET. At once, not on the packet lag: what waits on it (a guest
+			// waiting for GET to reach PUT, Ratchet & Clank's labels) needs it before the
+			// fetched commands run. A new window inside held data moves it as a refill does.
+			sync_get_force();
+			atomic_fence_seq_cst();
 
 			const auto ret = read_from_ptr_unsafe<be_t<u32>>(+m_cache[0], addr - m_cache_addr);
 			return {true, ret};
@@ -274,12 +395,12 @@ namespace rsx
 			{
 				m_memwatch_addr = get;
 				m_memwatch_cmp = spin_cmd;
-				m_ctrl->get.release(get);
+				m_ctrl->get.release(m_published_get = get);
 				return;
 			}
 
 			// Update ctrl registers
-			m_ctrl->get.release(m_fifo_pos = get);
+			m_ctrl->get.release(m_published_get = m_fifo_pos = get);
 			m_remaining_commands = 0;
 		}
 
@@ -292,7 +413,7 @@ namespace rsx
 				return {};
 			}
 
-			if (g_cfg.core.rsx_fifo_accuracy)
+			if (m_accurate_fetch)
 			{
 				// Return a pointer to the cache storage with confined access
 				const u32 cache_offset_in_words = (m_fifo_pos - m_cache_addr) / 4;
@@ -405,15 +526,12 @@ namespace rsx
 
 		void FIFO_control::read(register_pair& data)
 		{
+			m_accurate_fetch = !!g_cfg.core.rsx_fifo_accuracy;
+
 			if (m_remaining_commands)
 			{
 				// Previous block aborted to wait for PUT pointer
-				if (!read_unsafe(data))
-				{
-					// failed reads leave data unchanged
-					data.reg = FIFO_EMPTY;
-				}
-
+				read_unsafe(data);
 				return;
 			}
 
@@ -436,7 +554,7 @@ namespace rsx
 				m_memwatch_cmp = 0;
 			}
 
-			if (!g_cfg.core.rsx_fifo_accuracy) [[ likely ]]
+			if (!m_accurate_fetch) [[ likely ]]
 			{
 				const u32 put = read_put();
 
@@ -472,7 +590,9 @@ namespace rsx
 
 			if (m_cmd & RSX_METHOD_NON_METHOD_CMD_MASK) [[unlikely]]
 			{
+				// Where the stream goes next is set_get's to say.
 				m_next_cmd_entry = umax;
+
 				if ((m_cmd & RSX_METHOD_OLD_JUMP_CMD_MASK) == RSX_METHOD_OLD_JUMP_CMD ||
 					(m_cmd & RSX_METHOD_NEW_JUMP_CMD_MASK) == RSX_METHOD_NEW_JUMP_CMD ||
 					(m_cmd & RSX_METHOD_CALL_CMD_MASK) == RSX_METHOD_CALL_CMD ||
@@ -490,21 +610,29 @@ namespace rsx
 
 			ensure(!m_remaining_commands);
 			const u32 count = (m_cmd >> 18) & 0x7ff;
+
 			m_next_cmd_entry = m_fifo_pos + count * 4 + 4;
 
 			if (!count)
 			{
 				m_fifo_pos += 4;
-				sync_get();
+				sync_get_force();
 				data.reg = FIFO_NOP;
 				return;
 			}
 
+#ifdef __APPLE__
+			// Set for every count, because read_unsafe also resumes a one-argument packet
+			m_command_inc = ((m_cmd & RSX_METHOD_NON_INCREMENT_CMD_MASK) == RSX_METHOD_NON_INCREMENT_CMD) ? 0 : 4;
+
+#endif
 			if (count > 1)
 			{
 				// Set up readback parameters
 				m_command_reg = m_cmd & 0xfffc;
+#ifndef __APPLE__
 				m_command_inc = ((m_cmd & RSX_METHOD_NON_INCREMENT_CMD_MASK) == RSX_METHOD_NON_INCREMENT_CMD) ? 0 : 4;
+#endif
 				m_remaining_commands = count - 1;
 			}
 
@@ -523,9 +651,27 @@ namespace rsx
 					}
 					else
 					{
+#ifdef __APPLE__
+						// read_unsafe steps position and register before it reads, so park both one step before argument 1
+						static atomic_t<u32> s_first_arg_waits = 0;
+						if (const u32 n = ++s_first_arg_waits; (n & (n - 1)) == 0)
+						{
+							rsx_log.warning("FIFO: first argument not yet written (count %u, method 0x%x)", n, m_cmd & 0xfffc);
+						}
+
 						data.reg = FIFO_EMPTY;
-						m_command_reg = m_cmd & 0xfffc;
+						m_fifo_pos -= 4;
+						m_command_reg = (m_cmd & 0xfffc) - m_command_inc;
+						m_remaining_commands = count;
+#else
+						// Rewind to the header so read_unsafe() resumes from the first argument
+						// (it pre-increments both the FIFO position and the method register)
+						data.reg = FIFO_EMPTY;
+						m_fifo_pos -= 4;
+						m_command_inc = ((m_cmd & RSX_METHOD_NON_INCREMENT_CMD_MASK) == RSX_METHOD_NON_INCREMENT_CMD) ? 0 : 4;
+						m_command_reg = (m_cmd & 0xfffc) - m_command_inc;
 						m_remaining_commands++;
+#endif
 					}
 
 					return;
@@ -715,6 +861,11 @@ namespace rsx
 
 	void thread::run_FIFO()
 	{
+		// Explicitly empty rather than default-initialised. read() can return without assigning:
+		// when a packet is still in flight it forwards to read_unsafe, which bails out leaving
+		// `data` untouched if the producer has not written the next word yet. The reg was then
+		// read uninitialised -- in practice whatever the previous iteration left in the same
+		// stack slot, so a stale command could be re-executed instead of the ring reading empty.
 		FIFO::register_pair command{FIFO::FIFO_EMPTY, 0};
 		fifo_ctrl->read(command);
 		const auto cmd = command.reg;
@@ -732,16 +883,30 @@ namespace rsx
 					performance_counters.state = FIFO::state::nop;
 				}
 
-				// Going idle: publish GET now instead of carrying the bounded lag into a
-				// period where the producer may be waiting on ring space.
+				// Going idle: publish GET now rather than carrying up to seven packets of
+				// lag into a period where the producer may be waiting on ring space.
 				fifo_ctrl->sync_get_force();
 				return;
 			}
 			case FIFO::FIFO_EMPTY:
 			{
+				// Publish GET before going idle.
+				//
+				// GET is published on a bounded lag -- every eighth packet -- to keep a
+				// cross-cluster coherence miss off the per-packet path. That is only safe while
+				// something is still coming to flush it. Draining the ring is precisely when
+				// nothing is: the guest reads GET to see how far we have consumed, and with up
+				// to seven packets of lag frozen into it and no further packets to publish, it
+				// waits forever for progress that was made and never announced.
+				//
+				// Presents as a boot that hangs with the RSX perfectly healthy and idle, every
+				// guest thread in a legitimate wait, and sys_timer_usleep climbing -- and only
+				// when the packet count is not a multiple of eight as the ring drains, which is
+				// why it is game- and timing-dependent rather than reliable.
 				fifo_ctrl->sync_get_force();
 
-				// Short hot window before parking, reset for every fresh idle period.
+				// Spin budget for the idle wait below. Reset whenever a fresh idle period starts, so
+				// each drain gets its own short hot window before parking.
 				static thread_local u32 s_fifo_idle_spins = 0;
 
 				if (performance_counters.state == FIFO::state::running)
@@ -752,11 +917,67 @@ namespace rsx
 				}
 				else
 				{
-					// Spin briefly so a PUT landing within microseconds is seen with no wake
-					// latency; park many microseconds otherwise. Yielding burns a core the SPU
-					// threads want, and sleeping delays noticing work the RSX is on the critical
-					// path for, so the spin comes first and only sustained idle parks.
+					// Yield, without backing off to a sleep.
+					//
+					// A 50us sleep was added here when the RSX thread was measured spending 66%
+					// of its cycles in sched_yield while the machine was starved for cores: the
+					// affinity mask confined six SPU threads to four cores, and the reservation
+					// path serialised everything behind a global lock, so a spinning RSX was
+					// taking a core from threads that needed it.
+					//
+					// Neither of those is true any more, and the trade inverted with them.
+					// Measured after both were fixed: 34% of eight cores busy, two to four
+					// threads runnable, five idle. Nothing is waiting for the core this would
+					// give back, and the RSX sits on the frame's dependency chain, so sleeping
+					// only delays the moment it notices the guest has produced work.
+					//
+					// Charged to idle, because that is what it is. This yield sits inside the
+					// fifo_decode scope, and fifo_decode is the enclosing scope of the whole run
+					// loop, so without this the time the RSX spends waiting on an empty ring is
+					// reported as decode work. That reads as a saturated RSX -- Idle 0.003 ms
+					// against FIFO decode 20.4 ms -- while a native profile of the same thread
+					// put 34% of its cycles in sched_yield and its kernel path. The bucket
+					// report and the profiler disagreed, and the bucket report was wrong.
+					//
+					// It has now caused two wrong conclusions in one session: once reading a
+					// starving RSX as CPU-bound decode, and once reading a thread stuck in an
+					// occlusion query wait as the same thing.
+					// UPDATE: the yield is now itself the problem, and it is measured. A native
+					// profile of Arkham City gameplay put ~11% of TOTAL process CPU in sched_yield
+					// reached from here -- 93% of the RSX thread's kernel time, and its single largest
+					// cost. sched_yield is close to the worst available wait on this device: it is a
+					// syscall, it forces a scheduler pass, and with ~14 hot threads over 8 cores it is
+					// usually rescheduled immediately -- so it burns a core one of the five SPU threads
+					// actually wants, while doing nothing to notice the guest sooner.
+					//
+					// A short hot spin first, so a PUT that lands within microseconds is still caught
+					// without paying any wake latency; only sustained idle parks. WFE costs no syscall
+					// and the architected event stream bounds the park to tens of microseconds, so the
+					// RSX still sits on the frame's dependency chain rather than sleeping through work.
+					//
+					// The pre-spin is not optional: an earlier Android fork parked bare here (e31ef44ef) and
+					// had to walk it back (832c23078) when the wake latency cost frametime smoothness.
+					//
+					// Work the backend is holding for the GPU rather than the guest is checked first:
+					// an idle RSX otherwise looks only every 64 passes, which at the event stream's
+					// pace is several milliseconds.
+					m_renderer->on_fifo_idle();
+
+					RSX_PROF_SCOPE(idle_fifo);
+
 #if defined(ARCH_ARM64)
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+					// A WFE park counts as running, so iOS keeps this thread on a fast core, and a sleep gives the core back
+					constexpr u64 default_wfe_window_us = 30;
+					constexpr std::chrono::microseconds block_sleep{50};
+
+					if (s_fifo_idle_spins >= 8 && get_system_time() - performance_counters.FIFO_idle_timestamp >= default_wfe_window_us)
+					{
+						std::this_thread::sleep_for(block_sleep);
+						return;
+					}
+
+#endif
 					if (s_fifo_idle_spins < 8)
 					{
 						s_fifo_idle_spins++;
@@ -768,8 +989,10 @@ namespace rsx
 					}
 					else
 					{
-						// A monitor-less WFE has no bounded wake on this kernel, so a park
-						// could sleep through the guest's next PUT. Yield instead.
+						// Without the event stream a monitor-less WFE has no bounded
+						// wake, so a park here could sleep through the guest's PUT
+						// advance until an unrelated interrupt. Yield instead - the
+						// pre-WFE behavior of this path.
 						std::this_thread::yield();
 					}
 #else
@@ -781,7 +1004,8 @@ namespace rsx
 			}
 			case FIFO::FIFO_BUSY:
 			{
-				// Do something else. GET goes out here as well: this leaves the consume loop.
+				// Do something else. Same reasoning as the empty case: this leaves the consume
+				// loop, so GET goes out rather than sitting behind the lag counter.
 				fifo_ctrl->sync_get_force();
 				return;
 			}
@@ -963,13 +1187,13 @@ namespace rsx
 				case FIFO::EMIT_END:
 				{
 					// Emit end command to close existing scope
-					AUDIT(in_begin_end);
+					AUDIT(m_ctx->in_begin_end);
 					methods[NV4097_SET_BEGIN_END](m_ctx, NV4097_SET_BEGIN_END, 0);
 					break;
 				}
 				case FIFO::EMIT_BARRIER:
 				{
-					AUDIT(in_begin_end);
+					AUDIT(m_ctx->in_begin_end);
 					methods[NV4097_SET_BEGIN_END](m_ctx, NV4097_SET_BEGIN_END, 0);
 					methods[NV4097_SET_BEGIN_END](m_ctx, NV4097_SET_BEGIN_END, m_flattener.get_primitive());
 					break;
@@ -992,20 +1216,58 @@ namespace rsx
 
 			m_ctx->register_state->decode(reg, value);
 
+			if (rsx::prof::enabled()) [[unlikely]]
+			{
+				// The sequential counter is what the per-method figure should divide by.
+				// g_fifo_commands is incremented once per run_FIFO entry, which is a whole
+				// packet, so it prices packets.
+				rsx::prof::g_fifo_dispatches++;
+				rsx::prof::g_method_counts[reg & (rsx::prof::method_slot_count - 1)]++;
+			}
+
+			const bool value_changed = m_ctx->register_state->latch != value;
+			if (value_changed)
+			{
+				// Mark the decoded draw state that depends on this register. Applies to method registers too.
+				m_ctx->draw_state.pending |= draw_state_signals[reg];
+			}
+
 			if (auto method = methods[reg])
 			{
+				{
+					const u32 slot = rsx::prof::g_fifo_ring_pos++ % rsx::prof::fifo_ring_size;
+					rsx::prof::g_fifo_ring[slot] = { reg, value };
+				}
+
+				// Splits the handler bodies out of fifo_decode, which is the enclosing scope of
+				// the whole loop and therefore holds both. Arkham City spends 38.5 ms a frame in
+				// there at 164 ns a dispatch against Sonic's 45 ns on the same machinery, so the
+				// difference is in what the handlers do, and nothing separates the two.
+				//
+				// This is the one per-dispatch scope in the profiler, and an earlier attempt at
+				// one measured mostly itself. It is affordable here only because it wraps a
+				// call: two counter reads against a handler body, not against a loop iteration.
+				// Still costs a few percent of the bucket it splits -- read the split, not the
+				// total.
+				// Bills the same interval to this method's slot as well, so the handlers can be
+				// ranked by cost rather than by how often they are called.
+				::rsx::prof::method_scope method_prof_scope{
+					static_cast<u32>(reg & (::rsx::prof::method_slot_count - 1)) };
+
 				method(m_ctx, reg, value);
 
-				if (state & cpu_flag::again)
+				// Relaxed: `again` is only set by this thread, by the handler just called.
+				// The seq_cst default is an ldar on ARM64 for no benefit here.
+				if (state.observe() & cpu_flag::again)
 				{
 					m_ctx->register_state->decode(reg, m_ctx->register_state->latch);
 					break;
 				}
 			}
-			else if (m_ctx->register_state->latch != value)
+			else if (value_changed)
 			{
 				// Something changed, set signal flags if any specified
-				m_graphics_state |= state_signals[reg];
+				m_ctx->graphics_state |= state_signals[reg];
 			}
 		}
 		while (fifo_ctrl->read_unsafe(command));

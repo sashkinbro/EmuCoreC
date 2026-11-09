@@ -1,8 +1,11 @@
 #include "stdafx.h"
+#include "Emu/RSX/rsx_profiler.h"
 
 #include "Utilities/mutex.h"
 #include "VKRenderPass.h"
+#include "VKHelpers.h"
 #include "vkutils/image.h"
+#include "vkutils/gpu_timer.h"
 
 #include "Emu/RSX/Common/unordered_map.hpp"
 
@@ -58,7 +61,34 @@ namespace vk
 			case 3:
 				return static_cast<VkImageLayout>(encoded);
 			case 4:
-				return VK_IMAGE_LAYOUT_ATTACHMENT_FEEDBACK_LOOP_OPTIMAL_EXT;
+			{
+				// A renderpass_key can outlive the device that produced it. pipeline_props --
+				// this key included -- is written to the on-disk shader cache verbatim and
+				// replayed on the next run, and on Android the driver underneath can change
+				// between those two runs with two taps (adrenotools).
+				// VK_IMAGE_LAYOUT_ATTACHMENT_FEEDBACK_LOOP_OPTIMAL_EXT is not a valid
+				// VkImageLayout unless VK_EXT_attachment_feedback_loop_layout was enabled on
+				// THIS device, so a key written where it was enabled would otherwise build a
+				// render pass out of an enum this driver never agreed to. Observed on an
+				// Adreno 830: Turnip exposes the extension, the stock Qualcomm blob does not,
+				// and vkCreateRenderPass returned VK_SUCCESS for every invalid description.
+				//
+				// GENERAL is the exact fallback texture_barrier() picks on a device without the
+				// extension (VKRenderTargets.cpp), so this reproduces the pass a native run
+				// would have built. The entry stays dead either way -- renderpass_key is part of
+				// pipeline_key, so it cannot match a live key on this device -- this only keeps
+				// the invalid enum out of the driver.
+				//
+				// Clamped HERE because this is the single decode path: get_image_layouts()
+				// (color + depth) and get_input_attachments() (VkAttachmentReference::layout,
+				// VUID-VkAttachmentReference-attachmentFeedbackLoopLayout-07311) both route
+				// through it, so the two consumers cannot diverge later. It runs only on a
+				// g_renderpass_cache MISS, a few times per session, never per draw.
+				const auto* pdev = vk::get_current_renderer();
+				return (pdev && !pdev->get_framebuffer_loops_support())
+					? VK_IMAGE_LAYOUT_GENERAL
+					: VK_IMAGE_LAYOUT_ATTACHMENT_FEEDBACK_LOOP_OPTIMAL_EXT;
+			}
 			default:
 				fmt::throw_exception("Unsupported layout encoding 0x%llx here", encoded);
 			}
@@ -394,6 +424,16 @@ namespace vk
 
 		// A self-dependency, so a barrier may be issued INSIDE the pass for the feedback case:
 		// an attachment sampled while it is still bound.
+		//
+		// Vulkan forbids vkCmdPipelineBarrier inside a render pass unless the subpass declares
+		// a dependency on itself, and this cache declared none at all. The only legal option
+		// was therefore to end the pass, which is exactly what insert_texture_barrier did, 20
+		// to 23 times per frame in Arkham City out of roughly 83 passes. On a tiled GPU every
+		// one of those is a tile store and a reload of the whole attachment.
+		//
+		// Framebuffer-local stages only. VK_DEPENDENCY_BY_REGION_BIT is what makes the
+		// dependency tile-local rather than a full pipeline flush, and it requires every stage
+		// named here to be framebuffer-space, which rules out the vertex stage.
 		VkSubpassDependency self_dependency = {};
 		self_dependency.srcSubpass = 0;
 		self_dependency.dstSubpass = 0;
@@ -416,13 +456,18 @@ namespace vk
 			VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
 		self_dependency.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 
+		// Upstream added subpass_dependencies above and its own narrower entry for programmable
+		// blending (colour write -> input attachment read). Ours is the wider feedback case and
+		// also covers depth and plain shader reads, so both go in rather than one being assumed
+		// to subsume the other. Two self-dependencies on subpass 0 are legal.
+		subpass_dependencies.push_back(self_dependency);
+
 		VkRenderPassCreateInfo rp_info = {};
 		rp_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
 		rp_info.attachmentCount = ::size32(attachments);
 		rp_info.pAttachments = attachments.data();
 		rp_info.subpassCount = 1;
 		rp_info.pSubpasses = &subpass;
-		subpass_dependencies.push_back(self_dependency);
 		rp_info.dependencyCount = subpass_dependencies.size();
 		rp_info.pDependencies = subpass_dependencies.data();
 
@@ -443,6 +488,14 @@ namespace vk
 	{
 		renderpass_key_blob key(renderpass_key);
 		return key.has_no_attachments();
+	}
+
+	u64 get_renderpass_format_key(u64 renderpass_key)
+	{
+		renderpass_key_blob key(renderpass_key);
+		key.layout_blob = 0;
+		key.input_attachments_mask = 0;
+		return key.encoded;
 	}
 
 	void clear_renderpass_cache(VkDevice dev)
@@ -482,6 +535,30 @@ namespace vk
 		rp_begin.renderArea.extent.width = framebuffer_region.width;
 		rp_begin.renderArea.extent.height = framebuffer_region.height;
 
+		// Counted here, at the only place a pass actually starts. Counting calls to the
+		// wrapper instead gave about 1900 per frame, because it early-outs when the same
+		// pass and framebuffer are already bound, and almost every call takes that path.
+		if (rsx::prof::enabled()) [[unlikely]]
+		{
+			rsx::prof::g_render_passes++;
+			rsx::prof::g_pass_ordinal++;
+
+			if (rsx::prof::g_pass_ordinal < rsx::prof::pass_slot_count)
+			{
+				rsx::prof::g_pass_width[rsx::prof::g_pass_ordinal] = static_cast<u16>(framebuffer_region.width);
+				rsx::prof::g_pass_height[rsx::prof::g_pass_ordinal] = static_cast<u16>(framebuffer_region.height);
+			}
+		}
+
+		// The draw region was declared and never recorded anywhere, so the one figure that
+		// says how much of the GPU is actually drawing the game has been missing while
+		// everything else about the GPU was measured.
+		//
+		// Timed from outside the pass on both ends deliberately. On a tiler the load at the
+		// start and the store at the end are the expensive part, and a timestamp placed
+		// inside the pass would exclude exactly the cost worth knowing about.
+		vk::get_gpu_timer().begin(cmd, vk::gpu_timer::region::draw);
+
 		vkCmdBeginRenderPass(cmd, &rp_begin, VK_SUBPASS_CONTENTS_INLINE);
 		renderpass_info = { pass, target };
 	}
@@ -499,7 +576,31 @@ namespace vk
 
 	void end_renderpass(const vk::command_buffer& cmd)
 	{
+		// A query that began inside a render pass instance has to end inside that same instance.
+		// Ending the pass underneath an open one leaves it permanently unavailable: the driver
+		// never marks it ready, and on Turnip it takes the device with it, reported later
+		// against poke_query because that is the first call that waits on a result.
+		//
+		// Queries do begin inside render passes here. VKDraw only lifts them out when
+		// use_strict_query_scopes() is set, and that is wired to Strict Rendering Mode, a user
+		// performance setting rather than a driver quirk, so it is off for almost everyone.
+		//
+		// The check belongs here rather than at the call sites. There are twenty-one of them and
+		// only one, in VKDraw, ever paired itself with a cleanup; change_image_layout alone ends
+		// 41 passes a frame in Web of Shadows, and any of them can land while a query is open.
+		// Fixing two of the sites moved the device loss later instead of removing it.
+		if (cmd.flags & vk::command_buffer::cb_has_open_query)
+		{
+			// const_cast: ending the query is a recording operation on this very buffer, and
+			// every caller here holds it non-const. The signature is const by history.
+			do_query_cleanup(const_cast<vk::command_buffer&>(cmd));
+		}
+
 		vkCmdEndRenderPass(cmd);
+
+		// After the pass ends, so the tile store it triggers is charged to the region.
+		vk::get_gpu_timer().end(cmd, vk::gpu_timer::region::draw);
+
 		g_current_renderpass[cmd] = {};
 	}
 

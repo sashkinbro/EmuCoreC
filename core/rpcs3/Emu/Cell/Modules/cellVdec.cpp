@@ -23,6 +23,7 @@ extern "C"
 #include "libavutil/imgutils.h"
 #include "libswscale/swscale.h"
 }
+constexpr int averror_eof = AVERROR_EOF; // workaround for old-style-cast error
 #ifdef _MSC_VER
 #pragma warning(pop)
 #else
@@ -49,7 +50,6 @@ extern "C"
 
 std::mutex g_mutex_avcodec_open2;
 
-constexpr int averror_eof = AVERROR_EOF; // workaround for old-style-cast error
 
 LOG_CHANNEL(cellVdec);
 
@@ -310,8 +310,10 @@ struct vdec_context final
 			fmt::throw_exception("avcodec_alloc_context3() failed (type=0x%x)", type);
 		}
 
+#ifdef AV_CODEC_FLAG_COPY_OPAQUE
 		// Carry the AU userdata from each packet to the picture decoded from it, across the frame reordering
 		ctx->flags |= AV_CODEC_FLAG_COPY_OPAQUE;
+#endif
 
 		AVDictionary* opts = nullptr;
 
@@ -459,6 +461,15 @@ struct vdec_context final
 				packet.dts = au_dts != umax ? au_dts : s64{smin};
 				packet.opaque = reinterpret_cast<void*>(au_usrd);
 
+#ifndef AV_CODEC_FLAG_COPY_OPAQUE
+				// ARMSX3: the Android build uses FFmpeg 5.1, which predates AV_CODEC_FLAG_COPY_OPAQUE. reordered_opaque does the
+				// same job there: the decoder stamps each picture with the value set when the AU holding it was sent.
+				if (!drain)
+				{
+					ctx->reordered_opaque = static_cast<s64>(au_usrd);
+				}
+#endif
+
 				if (next_pts == 0 && au_pts != umax)
 				{
 					next_pts = au_pts;
@@ -557,7 +568,11 @@ struct vdec_context final
 
 						frame.pts = next_pts;
 						frame.dts = next_dts;
+#ifdef AV_CODEC_FLAG_COPY_OPAQUE
 						frame.userdata = reinterpret_cast<u64>(frame->opaque);
+#else
+						frame.userdata = static_cast<u64>(frame->reordered_opaque);
+#endif
 						frame.attr = attr;
 
 						u64 amend = 0;
@@ -1920,7 +1935,7 @@ error_code cellVdecGetPictureExt(ppu_thread& ppu, u32 handle, vm::cptr<CellVdecP
 			cellVdec.error("cellVdecGetPictureExt: experimental AVPixelFormat (handle=0x%x, seq_id=%d, cmd_id=%d, format=%d). This may cause suboptimal video quality.", handle, frame.seq_id, frame.cmd_id, frame->format);
 			[[fallthrough]];
 		case AV_PIX_FMT_YUV420P:
-			in_f = false ? AV_PIX_FMT_YUVA420P : static_cast<AVPixelFormat>(frame->format);
+			in_f = use_alpha ? AV_PIX_FMT_YUVA420P : static_cast<AVPixelFormat>(frame->format);
 			break;
 		default:
 			fmt::throw_exception("cellVdecGetPictureExt: Unknown frame format (%d)", frame->format);

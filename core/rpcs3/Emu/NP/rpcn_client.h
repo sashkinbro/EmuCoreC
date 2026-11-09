@@ -224,6 +224,10 @@ namespace rpcn
 		atomic_t<bool> authentified = false;
 		atomic_t<bool> want_conn    = false;
 		atomic_t<bool> want_auth    = false;
+		// ARMSX3: set when the connection of a signed-in session drops, until rpcn_thread has signed it in again
+		atomic_t<bool> session_lost = false;
+		// ARMSX3: set by terminate_connection(), after which the server closes the connection on purpose
+		atomic_t<bool> session_ending = false;
 		u32 binding_address = 0;
 		std::binary_semaphore sem_connected, sem_authentified;
 		std::mutex mutex_connected, mutex_authentified;
@@ -280,12 +284,19 @@ namespace rpcn
 		bool connect(std::string_view host);
 		bool login(std::string_view npid, std::string_view password, std::string_view token);
 		void disconnect();
+		void lose_connection();
+		void close_connection();
+		void give_up_session();
 
 	public:
 		~rpcn_client();
 		rpcn_client(rpcn_client& other)    = delete;
 		void operator=(const rpcn_client&) = delete;
 		static std::shared_ptr<rpcn_client> get_instance(u32 binding_address, bool check_config = false);
+		// Whatever client already exists, or nullptr. Unlike get_instance this never creates
+		// one, so a caller that only wants to report state does not spawn three threads and
+		// immediately tear them down again.
+		static std::shared_ptr<rpcn_client> peek_instance();
 		rpcn_state wait_for_connection();
 		rpcn_state wait_for_authentified();
 		bool terminate_connection();
@@ -319,6 +330,8 @@ namespace rpcn
 		std::vector<u64> get_new_messages();
 		std::optional<shared_ptr<std::pair<std::string, message_data>>> get_message(u64 id) const;
 		std::vector<std::pair<u64, shared_ptr<std::pair<std::string, message_data>>>> get_messages_and_register_cb(SceNpBasicMessageMainType type, bool include_bootable, message_cb_func cb_func, void* cb_param);
+		// ARMSX3: the same list without registering for new ones, for a UI that polls it.
+		std::vector<std::pair<u64, shared_ptr<std::pair<std::string, message_data>>>> get_messages(SceNpBasicMessageMainType type_filter, bool include_bootable) const;
 		void remove_message_cb(message_cb_func cb_func, void* cb_param);
 		void mark_message_used(u64 id);
 

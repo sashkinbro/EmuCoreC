@@ -1,5 +1,7 @@
 #include "stdafx.h"
 #include "MM.h"
+#include <array>
+#include <atomic>
 #include <Emu/RSX/Common/simple_array.hpp>
 #include <Emu/RSX/RSXOffload.h>
 #include <Emu/RSX/Utils/rsx_utils.h>
@@ -10,16 +12,8 @@
 #include <Utilities/address_range.h>
 #include <Utilities/mutex.h>
 
-#ifdef __ANDROID__
-#include <array>
-#include <atomic>
-#endif
-
 namespace rsx
 {
-	rsx::simple_array<MM_block> g_deferred_mprotect_queue;
-	shared_mutex g_mprotect_queue_lock;
-
 #ifdef __ANDROID__
 	// RSX protections are independent of vm::page_* flags. Keep a compact
 	// per-guest-page mirror so Android code can avoid entering a heavyweight
@@ -67,6 +61,9 @@ namespace rsx
 		return true;
 	}
 #endif
+
+	rsx::simple_array<MM_block> g_deferred_mprotect_queue;
+	shared_mutex g_mprotect_queue_lock;
 
 	void mm_sanitize_queue_internal()
 	{
@@ -217,15 +214,12 @@ namespace rsx
 			}
 
 			utils::memory_protect(ptr, length, prot);
-			mm_track_protection(start, length, prot);
+			mm_track_protection(reinterpret_cast<u64>(ptr), length, prot);
 			return;
 		}
 
 		// No, Ro, etc.
 		mm_defer_mprotect_internal(start, length, prot);
-		// Expose scheduled restrictive protection immediately. A preflight which
-		// sees it will flush the queue through the normal violation handler before
-		// touching the memory.
 		mm_track_protection(start, length, prot);
 	}
 
@@ -290,7 +284,10 @@ namespace rsx
 
 	void mm_flush_lazy()
 	{
-		if (!g_cfg.video.multithreaded_rsx)
+		// can_offload(), not the setting: with no offloader running this must flush inline rather
+		// than queue a job that will never be processed. The offloader samples multithreaded_rsx
+		// once at thread start, before per-game config is applied. See 889b82675.
+		if (!g_fxo->get<rsx::dma_manager>().can_offload())
 		{
 			mm_flush();
 			return;

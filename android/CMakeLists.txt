@@ -51,20 +51,22 @@ set(EMUCOREC_INPUT_SOURCES
     ${CMAKE_SOURCE_DIR}/rpcs3/Input/ps_move_config.cpp
     ${CMAKE_SOURCE_DIR}/rpcs3/Input/ps_move_calibration.cpp
     ${CMAKE_SOURCE_DIR}/rpcs3/Input/ps_move_tracker.cpp
+    ${CMAKE_SOURCE_DIR}/rpcs3/Input/blob_detector.cpp
     # pad_thread references mouse_gyro_handler directly, so it is not optional
     # despite the "mouse" name. Upstream's implementation is Qt-only; EmuCoreC
     # provides a Qt-free one under android/Input/.
     ${CMAKE_CURRENT_SOURCE_DIR}/Input/mouse_gyro_handler.cpp
     # Ours: on-screen touch controls.
     ${CMAKE_SOURCE_DIR}/rpcs3/Input/virtual_pad_handler.cpp
+    ${CMAKE_SOURCE_DIR}/rpcs3/Input/virtual_keyboard_handler.cpp
 )
 
 add_library(emucorec-core SHARED
     src/emucorec-android.cpp
     src/save_states.cpp
-    # Android OpenGL ES context ownership. This is compiled independently of
-    # the renderer while the desktop GL backend is being ported to GLES.
-    ${CMAKE_SOURCE_DIR}/rpcs3/Emu/RSX/GL/EGLAndroid.cpp
+    # Capture runs through non-blocking native frame/audio queues.
+    src/remote_play.cpp
+    ${CMAKE_SOURCE_DIR}/rpcs3/dev/iso.cpp
     ${EMUCOREC_INPUT_SOURCES}
     # rpcs3::get_version() and friends. Like Input/, this is compiled into the
     # `rpcs3` executable upstream, not into rpcs3_emu, so Android never gets it.
@@ -79,6 +81,10 @@ add_library(emucorec-core SHARED
 set_target_properties(emucorec-core PROPERTIES OUTPUT_NAME emucorec-core)
 
 target_compile_features(emucorec-core PRIVATE cxx_std_23)
+
+target_include_directories(rpcs3_emu PRIVATE
+    ${CMAKE_SOURCE_DIR}/3rdparty/librashader/include
+)
 
 target_include_directories(emucorec-core PRIVATE
     ${CMAKE_SOURCE_DIR}
@@ -104,8 +110,7 @@ target_link_libraries(emucorec-core
     3rdparty::hidapi
     3rdparty::libusb
     android
-    EGL
-    GLESv3
+    dl
     log
 )
 

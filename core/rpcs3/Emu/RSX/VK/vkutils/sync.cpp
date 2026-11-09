@@ -7,12 +7,16 @@
 #include "shared.h"
 
 #include "Emu/Cell/timers.hpp"
+#include "Emu/System.h"
+#include "Utilities/Thread.h"
+#include "Emu/RSX/rsx_profiler.h"
+
+#include <chrono>
+#include <thread>
 
 #include "util/sysinfo.hpp"
 #include "util/asm.hpp"
 #include "util/logs.hpp"
-
-namespace rsx { void request_device_lost_shutdown(const char* reason); }
 
 namespace vk
 {
@@ -180,22 +184,35 @@ namespace vk
 
 	void fence::wait_flush()
 	{
-		if (flushed)
-		{
-			return;
-		}
-
-		u64 spin_start = get_system_time();
+		// Bounded and abortable, because this spins rather than sleeps.
+		//
+		// `flushed` is set by queue_submit_impl after vkQueueSubmit. Under multithreaded RSX that
+		// submit is handed to the offloader thread, so anything waiting here is waiting on another
+		// thread to run -- and if that never happens, this spins at 100% forever with no way out.
+		// It is reached from command_buffer::begin(), so it takes the RSX thread with it: Emu.Kill()
+		// cannot join, the game will not close, and the emulator stays alive with no window.
+		//
+		// Seen with a librashader chain: 100% of RSX samples in wait_for_fence, an Emulation Join
+		// thread parked behind it, and a process that had to be killed.
+		u64 spins = 0;
 
 		while (!flushed)
 		{
-			if (get_system_time() - spin_start > 2'000'000)
+			utils::pause();
+
+			// Cheap: the check runs about once every 64k pauses, which is nothing against a spin
+			// that is already pathological by the time it matters.
+			if ((++spins & 0xffff) != 0)
 			{
-				rsx_log.error("[vulkan] fence::wait_flush spinning: fence=%p has not been flushed for %llu ms", handle, (get_system_time() - spin_start) / 1000);
-				spin_start = get_system_time();
+				continue;
 			}
 
-			utils::pause();
+			if (thread_ctrl::state() == thread_state::aborting || Emu.IsStopped())
+			{
+				rsx_log.error("Abandoning a fence flush wait because emulation is stopping. "
+					"A queued submit was never flushed -- this would otherwise hang shutdown.");
+				return;
+			}
 		}
 	}
 
@@ -577,6 +594,8 @@ namespace vk
 
 	VkResult wait_for_fence(fence* pFence, u64 timeout)
 	{
+		RSX_PROF_SCOPE(fence_wait);
+
 		pFence->wait_flush();
 
 		if (timeout)
@@ -585,41 +604,89 @@ namespace vk
 		}
 		else
 		{
-			u64 spin_start = get_system_time();
+			// An unbounded wait used to poll vkGetFenceStatus in a tight loop with nothing
+			// but a pause hint between calls. That is a core pinned at 100% for the whole
+			// duration of a GPU wait, plus a driver entry point hammered while the driver is
+			// trying to do the very work being waited on.
+			//
+			// It costs little on a desktop with cores to spare. It is expensive here: this
+			// is reached from command_buffer::flush() for the submit fence, so it is the
+			// path a frame takes when it waits on the GPU, and it competes with the SPU and
+			// PPU threads for a handful of cores. Arkham City measured 24ms of a 53ms frame
+			// in this function with the GPU only 71-77% busy, which is what a stall looks
+			// like when the waiter is too busy spinning to prepare the next submission.
+			//
+			// Poll briefly first, since most waits here are for a fence that is about to
+			// signal and blocking would cost a syscall and a wake-up for no reason, then
+			// hand the wait to the driver, which can sleep the thread and free the core.
+			// Same shape as wait_for_event below, which already got this treatment.
+			constexpr u64 hot_polls = 512;
 
-			while (auto status = vkGetFenceStatus(*g_render_device, pFence->handle))
+			for (u64 poll = 0; poll < hot_polls; poll++)
 			{
-				switch (status)
+				const VkResult status = vkGetFenceStatus(*g_render_device, pFence->handle);
+
+				if (status == VK_SUCCESS)
 				{
-				case VK_NOT_READY:
-					if (get_system_time() - spin_start > 2'000'000)
-					{
-						rsx_log.error("[vulkan] wait_for_fence spinning: fence=%p still not signaled after %llu ms", pFence->handle, (get_system_time() - spin_start) / 1000);
-						spin_start = get_system_time();
-					}
+					return VK_SUCCESS;
+				}
 
-					utils::pause();
-					continue;
-				default:
-					if (status == VK_ERROR_DEVICE_LOST)
-					{
-						// A dead device never signals this fence; latch the loss and stop cleanly
-						// instead of waiting out the driver timeout.
-						rsx::request_device_lost_shutdown("waiting on a fence");
-						return status;
-					}
-
+				if (status != VK_NOT_READY)
+				{
+					// Returns, never dies, on a lost device: it either replaces the renderer or
+					// latches a clean stop. Every wait in the RSX loop has to return rather than
+					// kill the thread; that was measured here, where a fence poll 4 ms after the
+					// loss skipped on_exit() and aborted the shutdown.
 					die_with_error(status);
 					return status;
 				}
+
+				utils::pause();
 			}
 
-			return VK_SUCCESS;
+			// Bounded slices rather than UINT64_MAX, so this stays interruptible.
+			//
+			// An unbounded wait cannot be abandoned. If the GPU never signals -- a wedged
+			// submission, a shader chain the driver never finishes -- the RSX thread parks here
+			// permanently: Emu.Kill() cannot join it, the game will not close, the emulator keeps
+			// running with no window, and nothing short of killing the process recovers it. The
+			// hang itself is bad; being unable to leave it is what turns it into a dead app.
+			//
+			// Reported with a librashader bezel preset: 88 seconds in this function with work
+			// still queued, then a game that would not restart.
+			//
+			// A second of granularity is nothing against a wait already long enough to reach the
+			// unbounded path, and it costs one extra vkWaitForFences per second of hang.
+			for (u64 slice = 0;; slice++)
+			{
+				const VkResult status = vkWaitForFences(*g_render_device, 1, &pFence->handle, VK_FALSE, 1'000'000'000ull);
+
+				if (status != VK_TIMEOUT)
+				{
+					return status;
+				}
+
+				// Say so, once, rather than looking identical to a freeze.
+				if (slice == 2)
+				{
+					rsx_log.error("GPU has not signalled a fence in 3s. If this persists the driver "
+						"is not completing submitted work; closing the game is still possible.");
+				}
+
+				if (thread_ctrl::state() == thread_state::aborting || Emu.IsStopped())
+				{
+					// Leaving a fence unwaited is not clean, but the alternative is never leaving.
+					rsx_log.error("Abandoning a GPU fence wait after %us because emulation is stopping.", slice + 1);
+					return VK_TIMEOUT;
+				}
+			}
 		}
 	}
 
 	VkResult wait_for_event(event* pEvent, u64 timeout)
 	{
+		RSX_PROF_SCOPE(fence_wait);
+
 		// Convert timeout to TSC cycles. Timeout accuracy isn't super-important, only fast response when event is signaled (within 10us if possible)
 		const u64 freq = utils::get_tsc_freq();
 
@@ -629,7 +696,20 @@ namespace vk
 		}
 
 		u64 start = 0;
-		u64 watchdog = get_system_time();
+
+		// Poll hot for a short window, then stand back.
+		//
+		// Every iteration of this loop is a vkGetEventStatus, which on a tiled mobile part
+		// reads memory the GPU is writing. Spinning on it flat out for milliseconds does
+		// not make the event arrive sooner: it burns a core at peak clock and takes memory
+		// bandwidth away from the GPU we are waiting for, on a device where bandwidth is
+		// the scarce resource. A readback issued mid-frame queues behind everything already
+		// submitted, so these waits drain the whole pipeline and run into milliseconds.
+		//
+		// The hot window keeps the common short wait as fast as it was; past that the wait
+		// is long enough that 50us of granularity is noise against it.
+		u64 polls = 0;
+		constexpr u64 hot_polls = 512;
 
 		while (true)
 		{
@@ -640,20 +720,10 @@ namespace vk
 			case VK_EVENT_RESET:
 				break;
 			default:
-				if (status == VK_ERROR_DEVICE_LOST)
-				{
-					rsx::request_device_lost_shutdown("waiting on an event");
-					return status;
-				}
-
+				// A lost device returns here too (see the fence wait above); the RSX loop then
+				// replaces the renderer or carries out the clean stop.
 				die_with_error(status);
 				return status;
-			}
-
-			if (get_system_time() - watchdog > 2'000'000)
-			{
-				rsx_log.error("[vulkan] wait_for_event spinning: event=%p not set after %llu ms", static_cast<const void*>(pEvent), (get_system_time() - watchdog) / 1000);
-				watchdog = get_system_time();
 			}
 
 			if (timeout)
@@ -674,7 +744,18 @@ namespace vk
 				}
 			}
 
-			utils::pause();
+			if (++polls <= hot_polls)
+			{
+				utils::pause();
+			}
+			else
+			{
+				// A plain sleep, deliberately not thread_ctrl::wait_for. That reads
+				// g_tls_this_thread and dereferences it in both branches without a null
+				// check, and this function is reached from threads RPCS3 did not create,
+				// where that pointer is null. Using it here crashed every boot.
+				std::this_thread::sleep_for(std::chrono::microseconds(50));
+			}
 		}
 	}
 }

@@ -1,7 +1,7 @@
 R"(
 
 // Program outputs
-layout(location=0) out vec4 out_regs[15];
+layout(location=0) out vec4 dest[16];
 
 #define RSX_SCA_OPCODE_NOP 0x00 // No-Operation
 #define RSX_SCA_OPCODE_MOV 0x01 // Move (copy)
@@ -221,7 +221,6 @@ uvec4 instr;
 vec4 temp[32];
 ivec4 a[2] = { ivec4(0), ivec4(0) };
 vec4 cc[2] = { vec4(0), vec4(0) };
-vec4 dest[16];
 
 D0 d0;
 D1 d1;
@@ -640,11 +639,6 @@ void main()
 #endif
 
 	gl_Position = pos;
-
-	for (int i = 0; i < 15; ++i)
-	{
-		out_regs[i] = dest[i + 1];
-	}
 }
 
 )"

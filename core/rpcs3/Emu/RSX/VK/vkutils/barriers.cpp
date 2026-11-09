@@ -1,3 +1,4 @@
+#include "Emu/RSX/rsx_profiler.h"
 #include "barriers.h"
 #include "commands.h"
 #include "image.h"
@@ -18,7 +19,11 @@ namespace vk
 	{
 		if (!preserve_renderpass && vk::is_renderpass_open(cmd))
 		{
-			vk::end_renderpass(cmd);
+			if (rsx::prof::enabled()) [[unlikely]] rsx::prof::g_rp_sites[10]++; vk::end_renderpass(cmd);
+		}
+		else if (rsx::prof::enabled() && vk::is_renderpass_open(cmd)) [[unlikely]]
+		{
+			rsx::prof::note_pass_barrier(false);
 		}
 
 		VkImageMemoryBarrier barrier = {};

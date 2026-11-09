@@ -1,4 +1,8 @@
 #include "stdafx.h"
+#ifdef __APPLE__
+// Included directly: an undefined TARGET_OS_IPHONE would silently read as 0 below.
+#include <TargetConditionals.h>
+#endif
 #include "instance.h"
 
 #include "Emu/system_config.h"
@@ -68,7 +72,12 @@ namespace vk
 
 	void instance::enable_debugging()
 	{
+#ifdef __APPLE__
+		// Registered with Debug output off too, since MoltenVK's messages now only reach this callback.
+		if (!vkGetInstanceProcAddr(m_instance, "vkCreateDebugReportCallbackEXT")) return;
+#else
 		if (!g_cfg.video.debug_output) return;
+#endif
 
 		PFN_vkDebugReportCallbackEXT callback = vk::dbgFunc;
 
@@ -89,6 +98,18 @@ namespace vk
 #endif
 	bool instance::create(const char* app_name, bool fast)
 	{
+#ifdef __ANDROID__
+		// Bind the dispatch table before the first Vulkan call. If the user picked
+		// a custom driver it was already staged by _armsx3_setCustomDriver; if not,
+		// this opens the system libvulkan.so. Everything below -- including the
+		// extension enumeration above -- calls through pointers this fills in.
+		if (!vk::android::ensure_loaded())
+		{
+			rsx_log.fatal("No usable Vulkan driver: %s", vk::android::last_error());
+			return false;
+		}
+#endif
+
 		// Initialize a vulkan instance
 		VkApplicationInfo app = {};
 
@@ -97,7 +118,36 @@ namespace vk
 		app.applicationVersion = 0;
 		app.pEngineName = app_name;
 		app.engineVersion = 0;
-		app.apiVersion = VK_API_VERSION_1_2;
+
+		// Ask for no more than the loader actually supports.
+		//
+		// This was pinned at 1.2. A loader that predates it may answer
+		// VK_ERROR_INCOMPATIBLE_DRIVER to any higher request, and the spec tells
+		// applications to check the version before creating an instance for exactly that
+		// reason. On such a device the renderer never starts at all, which is a poor
+		// outcome for a value that is only an upper bound on what we intend to use.
+		//
+		// vkEnumerateInstanceVersion is itself a 1.1 entry point, so it is resolved through
+		// the global procedure address and its absence means 1.0. A no-op wherever 1.2 or
+		// better is available, so nothing changes on hardware that was already fine.
+		u32 loader_version = VK_API_VERSION_1_0;
+
+		if (const auto pfn_enumerate_instance_version = reinterpret_cast<PFN_vkEnumerateInstanceVersion>(
+				vkGetInstanceProcAddr(nullptr, "vkEnumerateInstanceVersion")))
+		{
+			if (pfn_enumerate_instance_version(&loader_version) != VK_SUCCESS)
+			{
+				loader_version = VK_API_VERSION_1_0;
+			}
+		}
+
+		app.apiVersion = std::min(loader_version, static_cast<u32>(VK_API_VERSION_1_2));
+
+		if (app.apiVersion != VK_API_VERSION_1_2)
+		{
+			rsx_log.warning("Vulkan: loader reports %u.%u, requesting that instead of 1.2.",
+				VK_VERSION_MAJOR(app.apiVersion), VK_VERSION_MINOR(app.apiVersion));
+		}
 
 		// Set up instance information
 
@@ -109,6 +159,8 @@ namespace vk
 		// Declare MVK variables here to ensure the lifetime within the entire scope
 		const VkBool32 setting_true = VK_TRUE;
 		const int32_t setting_fast_math = g_cfg.video.disable_msl_fast_math.get() ? MVK_CONFIG_FAST_MATH_NEVER : MVK_CONFIG_FAST_MATH_ON_DEMAND;
+		// MoltenVK logs through stderr, and a blocked pipe there parks a Metal compile's completion handler.
+		const int32_t setting_log_level = MVK_CONFIG_LOG_LEVEL_NONE;
 
 		std::vector<VkLayerSettingEXT> mvk_settings;
 		VkLayerSettingsCreateInfoEXT mvk_layer_settings_create_info{};
@@ -126,7 +178,10 @@ namespace vk
 			}
 
 #ifdef __APPLE__
+			// iOS links MoltenVK statically with no loader, and MoltenVK rejects the portability extension.
+#if !TARGET_OS_IPHONE
 			extensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+#endif
 			extensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
 			if (support.is_supported(VK_EXT_LAYER_SETTINGS_EXTENSION_NAME))
 			{
@@ -134,6 +189,7 @@ namespace vk
 
 				mvk_settings.push_back(VkLayerSettingEXT{ kMVKMoltenVKDriverLayerName, "MVK_CONFIG_RESUME_LOST_DEVICE", VK_LAYER_SETTING_TYPE_BOOL32_EXT, 1, &setting_true });
 				mvk_settings.push_back(VkLayerSettingEXT{ kMVKMoltenVKDriverLayerName, "MVK_CONFIG_FAST_MATH_ENABLED", VK_LAYER_SETTING_TYPE_INT32_EXT, 1, &setting_fast_math });
+				mvk_settings.push_back(VkLayerSettingEXT{ kMVKMoltenVKDriverLayerName, "MVK_CONFIG_LOG_LEVEL", VK_LAYER_SETTING_TYPE_INT32_EXT, 1, &setting_log_level });
 
 				mvk_layer_settings_create_info.sType = VK_STRUCTURE_TYPE_LAYER_SETTINGS_CREATE_INFO_EXT;
 				mvk_layer_settings_create_info.pNext = next_info;
@@ -237,7 +293,9 @@ namespace vk
 		else
 		{
 			extensions_loaded = true;
+#if !TARGET_OS_IPHONE
 			extensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+#endif
 			extensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
 		}
 #endif
@@ -256,7 +314,9 @@ namespace vk
 #endif
 		instance_info.pNext = next_info;
 #ifdef __APPLE__
+#if !TARGET_OS_IPHONE
 		instance_info.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+#endif
 #endif
 
 		if (VkResult result = vkCreateInstance(&instance_info, nullptr, &m_instance); result != VK_SUCCESS)
@@ -268,6 +328,12 @@ namespace vk
 
 			return false;
 		}
+
+#ifdef __ANDROID__
+		// Instance-level entry points cannot resolve against a null instance, so
+		// the table has holes until now. Re-resolve against the real instance.
+		vk::android::resolve_instance(m_instance);
+#endif
 
 		return true;
 	}
@@ -326,22 +392,22 @@ namespace vk
 		return gpus;
 	}
 
-#ifdef ANDROID
-	bool instance::recreate_surface(swapchain_base& swapchain, display_handle_t window_handle)
+	VkSurfaceKHR instance::recreate_surface(display_handle_t window_handle)
 	{
-		auto wsi = dynamic_cast<swapchain_WSI*>(&swapchain);
-		if (!wsi) return false;
-		wsi->reset_surface(VK_NULL_HANDLE);
-		if (m_surface) vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
-		m_surface = VK_NULL_HANDLE;
-		VkAndroidSurfaceCreateInfoKHR info{VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR};
-		info.window = std::get<ANativeWindow*>(window_handle);
-		if (!info.window || vkCreateAndroidSurfaceKHR(m_instance, &info, nullptr, &m_surface) != VK_SUCCESS)
-			return false;
-		wsi->reset_surface(m_surface);
-		return m_surface != VK_NULL_HANDLE;
+		if (m_surface != VK_NULL_HANDLE)
+		{
+			vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
+			m_surface = VK_NULL_HANDLE;
+		}
+
+		WSI_config surface_config
+		{
+			.supports_automatic_wm_reports = true
+		};
+
+		m_surface = make_WSI_surface(m_instance, window_handle, &surface_config);
+		return m_surface;
 	}
-#endif
 
 	swapchain_base* instance::create_swapchain(display_handle_t window_handle, vk::physical_device& dev)
 	{

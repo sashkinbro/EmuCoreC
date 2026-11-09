@@ -71,7 +71,8 @@ else()
 	add_compile_options(-Wstrict-aliasing=1)
 	#add_compile_options(-Wnull-dereference)
 
-	if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+	# MATCHES so AppleClang gets these flags too.
+	if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 		add_compile_options(-Werror=inconsistent-missing-override)
 		add_compile_options(-Werror=delete-non-virtual-dtor)
 	elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
@@ -83,7 +84,7 @@ else()
 	endif()
 
 	#TODO Clean the code so these are removed
-	if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+	if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 		add_compile_options(-fconstexpr-steps=16777216)
 		add_compile_options(-Wno-unused-lambda-capture)
 		add_compile_options(-Wno-unused-private-field)

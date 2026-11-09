@@ -7,8 +7,8 @@
 #include "Utilities/mutex.h"
 
 #include <list>
-#include <memory>
 #include <tuple>
+#include <memory>
 
 namespace vk
 {
@@ -88,13 +88,17 @@ namespace vk
 
 		void flush()
 		{
+			flush_disposables();
+			m_sampler_pool.clear();
+		}
+
+		void flush_disposables()
+		{
 			std::list<eid_scope_t> dispose_queue;
 			{
 				std::lock_guard lock(m_eid_map_lock);
 				dispose_queue.splice(dispose_queue.begin(), m_eid_map);
 			}
-
-			m_sampler_pool.clear();
 		}
 
 		vk::sampler* get_sampler(const vk::render_device& dev, vk::sampler* previous,
@@ -165,15 +169,19 @@ namespace vk
 			get_current_eid_scope().eid++;
 		}
 
+		// Diagnostics: disposal batches still waiting, the objects they hold, and the event the
+		// oldest waits on. Anything handed to dispose() stays allocated until that event retires.
 		std::tuple<usz, usz, u64> pending_disposals() const
 		{
 			reader_lock lock(m_eid_map_lock);
+
 			usz objects = 0;
 			for (const auto& scope : m_eid_map)
 			{
 				objects += scope.m_disposables.size();
 			}
-			return {m_eid_map.size(), objects, m_eid_map.empty() ? 0 : m_eid_map.front().eid};
+
+			return { m_eid_map.size(), objects, m_eid_map.empty() ? 0 : m_eid_map.front().eid };
 		}
 
 		void eid_completed(u64 eid)

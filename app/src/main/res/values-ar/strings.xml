@@ -2032,4 +2032,51 @@
     <string name="settings_gamepad_action_right_stick_down">العصا اليمنى لأسفل</string>
     <string name="settings_gamepad_action_right_stick_left">العصا اليمنى لليسار</string>
     <string name="settings_gamepad_action_right_stick_right">العصا اليمنى لليمين</string>
+
+    <string name="ps3_core_pending_restart">ستُطبَّق التغييرات المحفوظة عند إعادة تشغيل اللعبة.</string>
+    <string name="ps3_core_apply_restart">تطبيق وإعادة تشغيل</string>
+
+    <string name="core_label_snapdragon_game_super_resolution">Snapdragon Game Super Resolution</string>
+    <string name="core_label_snapdragon_game_super_resolution_edge_direction">Snapdragon Game Super Resolution (اتجاه الحواف)</string>
+
+    <string name="core_label_oboe">Oboe</string>
+    <string name="core_label_x2">x2</string>
+    <string name="core_label_x3">x3</string>
+    <string name="core_label_x4">x4</string>
+
+    <!-- Current Android renderer, audio and presentation settings. -->
+    <string name="core_label_frame_generation" formatted="false">توليد الإطارات</string>
+    <string name="core_help_video_frame_generation" formatted="false">يضيف إطارات مولدة بين إطارات اللعبة. يستخدم مظللات من ملف Lossless Scaling الخاص بك، ويزيد عمل GPU والتأخير.</string>
+    <string name="core_label_frame_generation_performance_mode" formatted="false">وضع الأداء</string>
+    <string name="core_help_video_frame_generation_performance_mode" formatted="false">يستخدم مظللات أخف. أعد تشغيل توليد الإطارات بعد التغيير.</string>
+    <string name="core_label_frame_generation_flow_scale" formatted="false">تفاصيل الحركة (%)</string>
+    <string name="core_help_video_frame_generation_flow_scale" formatted="false">دقة تحليل الحركة بالنسبة المئوية. القيم الأقل أسرع وأقل وضوحًا. أعد تشغيل توليد الإطارات للتطبيق.</string>
+    <string name="core_label_frame_generation_target_rate" formatted="false">معدل التحديث المستهدف (Hz)</string>
+    <string name="core_help_video_frame_generation_target_rate" formatted="false">معدل الإخراج المستهدف بالهرتز. يستخدم 0 المضاعف الثابت المحدد.</string>
+    <string name="core_label_frame_generation_lossless_path" formatted="false">ملف Lossless Scaling</string>
+    <string name="core_help_video_frame_generation_lossless_path" formatted="false">المسار المطلق لملف DLL الخاص بنسختك من Lossless Scaling. تُبنى ذاكرة المظللات منه عند الحاجة.</string>
+    <string name="core_label_cubeb_backend" formatted="false">واجهة Cubeb</string>
+    <string name="core_help_audio_cubeb_backend" formatted="false">مسار صوت Cubeb: اتركه فارغًا لاستخدام OpenSL ES على Android، أو أدخل aaudio أو opensl. يلزم إعادة التشغيل.</string>
+    <string name="core_label_recording_compatible" formatted="false">صوت متوافق مع التسجيل</string>
+    <string name="core_help_audio_recording_compatible" formatted="false">يسمح لمسجلات الشاشة بالتقاط صوت Oboe عبر مازج النظام. قد يزيد التأخير.</string>
+    <string name="core_label_sgsr_edge_sharpness" formatted="false">حدة الحواف في SGSR</string>
+    <string name="core_help_video_sgsr_edge_sharpness" formatted="false">حدة الحواف عند تكبير الصورة باستخدام SGSR. القيم الأعلى تجعل الحواف أوضح.</string>
+    <string name="core_label_early_submit_draw_threshold" formatted="false">حد أوامر الرسم للإرسال المبكر</string>
+    <string name="core_help_video_vulkan_early_submit_draw_threshold" formatted="false">إرسال أوامر GPU بعد هذا العدد من عمليات الرسم. يعطل 0 الإرسال المبكر. يلزم إعادة التشغيل.</string>
+    <string name="core_label_vertex_fetch_specialization" formatted="false">تخصيص جلب الرؤوس</string>
+    <string name="core_help_video_vulkan_vertex_fetch_specialization" formatted="false">تخصيص قراءة الرؤوس لهذه اللعبة. قد يحسن أداء GPU. يلزم إعادة التشغيل.</string>
+    <string name="core_label_disable_swap_chain_pre_rotation" formatted="false">تعطيل التدوير المسبق لـ Swap Chain</string>
+    <string name="core_help_video_disable_swap_chain_pre_rotation" formatted="false">Vulkan: يترك تدوير الصورة في الشاشات المثبتة جانبيًا للنظام، كما في الإصدارات السابقة. لاستكشاف الأخطاء فقط؛ يستهلك وقت GPU على تلك الشاشات.</string>
+    <string name="core_label_shader_preset_resolution" formatted="false">دقة التظليل</string>
+    <string name="core_help_video_shader_preset_resolution" formatted="false">يشغّل التظليل بدقة أقل ثم يكبّر صورته إلى الشاشة. القيمة الأقل أسرع بكثير مع الإعدادات المسبقة الثقيلة وتبدو أنعم قليلا.</string>
+    <string name="core_label_cardboard_vr" formatted="false">Cardboard VR</string>
+    <string name="core_help_video_cardboard_vr" formatted="false">يعرض اللعبة مرتين جنبًا إلى جنب، صورة لكل عين، لهاتف داخل نظارة واقع افتراضي من نوع Cardboard. أمسك الهاتف بالوضع الأفقي. تمنح الألعاب ذات الأبعاد الثلاثية المجسمة كل عين منظرها الخاص عند تفعيل 3D Display Enabled في جميع إعدادات النواة وعندما تكون دقة PS3 هي 1280x720. يتم تخطي تظليل RetroArch و SGSR أثناء تفعيل هذا الوضع؛ ويظل FSR يعمل.</string>
+    <string name="core_label_vr_picture_size" formatted="false">حجم صورة VR</string>
+    <string name="core_help_video_vr_picture_size" formatted="false">مقدار ما تملؤه كل صورة من نصف الشاشة الخاص بها.</string>
+    <string name="core_label_vr_eye_spacing" formatted="false">المسافة بين العينين في VR</string>
+    <string name="core_help_video_vr_eye_spacing" formatted="false">القيم الأعلى تباعد بين الصورتين، والقيم الأقل تقربهما، لمحاذاتهما مع عدستي النظارة.</string>
+    <string name="core_label_vr_height" formatted="false">ارتفاع VR</string>
+    <string name="core_help_video_vr_height" formatted="false">القيم الأعلى ترفع الصورتين، والقيم الأقل تخفضهما، لمحاذاتهما مع عدستي النظارة.</string>
+    <string name="core_label_show_spu_compilation_hint" formatted="false">إظهار تلميح تجميع SPU</string>
+    <string name="core_help_miscellaneous_show_spu_compilation_hint" formatted="false">يعرض تلميح &quot;تجميع وحدات SPU&quot; باستخدام التراكب الأصلي.</string>
 </resources>

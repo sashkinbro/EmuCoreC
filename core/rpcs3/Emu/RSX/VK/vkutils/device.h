@@ -5,6 +5,12 @@
 #include "pipeline_binding_table.h"
 #include "memory.h"
 
+#ifdef __APPLE__
+#include <chrono>
+#include <mutex>
+#endif
+#include <util/atomic.hpp>
+
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -90,7 +96,9 @@ namespace vk
 		// runtime-sized arrays inside uniform blocks, which needs this.
 		bool unsized_array_support = false;
 		// Largest range bindable as a uniform buffer. When unsized_array_support is
-		// false the shader generators need it to emit a concrete array bound.
+		// false the shader generators need it to emit a concrete array bound: the
+		// data heaps bind a window of exactly this size and index into it, so
+		// (this / element size) IS the highest index a shader can legally see.
 		u32 max_ubo_range = 16384;
 		// Set only on PowerVR, where max_ubo_range was clamped. Everywhere else the renderer's
 		// uniform windows use the driver's own limit, exactly as before the clamp existed.
@@ -111,10 +119,28 @@ namespace vk
 			bool surface_capabilities_2 = false;
 			bool synchronization_2 = false;
 			bool unrestricted_depth_range = false;
+
+			// VK_ANDROID_external_memory_android_hardware_buffer together with its dependency
+			// VK_EXT_queue_family_foreign, which unlike the other three was never promoted to core.
+			// True only when the device offers both, and then both ARE requested at vkCreateDevice,
+			// so this flag always means "enabled on the logical device": ARMSX3 remote play shares
+			// captured frames with the video encoder as AHardwareBuffers (VKPresent.cpp).
+			//
+			// Frame generation used AHardwareBuffers too, back when it ran on its own VkDevice, and
+			// this was once latched from the physical device alone while the extension stayed off,
+			// the latch-without-enable shape that produced a null-function-pointer crash elsewhere
+			// in this header. Keep the probe and the request together.
+			bool external_memory_ahb = false;
+
+			// What the Lossless Scaling shaders themselves need, independent of how the images
+			// are shared. Eden gates on exactly these two; see the note in device.cpp.
+			bool vulkan_memory_model = false;
+			bool null_descriptor = false;
 			bool extended_device_fault = false;
 			bool texture_compression_bc = false;
 			bool portability = false;
 			bool provoking_vertex_last = false;
+			bool shader_draw_parameters = false;
 		} optional_features_support;
 
 		friend class render_device;
@@ -149,6 +175,20 @@ namespace vk
 		VkPhysicalDeviceType get_type() const { return props.deviceType; }
 	};
 
+	/**
+	 * Memory the GPU pools may size themselves against.
+	 *
+	 * On a discrete GPU this is simply the device local heap: a 3GB texture cache out of 8GB
+	 * of dedicated VRAM costs system RAM nothing. A phone has one pool for both, so
+	 * device_local_total_bytes reports system RAM, and sizing caches against it budgets
+	 * memory the OS also needs.
+	 *
+	 * Measured: the texture cache quota resolved to 2978MB on a 7.4GB device, the process
+	 * climbed to 4.3GB, drove available memory to 54MB and 3GB of swap, and was killed
+	 * mid-session.
+	 */
+	u64 get_budgetable_device_memory(u64 device_local_total);
+
 	class render_device
 	{
 		physical_device* pgpu = nullptr;
@@ -156,6 +196,26 @@ namespace vk
 		gpu_formats_support m_formats_support{};
 		std::unique_ptr<mem_allocator_base> m_allocator;
 		VkDevice dev = VK_NULL_HANDLE;
+
+		// Driver-side pipeline cache, seeded from disk at device creation and written
+		// back at teardown. Every vkCreate*Pipelines call is handed this, which lets the
+		// driver skip compilation work it has already done -- including work done in a
+		// PREVIOUS run, which is the whole point on mobile where a cold pipeline compile
+		// is a visible stall. Orthogonal to RSX's own shader cache: that one remembers
+		// WHICH pipelines a title needs, this one makes each one cheap to create.
+		VkPipelineCache m_pipeline_cache = VK_NULL_HANDLE;
+		mutable usz m_pipeline_cache_saved_size = 0;
+#ifdef __APPLE__
+		mutable std::mutex m_pipeline_cache_save_lock;
+		mutable std::chrono::steady_clock::time_point m_pipeline_cache_save_time{};
+#endif
+
+		std::string get_pipeline_cache_path() const;
+		void load_pipeline_cache();
+#ifndef __APPLE__
+		void save_pipeline_cache() const;
+#endif
+		void save_and_destroy_pipeline_cache();
 
 		VkQueue m_graphics_queue = VK_NULL_HANDLE;
 		VkQueue m_present_queue = VK_NULL_HANDLE;
@@ -165,17 +225,13 @@ namespace vk
 		u32 m_present_queue_family = 0;
 		u32 m_transfer_queue_family = 0;
 
+		// GPU reset and recovery
+		mutable atomic_t<bool> m_is_lost = false;
+		std::function<void()> m_error_handler{};
+
 		void dump_debug_info(
 			const std::vector<const char*>& requested_extensions,
 			const VkPhysicalDeviceFeatures& requested_features) const;
-
-		VkPipelineCache m_pipeline_cache = VK_NULL_HANDLE;
-		mutable usz m_pipeline_cache_saved_size = 0;
-
-		std::string get_pipeline_cache_path() const;
-		void load_pipeline_cache();
-		void save_pipeline_cache() const;
-		void save_and_destroy_pipeline_cache();
 
 	public:
 		render_device() = default;
@@ -192,13 +248,32 @@ namespace vk
 		const physical_device& gpu() const { return *pgpu; }
 		const memory_type_mapping& get_memory_mapping() const { return memory_map; }
 		const gpu_formats_support& get_formats_support() const { return m_formats_support; }
+
+		// May be VK_NULL_HANDLE, which is a legal argument to vkCreate*Pipelines and simply
+		// means "no cache". Safe to pass from several pipeline compiler threads at once:
+		// the spec only requires external synchronisation on a cache created with
+		// VK_PIPELINE_CACHE_CREATE_EXTERNALLY_SYNCHRONIZED_BIT_EXT, which this is not.
+		VkPipelineCache get_pipeline_cache() const { return m_pipeline_cache; }
+#ifdef __APPLE__
+		// The RSX thread saves during play, at most once per min_interval; teardown saves with none.
+		void save_pipeline_cache(std::chrono::steady_clock::duration min_interval = {}) const;
+#endif
+
+		// Writes the driver pipeline cache to disk now if it grew since the last write. The
+		// cache is otherwise only written when the device is destroyed, which an Android
+		// process killed from the background never reaches. RSX thread only.
+		void flush_pipeline_cache() const { save_pipeline_cache(); }
+
 		const gpu_shader_types_support& get_shader_types_support() const { return pgpu->shader_types_support; }
 		const custom_border_color_features& get_custom_border_color_support() const { return pgpu->custom_border_color_support; }
 		bool get_unsized_array_support() const { return pgpu->unsized_array_support; }
 
 		/**
 		 * Array bound to emit for a runtime-sized uniform-block array when the
-		 * device cannot do unsized ones.
+		 * device cannot do unsized ones. The heaps bind a window of
+		 * maxUniformBufferRange and the shader indexes it as
+		 * (dynamic_offset / element_size), so this is exactly the highest index
+		 * reachable -- not an estimate.
 		 */
 		// The window the heaps bind a uniform buffer through. Must agree with ubo_array_bound:
 		// the shader indexes from the start of this window, so a window wider than the declared
@@ -239,9 +314,20 @@ namespace vk
 		bool get_anisotropic_filtering_support() const { return pgpu->features.samplerAnisotropy != VK_FALSE; }
 		bool get_wide_lines_support() const { return pgpu->features.wideLines != VK_FALSE; }
 		bool get_conditional_render_support() const { return pgpu->optional_features_support.conditional_rendering; }
+
+		// Topology, cull mode, front face and the depth test are set per draw instead of being
+		// baked into a pipeline object. That is what keeps the permutation count down on mobile,
+		// where every extra pipeline is a compile stall the first time it is seen and another
+		// entry in a cache that already takes minutes to warm. Everything keyed on this must have
+		// a static fallback: the extension is core in 1.3 but plenty of shipped Android 11/13
+		// drivers predate it.
 		bool get_extended_dynamic_state_support() const { return pgpu->optional_features_support.extended_dynamic_state; }
+
 		bool get_unrestricted_depth_range_support() const { return pgpu->optional_features_support.unrestricted_depth_range; }
+		bool get_vulkan_memory_model_support() const { return pgpu->optional_features_support.vulkan_memory_model; }
+		bool get_null_descriptor_support() const { return pgpu->optional_features_support.null_descriptor; }
 		bool get_external_memory_host_support() const { return pgpu->optional_features_support.external_memory_host; }
+		bool get_external_memory_ahb_support() const { return pgpu->optional_features_support.external_memory_ahb; }
 		bool get_memory_budget_support() const { return pgpu->optional_features_support.memory_budget; }
 		bool get_surface_capabilities_2_support() const { return pgpu->optional_features_support.surface_capabilities_2; }
 		bool get_debug_utils_support() const;
@@ -251,6 +337,7 @@ namespace vk
 		bool get_extended_device_fault_support() const { return pgpu->optional_features_support.extended_device_fault; }
 		bool get_texture_compression_bc_support() const { return pgpu->optional_features_support.texture_compression_bc; }
 		bool get_provoking_vertex_last_support() const { return pgpu->optional_features_support.provoking_vertex_last; }
+		bool get_shader_draw_parameters_support() const { return pgpu->optional_features_support.shader_draw_parameters; }
 
 		u64 get_descriptor_update_after_bind_support() const { return pgpu->descriptor_indexing_support.update_after_bind_mask; }
 		u32 get_descriptor_max_draw_calls() const { return pgpu->descriptor_max_draw_calls; }
@@ -263,15 +350,15 @@ namespace vk
 		u32 get_transfer_queue_family() const { return m_transfer_queue_family; }
 
 		mem_allocator_base* get_allocator() const { return m_allocator.get(); }
-		VkPipelineCache get_pipeline_cache() const { return m_pipeline_cache; }
+
+		bool device_lost() const;  // Returns true if the device was valid before the call.
+		bool is_lost() const { return m_is_lost; }
+		void set_error_handler(std::function<void()> callback) { m_error_handler = callback; }
 
 		operator VkDevice() const { return dev; }
 	};
 
 	memory_type_mapping get_memory_mapping(const physical_device& dev);
-	// Usable device memory for cache budgeting: on Android the GPU shares system RAM, so this
-	// is what is actually free rather than the device-local heap size.
-	u64 get_budgetable_device_memory(u64 device_local_total);
 	gpu_formats_support get_optimal_tiling_supported_formats(const physical_device& dev);
 
 	extern const render_device* g_render_device;

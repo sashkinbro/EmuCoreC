@@ -1,12 +1,19 @@
 #include "device.h"
 #include "memory.h"
 #include "memory_budget.hpp"
+#include "Emu/system_config.h"
 
 #include "Emu/RSX/Utils/algorithm.hpp"
 #include "Emu/system_config.h"
+#ifdef __APPLE__
+#include <atomic>
+#include "ios_jit_dual_map.h"
+#endif
 
 namespace vk
 {
+	// Defined in VKHelpers.cpp. Declared here rather than including VKHelpers.h, which pulls the
+	// renderer into vkutils and inverts the dependency this directory is kept clean of.
 	bool is_last_ditch_eviction();
 	void set_last_ditch_eviction(bool state);
 
@@ -164,6 +171,39 @@ namespace vk
 		: m_device(dev), m_allocation_flags(0)
 	{}
 
+#ifdef __APPLE__
+	// Device-local VMA block bytes for the perf line, kept in an atomic the bridge can read during teardown.
+	static std::atomic<u64> s_device_local_block_bytes{0};
+
+	static bool is_device_local_type(VmaAllocator allocator, u32 memory_type)
+	{
+		const VkPhysicalDeviceMemoryProperties* props = nullptr;
+		vmaGetMemoryProperties(allocator, &props);
+		return props && (props->memoryHeaps[props->memoryTypes[memory_type].heapIndex].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT);
+	}
+
+	static void VKAPI_PTR on_vma_block_allocated(VmaAllocator allocator, u32 memory_type, VkDeviceMemory, VkDeviceSize size, void*)
+	{
+		if (is_device_local_type(allocator, memory_type))
+		{
+			s_device_local_block_bytes.fetch_add(size, std::memory_order_relaxed);
+		}
+	}
+
+	static void VKAPI_PTR on_vma_block_freed(VmaAllocator allocator, u32 memory_type, VkDeviceMemory, VkDeviceSize size, void*)
+	{
+		if (is_device_local_type(allocator, memory_type))
+		{
+			s_device_local_block_bytes.fetch_sub(size, std::memory_order_relaxed);
+		}
+	}
+
+	u64 vmm_get_device_local_block_bytes()
+	{
+		return s_device_local_block_bytes.load(std::memory_order_relaxed);
+	}
+
+#endif
 	mem_allocator_vma::mem_allocator_vma(const vk::render_device& dev, VkPhysicalDevice pdev, VkInstance inst)
 		: mem_allocator_base(dev, pdev)
 	{
@@ -175,6 +215,25 @@ namespace vk
 		allocatorInfo.device = dev;
 		allocatorInfo.instance = inst;
 		allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_2;
+#ifdef __APPLE__
+		// VMA copies these at vmaCreateAllocator, so a local is enough.
+		const VmaDeviceMemoryCallbacks block_callbacks{on_vma_block_allocated, on_vma_block_freed, nullptr};
+		allocatorInfo.pDeviceMemoryCallbacks = &block_callbacks;
+
+#ifdef ARCH_ARM64
+		// VMA's default 256 MiB blocks held 736 MiB of Metal memory for 493 MiB in use on a 4 GB iPhone.
+		if (utils::low_memory_device())
+		{
+			allocatorInfo.preferredLargeHeapBlockSize = 32 * 0x100000;
+			rsx_log.notice("VMA: low-memory device, %u MiB blocks", 32);
+		}
+		else
+		{
+			allocatorInfo.preferredLargeHeapBlockSize = 64 * 0x100000;
+			rsx_log.notice("VMA: not a low-memory device, %u MiB blocks", 64);
+		}
+#endif
+#endif
 
 		std::vector<VkDeviceSize> heap_limits;
 		const auto vram_allocation_limit = g_cfg.video.vk.vram_allocation_limit * 0x100000ull;
@@ -184,7 +243,10 @@ namespace vk
 			vkGetPhysicalDeviceMemoryProperties(pdev, &memory_properties);
 			for (u32 i = 0; i < memory_properties.memoryHeapCount; ++i)
 			{
-				const u64 max_sz = (memory_properties.memoryHeaps[i].flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+				// VK_MEMORY_HEAP_DEVICE_LOCAL_BIT, not VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT: this is a
+				// heap flag, not a memory-type property. Both are 0x1 so the behaviour is unchanged,
+				// but the property enum does not belong on a VkMemoryHeap::flags test.
+				const u64 max_sz = (memory_properties.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT)
 					? vram_allocation_limit
 					: VK_WHOLE_SIZE;
 
@@ -194,6 +256,22 @@ namespace vk
 			m_heap_capped = true;
 		}
 
+		// Ask the driver what it will actually give us, instead of assuming the heap
+		// (or our own cap) is available.
+		//
+		// get_memory_usage returns usage/budget, and every eviction decision upstream
+		// is a threshold on it: 75% picks safer allocation flags, 90% is severe, 95%
+		// is treated as fatal. Without this extension VMA has no budget to report, so
+		// it uses the heap size -- and where pHeapSizeLimit is set, that limit. On a
+		// phone the limit is a number we chose, not one the hardware promised, so the
+		// load reads far below the real ceiling and NONE of those thresholds are ever
+		// crossed. Observed on an Adreno 740: Ratchet & Clank died on a 32MB
+		// allocation at 516MB used against a 2048MB cap -- 25% load, severity "low",
+		// no eviction had run in the three minutes before it, and the first refusal
+		// from the driver killed the RSX thread outright.
+		//
+		// VMA takes the smaller of this budget and pHeapSizeLimit, so the cap still
+		// caps; it just stops being mistaken for headroom that exists.
 		if (dev.get_memory_budget_support())
 		{
 			allocatorInfo.flags |= VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
@@ -203,6 +281,33 @@ namespace vk
 			rsx_log.warning("VK_EXT_memory_budget is unavailable. Video memory pressure will be "
 				"judged against the heap size rather than what the driver will actually part with.");
 		}
+
+#ifdef __ANDROID__
+		// Android builds with VK_NO_PROTOTYPES so the driver behind every vkFoo
+		// can be swapped (adrenotools). That also switches VMA from its static
+		// import path to the dynamic one -- and the dynamic path needs the two
+		// proc-address getters handed to it, which nothing was doing.
+		//
+		// VMA does not fail loudly when they are missing: VMA_ASSERT compiles out
+		// in release, so it called straight through a null pointer and took the
+		// process down inside VmaAllocator_T's constructor, on every single boot.
+		//
+		// Only these two are needed; VMA fetches the rest through them. Feeding it
+		// OUR getters (rather than the system ones) is also what keeps VMA on the
+		// same driver as the rest of the renderer when a custom one is loaded.
+		VmaVulkanFunctions vulkan_functions{};
+		vulkan_functions.vkGetInstanceProcAddr = ::vkGetInstanceProcAddr;
+		vulkan_functions.vkGetDeviceProcAddr = ::vkGetDeviceProcAddr;
+
+		if (!vulkan_functions.vkGetInstanceProcAddr || !vulkan_functions.vkGetDeviceProcAddr)
+		{
+			fmt::throw_exception("Vulkan dispatch table is not loaded (vkGetInstanceProcAddr=%p, vkGetDeviceProcAddr=%p)",
+				reinterpret_cast<void*>(vulkan_functions.vkGetInstanceProcAddr),
+				reinterpret_cast<void*>(vulkan_functions.vkGetDeviceProcAddr));
+		}
+
+		allocatorInfo.pVulkanFunctions = &vulkan_functions;
+#endif
 
 		CHECK_RESULT(vmaCreateAllocator(&allocatorInfo, &m_allocator));
 
@@ -295,6 +400,27 @@ namespace vk
 			}
 		}
 
+		if (!request.throw_on_fail)
+		{
+			return VK_NULL_HANDLE;
+		}
+
+		// Last chance before killing the thread: evict as if this were fatal, because it is.
+		//
+		// The attempt above asks at 'severe' when the caller can throw, and severe is also as far
+		// as on_vram_exhausted will go while the RSX is uninterruptible -- it deliberately
+		// declines the hard sync there, since eviction would touch resources the driver may still
+		// be reading. That is the right call while there is still a way out. There is not one
+		// here: the next statement ends the RSX thread, which the user sees as the picture
+		// freezing while audio keeps playing, so a sync that might disturb in-flight resources is
+		// strictly the cheaper risk.
+		//
+		// Ratchet & Clank reaches this asking for a single 84MB block while holding 472MB of a
+		// 2048MB cap, so what fails is one large request rather than a full heap -- exactly the
+		// case where dropping everything unlocked can still find room.
+		//
+		// Guarded on recover_vmem_on_fail like the attempt above, so a caller that opted out of
+		// recovery is not handed it here by the back door.
 		const bool last_ditch_recovered = [&]()
 		{
 			if (!request.recover_vmem_on_fail || error_code != VK_ERROR_OUT_OF_DEVICE_MEMORY)
@@ -302,6 +428,8 @@ namespace vk
 				return false;
 			}
 
+			// Scoped, so the exemption cannot outlive this attempt and quietly authorise a hard
+			// sync somewhere it is not warranted.
 			vk::set_last_ditch_eviction(true);
 			const bool relieved = vmm_handle_memory_pressure(rsx::problem_severity::fatal);
 			vk::set_last_ditch_eviction(false);
@@ -320,12 +448,30 @@ namespace vk
 			}
 		}
 
-		if (!request.throw_on_fail)
-		{
-			return VK_NULL_HANDLE;
-		}
+		// Say what could not be allocated before dying.
+		//
+		// "Out of video memory" on its own cannot distinguish a device that is genuinely full
+		// from a single absurd request, and those need opposite fixes. God of War 3's DEMO fails
+		// here while the full game, which is larger, boots fine -- so the totals are not the
+		// obvious explanation and the size of this one request matters.
+		// The cap, not just the request. vram_allocation_limit is applied as VMA's pHeapSizeLimit,
+		// so it is a hard ceiling and not a soft budget: once total allocations reach it VMA
+		// returns OUT_OF_DEVICE_MEMORY however much the device actually has free. A modest
+		// request failing while the process holds little is the signature of hitting that
+		// ceiling rather than the hardware.
+		rsx_log.error("Failed to allocate %lluK of video memory (pool=%d, pool total=%lluM, heap cap=%lluM).",
+			request.size / 1024, static_cast<int>(request.pool),
+			vmm_get_application_pool_usage(request.pool) / 0x100000,
+			static_cast<u64>(g_cfg.video.vk.vram_allocation_limit));
 
-		rsx_log.error("Video memory at allocation failure: %s", vmm_describe_memory_usage());
+		// And who holds the rest. The pool total above covers only the failing request's own pool,
+		// which in LEGO Harry Potter was 437M of a 2048M cap when a 256M ring heap was refused,
+		// and nothing said whether the cap or the driver refused it, or what held the remainder.
+		// This names what VMA had in blocks against the cap (the figure it actually refuses on),
+		// what every pool held, and how far the GPU was behind, since memory handed to the garbage
+		// collector stays allocated until the next submission retires.
+		rsx_log.error("Video memory at the failure: %s", vmm_describe_memory_usage());
+
 		die_with_error(error_code);
 		fmt::throw_exception("Unreachable! Error_code=0x%x", static_cast<u32>(error_code));
 	}
@@ -387,10 +533,18 @@ namespace vk
 
 	std::string mem_allocator_vma::describe_heap_usage()
 	{
+		// A local copy: get_memory_usage() keeps its own in 'stats', and a report should not
+		// write over it.
 		std::array<VmaBudget, VK_MAX_MEMORY_HEAPS> budgets{};
 		vmaGetHeapBudgets(m_allocator, budgets.data());
+
+		// VMA's own copy of the properties, where a capped heap's size IS the cap it enforces.
 		const VkPhysicalDeviceMemoryProperties* props = nullptr;
 		vmaGetMemoryProperties(m_allocator, &props);
+
+		// VMA refuses on blockBytes (whole VkDeviceMemory blocks), checked before the driver is
+		// even asked, so that is the number to hold against the cap. allocationBytes is the part
+		// of those blocks actually handed out; the gap is space VMA holds but nothing uses.
 		std::string result;
 		for (u32 i = 0; i < props->memoryHeapCount; ++i)
 		{
@@ -398,13 +552,16 @@ namespace vk
 			{
 				continue;
 			}
+
 			const auto& heap = budgets[i];
-			fmt::append(result, "%sheap %u: %lluM in %u blocks of %lluM %s (%lluM in %u allocations), driver %lluM of %lluM",
-				result.empty() ? "" : ", ", i, heap.statistics.blockBytes / 0x100000, heap.statistics.blockCount,
+			fmt::append(result, "%sheap %u: %lluM in %u blocks of a %lluM %s (%lluM in %u allocations), driver reports %lluM used of a %lluM budget",
+				result.empty() ? "" : ", ", i,
+				heap.statistics.blockBytes / 0x100000, heap.statistics.blockCount,
 				props->memoryHeaps[i].size / 0x100000, m_heap_capped ? "cap" : "heap",
 				heap.statistics.allocationBytes / 0x100000, heap.statistics.allocationCount,
 				heap.usage / 0x100000, heap.budget / 0x100000);
 		}
+
 		return result;
 	}
 

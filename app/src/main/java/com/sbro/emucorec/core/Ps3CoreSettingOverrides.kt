@@ -4,6 +4,37 @@ import android.content.Context
 import android.util.Log
 import org.json.JSONObject
 
+internal val PRESENTATION_DEFAULTS = linkedMapOf(
+    "Video@@Cardboard VR" to "false",
+    "Video@@VR Picture Size" to "80",
+    "Video@@VR Eye Spacing" to "0",
+    "Video@@VR Height" to "0",
+)
+
+internal data class CardboardPresentation(val enabled: Boolean, val size: Int, val spacing: Int, val vertical: Int)
+
+internal fun resolveCardboardPresentation(values: Map<String, String>): CardboardPresentation = CardboardPresentation(
+    enabled = values["Video@@Cardboard VR"]?.toBooleanStrictOrNull() ?: false,
+    size = (values["Video@@VR Picture Size"]?.toIntOrNull() ?: 80).coerceIn(20, 100),
+    spacing = (values["Video@@VR Eye Spacing"]?.toIntOrNull() ?: 0).coerceIn(-100, 100),
+    vertical = (values["Video@@VR Height"]?.toIntOrNull() ?: 0).coerceIn(-100, 100),
+)
+
+internal fun withTitleHostnameRedirects(userList: String, titleId: String?): String {
+    // ARMSX3 47b4510a8a: Sony's retired Demon's Souls hosts otherwise resolve to parked
+    // domains. Defaults are per title and every explicit user host keeps its address.
+    if (titleId?.trim()?.uppercase() !in setOf(
+            "BLUS30443", "BLES00932", "BCJS30022", "BCAS20071", "NPUB30910", "NPEB01202", "NPJA00102",
+        )) return userList
+    val entries = userList.split("&&").map(String::trim).filter(String::isNotEmpty)
+    val userHosts = entries.map { it.substringBefore('=').trim().lowercase() }.toSet()
+    val hosts = listOf(
+        "ds-eu-c.scej-online.jp", "ds-eu-g.scej-online.jp", "c.demons-souls.com",
+        "g.demons-souls.com", "cmnap.scej-online.jp", "demons-souls.scej-online.jp",
+    )
+    return (entries + hosts.filterNot(userHosts::contains).map { "$it=206.189.232.242" }).joinToString("&&")
+}
+
 /**
  * Durable global and per-title overrides for settings exposed by the RPCS3 core.
  *
@@ -115,6 +146,14 @@ object Ps3CoreSettingOverrides {
         }
     }
 
+    /** Desired values explicitly remembered by the app, excluding recommended defaults. */
+    fun savedGlobalValues(context: Context): Map<String, String> {
+        val prefs = prefs(context)
+        return LinkedHashMap(read(prefs.getString(KEY_BASELINE, null))).apply {
+            putAll(read(prefs.getString(KEY_GLOBAL, null)))
+        }
+    }
+
     /** Serialize every native global/per-title override for settings backups. */
     fun exportJson(context: Context): JSONObject {
         val prefs = prefs(context)
@@ -165,6 +204,11 @@ object Ps3CoreSettingOverrides {
         if (game.isEmpty()) editor.remove(key) else editor.putString(key, encode(game))
         editor.apply()
 
+        if (path in PRESENTATION_DEFAULTS) {
+            applyPresentationSettings(context, titleId)
+            return true
+        }
+
         val baseline = read(prefs.getString(KEY_BASELINE, null))
         val global = read(prefs.getString(KEY_GLOBAL, null))
         val restored = global[path] ?: baseline[path] ?: coreDefaultEncodedValue
@@ -193,6 +237,7 @@ object Ps3CoreSettingOverrides {
         // Invalidate even on partial failure: some values may have changed.
         CoreSettingsTreeCache.invalidateTree()
         prefs(context).edit().clear().apply()
+        applyPresentationSettings(context, null)
         return accepted
     }
 
@@ -214,15 +259,44 @@ object Ps3CoreSettingOverrides {
 
         resolvedBase.forEach { (path, value) -> set(path, value, "global") }
         game.forEach { (path, value) -> set(path, value, "game:${titleId.orEmpty()}", transient = true) }
+        applyPresentationSettings(context, titleId)
+        val redirectPath = "Net@@IP swap list"
+        val encodedRedirects = game[redirectPath] ?: resolvedBase[redirectPath]
+        val redirects = if (encodedRedirects != null) {
+            runCatching { JSONObject("{\"value\":$encodedRedirects}").getString("value") }.getOrDefault("")
+        } else {
+            runCatching { JSONObject(Ps3Core.instance.settingsGet(redirectPath)).optString("value") }.getOrDefault("")
+        }
+        val merged = withTitleHostnameRedirects(redirects, titleId)
+        if (merged != redirects) {
+            // Queue after all user layers, but never persist a community-server default globally.
+            set(redirectPath, JSONObject.quote(merged), "title redirects", transient = true)
+        }
     }
 
     private fun set(path: String, value: String, tier: String, transient: Boolean = false) {
+        // These controls are owned by the Android presenter rather than cfg_root.
+        if (path in PRESENTATION_DEFAULTS) return
         val applied = runCatching {
             if (transient) Ps3Core.instance.queueGameSetting(path, value)
             else Ps3Core.instance.settingsSet(path, value)
         }.getOrDefault(false)
         if (applied) CoreSettingsTreeCache.invalidateTree()
         if (!applied) Log.w(TAG, "RPCS3 rejected [$tier] $path")
+    }
+
+    internal fun validPresentationEdit(path: String, value: String): Boolean = when (path) {
+        "Video@@Cardboard VR" -> value.toBooleanStrictOrNull() != null
+        "Video@@VR Picture Size" -> value.toIntOrNull()?.let { it in 20..100 } == true
+        "Video@@VR Eye Spacing", "Video@@VR Height" -> value.toIntOrNull()?.let { it in -100..100 } == true
+        else -> false
+    }
+
+    internal fun applyPresentationSettings(context: Context, titleId: String?) {
+        if (!Ps3Core.initialized) return
+        val values = resolvedGlobalValues(context) + titleId?.let { gameOverrides(context, it) }.orEmpty()
+        val state = resolveCardboardPresentation(values)
+        Ps3Core.instance.setCardboardVr(state.enabled, state.size, state.spacing, state.vertical)
     }
 
     private fun prefs(context: Context) =

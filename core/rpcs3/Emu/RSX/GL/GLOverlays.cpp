@@ -224,23 +224,10 @@ namespace gl
 	gl::texture_view* ui_overlay_renderer::load_simple_image(const rsx::overlays::image_info_base* desc, bool temp_resource, u32 owner_uid)
 	{
 		auto tex = std::make_unique<gl::texture>(GL_TEXTURE_2D, desc->w, desc->h, 1, 1, 1, GL_RGBA8, RSX_FORMAT_CLASS_COLOR);
-	#ifdef RSX_GLES
-		// Overlay images are decoded to ordinary RGBA8 bytes. Desktop GL accepts
-		// GL_UNSIGNED_INT_8_8_8_8 here, but that packed transfer type is not part
-		// of the GLES pixel upload contract used by Adreno. Upload the bytes in
-		// their native order and use the original image directly: a texture view
-		// is unnecessary when neither the format nor the subresource changes.
-		tex->copy_from(desc->as_span(), gl::texture::format::rgba, gl::texture::type::ubyte, {});
-	#else
 		tex->copy_from(desc->as_span(), gl::texture::format::rgba, gl::texture::type::uint_8_8_8_8, {});
-	#endif
 
-	#ifdef RSX_GLES
-		auto view = std::make_unique<gl::nil_texture_view>(tex.get());
-	#else
 		const GLenum remap[] = { GL_RED, GL_ALPHA, GL_BLUE, GL_GREEN };
 		auto view = std::make_unique<gl::texture_view>(tex.get(), remap);
-	#endif
 
 		auto result = view.get();
 		if (!temp_resource)
@@ -324,14 +311,8 @@ namespace gl
 		auto tex = std::make_unique<gl::texture>(GL_TEXTURE_2D_ARRAY, font_size.width, font_size.height, font_size.depth, 1, 1, GL_R8, RSX_FORMAT_CLASS_COLOR);
 		tex->copy_from(std::span<const u8>(glyph_data), gl::texture::format::r, gl::texture::type::ubyte, {});
 
-	#ifdef RSX_GLES
-		// The font atlas already has the exact R8 array layout sampled by the
-		// overlay shader. Avoid an otherwise redundant texture view on GLES.
-		auto view = std::make_unique<gl::nil_texture_view>(tex.get());
-	#else
 		GLenum remap[] = { GL_RED, GL_RED, GL_RED, GL_RED };
 		auto view = std::make_unique<gl::texture_view>(tex.get(), remap);
-	#endif
 
 		auto result = view.get();
 		font_cache[key] = std::move(tex);
@@ -352,11 +333,7 @@ namespace gl
 
 			if (dirty)
 			{
-			#ifdef RSX_GLES
-				view->image()->copy_from(desc->as_span(), gl::texture::format::rgba, gl::texture::type::ubyte, {});
-			#else
 				view->image()->copy_from(desc->as_span(), gl::texture::format::rgba, gl::texture::type::uint_8_8_8_8, {});
-			#endif
 			}
 
 			return view;
@@ -421,7 +398,7 @@ namespace gl
 		}
 	}
 
-	void ui_overlay_renderer::run(gl::command_context& cmd_, const areau& viewport, GLuint target, rsx::overlays::overlay& ui, bool flip_vertically)
+	void ui_overlay_renderer::run(gl::command_context& cmd_, const areau& viewport, GLuint target, rsx::overlays::overlay& ui, bool flip_vertically, bool advance)
 	{
 		ui.set_render_viewport(
 		    static_cast<u16>(std::min<u32>(viewport.width(), std::numeric_limits<u16>::max())),
@@ -503,14 +480,19 @@ namespace gl
 				sdf_config.transform(static_cast<areaf>(viewport).flipped_vertical(), {ui_scale.x, ui_scale.y});
 
 				program_handle.uniforms["sdf_params"] = color4f(sdf_config.hx, sdf_config.hy, sdf_config.br, sdf_config.bw);
-				program_handle.uniforms["sdf_origin"] = color2f(sdf_config.cx, sdf_config.cy);
+				program_handle.uniforms["sdf_origin"] = color4f(sdf_config.cx, sdf_config.cy, sdf_config.ca, 0.f);
 				program_handle.uniforms["sdf_border_color"] = sdf_config.border_color;
 			}
 
 			overlay_pass::run(cmd_, viewport, target, gl::image_aspect::color, true);
 		}
 
-		ui.update(get_system_time());
+		// advance = false draws the overlay again without stepping it: Cardboard VR draws it once per eye
+		// (GLPresent.cpp), and stepping twice made the performance overlay count each frame twice.
+		if (advance)
+		{
+			ui.update(get_system_time());
+		}
 	}
 
 	video_out_calibration_pass::video_out_calibration_pass()
@@ -534,7 +516,7 @@ namespace gl
 	}
 
 	void video_out_calibration_pass::run(gl::command_context& cmd, const areau& viewport, const rsx::simple_array<GLuint>& source, f32 gamma, bool limited_rgb,
-		bool stereo_enabled, gl::filter input_filter)
+		bool stereo_enabled, gl::filter input_filter, s32 single_image_eye)
 	{
 		if (m_input_filter != input_filter)
 		{
@@ -549,7 +531,9 @@ namespace gl
 
 		program_handle.uniforms["gamma"] = gamma;
 		program_handle.uniforms["limit_range"] = limited_rgb + 0;
-		program_handle.uniforms["stereo_display_mode"] = static_cast<u8>(stereo_cfg.stereo_mode());
+		// 100 and 101 are the shader's STEREO_MODE_SINGLE_IMAGE_LEFT_EYE and _RIGHT_EYE.
+		const int display_mode = single_image_eye >= 0 ? 100 + (single_image_eye ? 1 : 0) : static_cast<u8>(stereo_cfg.stereo_mode());
+		program_handle.uniforms["stereo_display_mode"] = display_mode;
 		program_handle.uniforms["stereo_image_count"] = (source[1] == GL_NONE ? 1 : 2);
 		program_handle.uniforms["left_anaglyph_matrix"] = matrices.left;
 		program_handle.uniforms["right_anaglyph_matrix"] = matrices.right;
@@ -565,25 +549,9 @@ namespace gl
 
 	rp_ssbo_to_generic_texture::rp_ssbo_to_generic_texture()
 	{
-	#ifdef RSX_GLES
-		// This transfer pass derives its address from gl_FragCoord and has no
-		// fragment inputs. Keep the GLES stage interface minimal; some Adreno
-		// releases fail to link the otherwise unused tc0 vertex output.
-		vs_src = R"(
-#version 320 es
-void main()
-{
-	const vec2 positions[4] = vec2[4](
-		vec2(-1.0, -1.0), vec2(1.0, -1.0),
-		vec2(-1.0, 1.0), vec2(1.0, 1.0));
-	gl_Position = vec4(positions[gl_VertexID & 3], 0.0, 1.0);
-}
-)";
-	#else
 		vs_src =
 		#include "../Program/GLSLSnippets/GenericVSPassthrough.glsl"
 		;
-	#endif
 
 		fs_src =
 		#include "../Program/GLSLSnippets/CopyBufferToGenericImage.glsl"
@@ -591,13 +559,14 @@ void main()
 
 		const auto& caps = gl::get_driver_caps();
 		const bool stencil_export_supported = caps.ARB_shader_stencil_export_supported;
-	#ifdef RSX_GLES
-		// The GLES buffer-to-image path deliberately uses this render pass for
-		// ordinary color formats instead of an untyped desktop imageStore shader.
+#ifdef RSX_GLES
+		// ARMSX3: on ES every colour upload comes through here (see GLTexture.cpp), as on the old
+		// AMD driver, so the plain formats need decoding too. Without them nothing is written and
+		// every texture is black.
 		const bool legacy_format_support = true;
-	#else
+#else
 		const bool legacy_format_support = caps.subvendor_ATI;
-	#endif
+#endif
 
 		std::pair<std::string_view, std::string> repl_list[] =
 		{

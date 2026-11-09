@@ -4,6 +4,9 @@ import android.content.Context
 import android.util.Log
 import com.sbro.emucorec.core.EmulatorStorage
 import com.sbro.emucorec.core.Ps3SfoParser
+import com.sbro.emucorec.core.Ps3Core
+import com.sbro.emucorec.core.Ps3Runtime
+import org.json.JSONObject
 import java.io.File
 
 class InstalledGameRepository {
@@ -102,23 +105,7 @@ class InstalledGameRepository {
                 if (directory.isFile && com.sbro.emucorec.core.Ps3IsoParser.isIsoImage(directory)) {
                     return@mapNotNull com.sbro.emucorec.core.Ps3IsoParser.parse(context, directory)
                 }
-                val sfo = findParamSfo(directory) ?: EmulatorStorage.paramSfoPath(context, directory.name)
-                if (!sfo.isFile) return@mapNotNull null
-                val metadata = Ps3SfoParser.parse(sfo)
-                val parsedTitleId = metadata.titleId?.takeIf(String::isNotBlank) ?: return@mapNotNull null
-                val parsedTitle = metadata.title?.takeIf(String::isNotBlank) ?: return@mapNotNull null
-                val iconFile = findIcon(directory) ?: EmulatorStorage.iconPath(context, parsedTitleId)
-                InstalledPs3Game(
-                    titleId = parsedTitleId,
-                    title = parsedTitle,
-                    contentId = metadata.contentId,
-                    saveDataId = metadata.saveDataId ?: parsedTitleId,
-                    version = metadata.version,
-                    category = metadata.category,
-                    iconPath = iconFile.takeIf { it.exists() }?.absolutePath,
-                    catalogCoverUrl = null,
-                    installPath = directory.absolutePath
-                )
+                readDirectoryGame(context, directory)
             }
 
         val customFolderDirGames = customGameDirs.mapNotNull { directory ->
@@ -126,24 +113,7 @@ class InstalledGameRepository {
                 return@mapNotNull com.sbro.emucorec.core.Ps3IsoParser.parse(context, directory)
                     ?.copy(isCustomFolderGame = true)
             }
-            val sfo = findParamSfo(directory) ?: EmulatorStorage.paramSfoPath(context, directory.name)
-            if (!sfo.isFile) return@mapNotNull null
-            val metadata = Ps3SfoParser.parse(sfo)
-            val parsedTitleId = metadata.titleId?.takeIf(String::isNotBlank) ?: return@mapNotNull null
-            val parsedTitle = metadata.title?.takeIf(String::isNotBlank) ?: return@mapNotNull null
-            val iconFile = findIcon(directory) ?: EmulatorStorage.iconPath(context, parsedTitleId)
-            InstalledPs3Game(
-                titleId = parsedTitleId,
-                title = parsedTitle,
-                contentId = metadata.contentId,
-                saveDataId = metadata.saveDataId ?: parsedTitleId,
-                version = metadata.version,
-                category = metadata.category,
-                iconPath = iconFile.takeIf { it.exists() }?.absolutePath,
-                catalogCoverUrl = null,
-                installPath = directory.absolutePath,
-                isCustomFolderGame = true
-            )
+            readDirectoryGame(context, directory)?.copy(isCustomFolderGame = true)
         }
 
         val directBootGames = FolderGames.entries(context).mapNotNull { (_, targetPath) ->
@@ -221,6 +191,20 @@ class InstalledGameRepository {
         val disc = File(directory, "PS3_GAME/ICON0.PNG")
         if (disc.isFile) return disc
         return null
+    }
+
+    private fun readDirectoryGame(context: Context, directory: File): InstalledPs3Game? {
+        val metadataDirectory = if (findParamSfo(directory) != null) directory else
+            EmulatorStorage.paramSfoPath(context, directory.name).parentFile ?: return null
+        val game = readInstalledFolder(metadataDirectory) { trial ->
+            runCatching {
+                if (!Ps3Runtime.ensureInitialized(context)) return@runCatching null
+                val info = JSONObject(Ps3Core.instance.probeDiscInfo(trial.absolutePath, ""))
+                info.optString("metadataRoot").takeIf(String::isNotBlank)?.let(::File)
+            }.getOrNull()
+        } ?: return null
+        val fallbackIcon = EmulatorStorage.iconPath(context, game.titleId).takeIf(File::isFile)
+        return game.copy(installPath = directory.absolutePath, iconPath = game.iconPath ?: fallbackIcon?.absolutePath)
     }
 
     private fun findInstalledGameFolders(context: Context, titleId: String): Set<File> {

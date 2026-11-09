@@ -99,4 +99,10 @@ namespace rpcs3::utils
 	std::string get_game_content_path(game_content_type type);
 
 	bool version_is_bigger(std::string_view v0, std::string_view v1, std::string_view serial, bool is_fw);
+	void report_frame_period_ns(u64 ns);
+	u64 get_frame_period_ns();
+	void report_frame_work_ns(u64 ns);
+	u64 get_frame_work_ns();
+	void set_rsx_thread_tid(s32 tid);
+	s32 get_rsx_thread_tid();
 }

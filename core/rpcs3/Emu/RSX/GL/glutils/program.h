@@ -77,26 +77,6 @@ namespace gl
 				program& m_program;
 				GLint m_location;
 
-			#ifdef RSX_GLES
-				template <typename Callback>
-				void apply(Callback&& callback) const
-				{
-					GLint previous = GL_NONE;
-					glGetIntegerv(GL_CURRENT_PROGRAM, &previous);
-					if (static_cast<GLuint>(previous) != m_program.id())
-					{
-						glUseProgram(m_program.id());
-					}
-
-					callback();
-
-					if (static_cast<GLuint>(previous) != m_program.id())
-					{
-						glUseProgram(static_cast<GLuint>(previous));
-					}
-				}
-			#endif
-
 			public:
 				uniform_t(program& program, GLint location)
 					: m_program(program)
@@ -109,26 +89,6 @@ namespace gl
 					return m_location;
 				}
 
-			#ifdef RSX_GLES
-				void operator = (int rhs) const { apply([&] { glUniform1i(location(), rhs); }); }
-				void operator = (unsigned rhs) const { apply([&] { glUniform1ui(location(), rhs); }); }
-				void operator = (float rhs) const { apply([&] { glUniform1f(location(), rhs); }); }
-				void operator = (bool rhs) const { apply([&] { glUniform1ui(location(), rhs ? 1 : 0); }); }
-				void operator = (handle64_t rhs) const { glProgramUniformHandleui64ARB(m_program.id(), location(), rhs); }
-				void operator = (const color1i& rhs) const { apply([&] { glUniform1i(location(), rhs.r); }); }
-				void operator = (const color1f& rhs) const { apply([&] { glUniform1f(location(), rhs.r); }); }
-				void operator = (const color2i& rhs) const { apply([&] { glUniform2i(location(), rhs.r, rhs.g); }); }
-				void operator = (const color2f& rhs) const { apply([&] { glUniform2f(location(), rhs.r, rhs.g); }); }
-				void operator = (const color3i& rhs) const { apply([&] { glUniform3i(location(), rhs.r, rhs.g, rhs.b); }); }
-				void operator = (const color3f& rhs) const { apply([&] { glUniform3f(location(), rhs.r, rhs.g, rhs.b); }); }
-				void operator = (const color4i& rhs) const { apply([&] { glUniform4i(location(), rhs.r, rhs.g, rhs.b, rhs.a); }); }
-				void operator = (const color4f& rhs) const { apply([&] { glUniform4f(location(), rhs.r, rhs.g, rhs.b, rhs.a); }); }
-				void operator = (const areaf& rhs) const { apply([&] { glUniform4f(location(), rhs.x1, rhs.y1, rhs.x2, rhs.y2); }); }
-				void operator = (const areai& rhs) const { apply([&] { glUniform4i(location(), rhs.x1, rhs.y1, rhs.x2, rhs.y2); }); }
-				void operator = (const mat3f& rhs) const { apply([&] { glUniformMatrix3fv(location(), 1, GL_FALSE, &rhs[0].rgb[0]); }); }
-				void operator = (const std::span<const int>& rhs) const { apply([&] { glUniform1iv(location(), ::size32(rhs), rhs.data()); }); }
-				void operator = (const std::span<const handle64_t>& rhs) const { glProgramUniformHandleui64vARB(m_program.id(), location(), ::size32(rhs), rhs.data()); }
-			#else
 				void operator = (int rhs) const { glProgramUniform1i(m_program.id(), location(), rhs); }
 				void operator = (unsigned rhs) const { glProgramUniform1ui(m_program.id(), location(), rhs); }
 				void operator = (float rhs) const { glProgramUniform1f(m_program.id(), location(), rhs); }
@@ -147,7 +107,6 @@ namespace gl
 				void operator = (const mat3f& rhs) const { glProgramUniformMatrix3fv(m_program.id(), location(), 1, GL_FALSE, &rhs[0].rgb[0]); }
 				void operator = (const std::span<const int>& rhs) const { glProgramUniform1iv(m_program.id(), location(), ::size32(rhs), rhs.data()); }
 				void operator = (const std::span<const handle64_t>& rhs) const { glProgramUniformHandleui64vARB(m_program.id(), location(), ::size32(rhs), rhs.data()); }
-			#endif
 			};
 
 			class uniforms_t

@@ -5,11 +5,7 @@ layout(local_size_x = %ws, local_size_y = 1, local_size_z = 1) in;
 #define IMAGE_LOCATION(x) (x + %image_slot)
 #define SSBO_LOCATION(x)  (x + %ssbo_slot)
 
-#ifdef RSX_GLES
-layout(rgba8, %set, binding=IMAGE_LOCATION(0)) uniform writeonly restrict image2D output2D;
-#else
 layout(%set, binding=IMAGE_LOCATION(0)) uniform writeonly restrict image2D output2D;
-#endif
 
 #define FMT_GL_RGBA8                  0x8058
 #define FMT_GL_BGRA8                  0x80E1
@@ -23,8 +19,8 @@ layout(%set, binding=IMAGE_LOCATION(0)) uniform writeonly restrict image2D outpu
 #define FMT_GL_RGBA16F                0x881A
 #define FMT_GL_RGBA32F                0x8814
 
-#define bswap_u16(bits) (bits & 0xFFu) << 8u | (bits & 0xFF00u) >> 8u | (bits & 0xFF0000u) << 8u | (bits & 0xFF000000u) >> 8u
-#define bswap_u32(bits) (bits & 0xFFu) << 24u | (bits & 0xFF00u) << 8u | (bits & 0xFF0000u) >> 8u | (bits & 0xFF000000u) >> 24u
+#define bswap_u16(bits) (bits & 0xFF) << 8 | (bits & 0xFF00) >> 8 | (bits & 0xFF0000) << 8 | (bits & 0xFF000000) >> 8
+#define bswap_u32(bits) (bits & 0xFF) << 24 | (bits & 0xFF00) << 8 | (bits & 0xFF0000) >> 8 | (bits & 0xFF000000) >> 24
 
 layout(%set, binding=SSBO_LOCATION(0), std430) readonly restrict buffer RawDataBlock
 {
@@ -63,18 +59,18 @@ ivec2 linear_id_to_output_coord(uint index)
 // Decoders. Beware of multi-wide swapped types (e.g swap(16x2) != swap(32x1))
 uint readUint8(const in uint address)
 {
-	const uint block = address / 4u;
-	const uint offset = address % 4u;
+	const uint block = address / 4;
+	const uint offset = address % 4;
 	return bitfieldExtract(data[block], int(offset) * 8, 8);
 }
 
 uint readUint16(const in uint address)
 {
-	const uint block = address / 2u;
-	const uint offset = address % 2u;
+	const uint block = address / 2;
+	const uint offset = address % 2;
 	const uint value = bitfieldExtract(data[block], int(offset) * 16, 16);
 
-	if (swap_bytes != 0u)
+	if (swap_bytes != 0)
 	{
 		return bswap_u16(value);
 	}
@@ -85,7 +81,7 @@ uint readUint16(const in uint address)
 uint readUint32(const in uint address)
 {
 	const uint value = data[address];
-	return (swap_bytes != 0u) ? bswap_u32(value) : value;
+	return (swap_bytes != 0) ? bswap_u32(value) : value;
 }
 
 uvec2 readUint8x2(const in uint address)
@@ -100,31 +96,31 @@ ivec2 readInt8x2(const in uint address)
 	return raw - (ivec2(greaterThan(raw, ivec2(127))) * 256);
 }
 
-#define readFixed8(address) float(readUint8(address)) / 255.f
-#define readFixed8x2(address) vec2(readUint8x2(address)) / 255.f
-#define readFixed8x2Snorm(address) vec2(readInt8x2(address)) / 127.f
+#define readFixed8(address) readUint8(address) / 255.f
+#define readFixed8x2(address) readUint8x2(address) / 255.f
+#define readFixed8x2Snorm(address) readInt8x2(address) / 127.f
 
 vec4 readFixed8x4(const in uint address)
 {
 	const uint raw = readUint32(address);
-	return vec4(uvec4(
+	return uvec4(
 		bitfieldExtract(raw, 0, 8),
 		bitfieldExtract(raw, 8, 8),
 		bitfieldExtract(raw, 16, 8),
 		bitfieldExtract(raw, 24, 8)
-	)) / 255.f;
+	) / 255.f;
 }
 
-#define readFixed16(address) float(readUint16(uint(address))) / 65535.f
-#define readFixed16x2(address) vec2(readFixed16(address * 2u + 0u), readFixed16(address * 2u + 1u))
-#define readFixed16x4(address) vec4(readFixed16(address * 4u + 0u), readFixed16(address * 4u + 1u), readFixed16(address * 4u + 2u), readFixed16(address * 4u + 3u))
+#define readFixed16(address) readUint16(uint(address)) / 65535.f
+#define readFixed16x2(address) vec2(readFixed16(address * 2 + 0), readFixed16(address * 2 + 1))
+#define readFixed16x4(address) vec4(readFixed16(address * 4 + 0), readFixed16(address * 4 + 1), readFixed16(address * 4 + 2), readFixed16(address * 4 + 3))
 
 #define readFloat16(address) unpackHalf2x16(readUint16(uint(address))).x
-#define readFloat16x2(address) vec2(readFloat16(address * 2u + 0u), readFloat16(address * 2u + 1u))
-#define readFloat16x4(address) vec4(readFloat16(address * 4u + 0u), readFloat16(address * 4u + 1u), readFloat16(address * 4u + 2u), readFloat16(address * 4u + 3u))
+#define readFloat16x2(address) vec2(readFloat16(address * 2 + 0), readFloat16(address * 2 + 1))
+#define readFloat16x4(address) vec4(readFloat16(address * 4 + 0), readFloat16(address * 4 + 1), readFloat16(address * 4 + 2), readFloat16(address * 4 + 3))
 
 #define readFloat32(address) uintBitsToFloat(readUint32(address))
-#define readFloat32x4(address) uintBitsToFloat(uvec4(readUint32(address * 4u + 0u), readUint32(address * 4u + 1u), readUint32(address * 4u + 2u), readUint32(address * 4u + 3u)))
+#define readFloat32x4(address) uintBitsToFloat(uvec4(readUint32(address * 4 + 0), readUint32(address * 4 + 1), readUint32(address * 4 + 2), readUint32(address * 4 + 3)))
 
 #define KERNEL_SIZE %wks
 
@@ -182,7 +178,7 @@ void write_output(const in uint invocation_id)
 
 void main()
 {
-	uint index = linear_invocation_id() * uint(KERNEL_SIZE);
+	uint index = linear_invocation_id() * KERNEL_SIZE;
 
 	for (int loop = 0; loop < KERNEL_SIZE; ++loop, ++index)
 	{

@@ -1,9 +1,12 @@
 #pragma once
-#if defined(__ANDROID__)
-#include <GLES3/gl32.h>
-#include <GLES2/gl2ext.h>
-#include "OpenGLESCompat.h"
-#elif !defined(_WIN32)
+// ARMSX3: Android targets OpenGL ES 3.2, which has no GLEW and no desktop GL
+// entry points. OpenGL_ES.hpp stands in for both. Everything ES-specific lives
+// in that file and OpenGL_ES.cpp; this guard is the whole upstream footprint.
+#ifdef __ANDROID__
+#include "OpenGL_ES.hpp"
+#else
+
+#ifndef _WIN32
 #include <GL/glew.h>
 #endif
 
@@ -21,8 +24,9 @@ typedef BOOL (WINAPI* PFNWGLSWAPINTERVALEXTPROC) (int interval);
 #undef WGL_PROC
 #undef OPENGL_PROC2
 
-#elif defined(__ANDROID__)
-// GLES declarations are included above. Android has no desktop GL/gl.h.
+#elif defined(__APPLE__)
+#include <OpenGL/gl.h>
+#include <OpenGL/glu.h>
 
 #else
 #include <GL/gl.h>
@@ -32,6 +36,8 @@ typedef BOOL (WINAPI* PFNWGLSWAPINTERVALEXTPROC) (int interval);
 #include <GL/glxext.h>
 #endif
 #endif
+
+#endif // __ANDROID__
 
 #ifndef GL_TEXTURE_BUFFER_BINDING
 //During spec release, this enum was removed during upgrade from ARB equivalent
@@ -43,17 +49,4 @@ namespace gl
 {
 	void init();
 	void set_swapinterval(int interval);
-
-#ifdef __ANDROID__
-	namespace es
-	{
-		// Android owns the native window. The returned context object owns only
-		// EGL resources and may therefore be destroyed from the RSX/compiler
-		// thread that last used it.
-		void* create_context(void* native_window, void* share_context);
-		void destroy_context(void* context);
-		void make_current(void* context, void* native_window);
-		void swap_buffers();
-	}
-#endif
 }

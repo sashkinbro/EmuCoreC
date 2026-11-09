@@ -44,12 +44,9 @@ namespace rsx
 		cmd_mm_flush = 0x81000000,
 	};
 
-	void mm_protect(void* start, u64 length, utils::protection prot);
-	// Apply protection synchronously while keeping the preflight tracker
-	// coherent with the actual guest mapping.
-	void mm_protect_immediate(void* start, u64 length, utils::protection prot);
-	// Cheap lock-free query of protection applied by RSX subsystems.
 	bool mm_is_accessible(u32 vm_address, bool is_writing);
+	void mm_protect(void* start, u64 length, utils::protection prot);
+	void mm_protect_immediate(void* start, u64 length, utils::protection prot);
 	void mm_flush_lazy();
 	void mm_flush(u32 vm_address);
 	void mm_flush(const rsx::simple_array<utils::address_range64>& ranges);

@@ -1,10 +1,14 @@
 #include "stdafx.h"
+#include "Emu/RSX/rsx_profiler.h"
 #include "vkutils/query_pool.hpp"
 #include "VKHelpers.h"
 #include "VKQueryPool.h"
 #include "VKRenderPass.h"
 #include "VKResourceManager.h"
 #include "util/asm.hpp"
+
+#include <chrono>
+#include <thread>
 #include "VKGSRender.h"
 
 namespace vk
@@ -45,16 +49,14 @@ namespace vk
 			return query.ready;
 		}
 		default:
-			if (error == VK_ERROR_DEVICE_LOST)
-			{
-				// A dead device will never report this occlusion query; latch the loss and let
-				// the emulator stop cleanly rather than wait on the driver timeout.
-				rsx::request_device_lost_shutdown("polling an occlusion query");
+			if (!die_with_error(error))
 				return false;
-			}
 
-			die_with_error(error);
-			return false;
+			// The query will never complete. Report everything as visible, as if there was no host query.
+			query.any_passed = true;
+			query.ready = true;
+			query.data = umax;
+			return true;
 		}
 	}
 
@@ -90,7 +92,6 @@ namespace vk
 			if (m_query_pool_cache.size() > 0)
 			{
 				m_current_query_pool = std::move(m_query_pool_cache.front());
-				m_current_query_pool->reset_refs();
 				m_query_pool_cache.pop_front();
 			}
 			else
@@ -182,17 +183,88 @@ namespace vk
 		{
 			poke_query(query_info, index, result_flags);
 
-			u64 spin_start = get_system_time();
+			// Charged to fence_wait: this is the RSX thread blocked on a GPU result, which is
+			// what that bucket means. It was invisible before, and it is not small: a
+			// simpleperf profile of the RSX thread during Arkham City gameplay put 24.9% of
+			// all samples in this function, the single largest entry by a wide margin, while
+			// the bucket report showed nothing because no scope reached here.
+			RSX_PROF_SCOPE(fence_wait);
 
-			while (!query_info.ready)
+			// Bounded, because this loop has no other way out. A query that never becomes
+			// available parks the RSX thread here permanently, and nothing reports it: the stall
+			// detector runs from do_local_task in the FIFO loop, which we have already left, so
+			// the profiler charges the time to FIFO decode and the app looks CPU-bound while
+			// audio and vblank carry on. Diagnosing one of these took a native profile to show
+			// the thread was in sched_yield under this function.
+			//
+			// Giving up returns whatever the query holds, which costs at most wrong culling for
+			// a frame. That is a better failure than a freeze, and the log line names the cause
+			// instead of leaving it to be inferred.
+			const auto wait_started = std::chrono::steady_clock::now();
+			bool warned = false;
+
+			for (u32 spins = 0; !query_info.ready; spins++)
 			{
-				if (get_system_time() - spin_start > 2'000'000)
+				// Emulation is going away; a driver that never answers must not also wedge
+				// the exit path. The value is irrelevant once we are aborting.
+				if (thread_ctrl::state() == thread_state::aborting)
 				{
-					rsx_log.error("[vulkan] occlusion query %u still not ready after %llu ms", index, (get_system_time() - spin_start) / 1000);
-					spin_start = get_system_time();
+					rsx_log.warning("Occlusion query %u abandoned: emulation is shutting down.", index);
+					break;
 				}
 
+				if ((spins & 0xffff) == 0xffff)
+				{
+					const auto waited = std::chrono::steady_clock::now() - wait_started;
+
+					if (!warned && waited > std::chrono::seconds(1))
+					{
+						warned = true;
+						rsx_log.error("Occlusion query %u has not completed after 1s; still waiting.", index);
+					}
+
+					if (waited > std::chrono::seconds(3))
+					{
+						// Ask once more directly before giving up, to record WHICH way the
+						// driver is stalling: VK_NOT_READY, or VK_SUCCESS with the
+						// availability word still clear. The two are indistinguishable
+						// through poke_query and need different conversations with whoever
+						// maintains the driver.
+						u32 probe[2] = { 0, 0 };
+						const VkResult status = vkGetQueryPoolResults(*owner, *query_info.pool, index, 1, 8, probe, 8,
+							result_flags | VK_QUERY_RESULT_WITH_AVAILABILITY_BIT);
+
+						rsx_log.error("Occlusion query %u never completed (last VkResult %d, result %u, availability %u); "
+							"abandoning the wait and using result=%u.",
+							index, static_cast<int>(status), probe[0], probe[1], query_info.data);
+						query_info.ready = true;
+						break;
+					}
+				}
+
+#if defined(__ANDROID__) || defined(__APPLE__)
+				// Spin briefly, then hand the core back.
+				//
+				// A pure pause() spin is reasonable on a desktop, where the result lands in
+				// microseconds and there are cores to spare. On a tiled mobile GPU the
+				// result is not available until the tile pass resolves, so the wait is far
+				// longer, and this device runs eleven hot emulator threads across five
+				// usable cores. Burning one of them on a spin costs an SPU thread that had
+				// real work to do.
+				//
+				// The short spin first keeps the fast case fast, since a result that is
+				// nearly ready still returns without a scheduler round trip.
+				if (spins < 64)
+				{
+					utils::pause();
+				}
+				else
+				{
+					std::this_thread::yield();
+				}
+#else
 				utils::pause();
+#endif
 				poke_query(query_info, index, result_flags);
 			}
 		}
@@ -202,8 +274,46 @@ namespace vk
 
 	void query_pool_manager::get_query_result_indirect(vk::command_buffer& cmd, u32 index, u32 count, VkBuffer dst, VkDeviceSize dst_offset)
 	{
-		// We're technically supposed to stop any active renderpasses before streaming the results out, but that doesn't matter on IMR hw
-		// On TBDR setups like the apple M series, the stop is required (results are all 0 if you don't flush the RP), but this introduces a very heavy performance loss.
+		// Not "technically supposed to" -- vkCmdCopyQueryPoolResults MUST be recorded outside a
+		// render pass instance. Inside one it is undefined behaviour, and an IMR desktop GPU
+		// tolerating it is not evidence that a tiler will.
+		//
+		// This device does not: with occlusion queries on, Spider-Man: Web of Shadows loses the
+		// Vulkan device shortly after a new game starts. The fault surfaces later, in poke_query,
+		// because that is the first call that waits on a GPU result -- so it reads as the query
+		// READ being at fault when the damage was done when this was recorded. Only the RSX
+		// thread dies, so the app keeps running with audio and vblank alive and it presents as a
+		// hard freeze rather than a crash.
+		//
+		// Turning occlusion queries off avoids it and is not an alternative: measured here at
+		// 80ms frames with broken visuals, because the game loses its culling results.
+		//
+		// The upstream comment feared the flush cost. It is paid only when a pass is actually
+		// open, on a path that already stalls for a GPU result.
+		if (vk::is_renderpass_open(cmd))
+		{
+			// A query that began inside a render pass instance has to end inside that same
+			// instance. Ending the pass underneath an open one leaves it permanently
+			// unavailable: the driver never marks it ready, so get_query_result spins on
+			// poke_query forever and the RSX thread stops with everything else still alive.
+			//
+			// Nothing catches it either. The submit-time ensure() in commands.cpp only checks
+			// that the query was closed, and end_occlusion_query does close it a moment later,
+			// so the flag is clear and the assert passes while the result never arrives. That
+			// cost Web of Shadows a hang here after the device loss below was fixed.
+			//
+			// Closing it first keeps begin and end within one pass, which is the ordering the
+			// spec asks for. The query is cut short, as it is anywhere do_query_cleanup is
+			// used, and a truncated occlusion result beats a stalled thread.
+			if (cmd.flags & vk::command_buffer::cb_has_open_query)
+			{
+				vk::do_query_cleanup(cmd);
+			}
+
+			if (rsx::prof::enabled()) [[unlikely]] rsx::prof::g_rp_sites[2]++;
+			vk::end_renderpass(cmd);
+		}
+
 		vkCmdCopyQueryPoolResults(cmd, *query_slot_status[index].pool, index, count, dst, dst_offset, 4, VK_QUERY_RESULT_WAIT_BIT);
 	}
 
@@ -234,7 +344,14 @@ namespace vk
 			// TODO: Alternatively, use VK_EXT_host_pool_reset to reset an old pool with no references and swap that in
 			if (vk::is_renderpass_open(cmd))
 			{
-				vk::end_renderpass(cmd);
+				// Same hazard as get_query_result_indirect above: whatever is open has to be
+				// closed before the pass goes, or it never becomes available.
+				if (cmd.flags & vk::command_buffer::cb_has_open_query)
+				{
+					vk::do_query_cleanup(cmd);
+				}
+
+				if (rsx::prof::enabled()) [[unlikely]] rsx::prof::g_rp_sites[2]++; vk::end_renderpass(cmd);
 			}
 
 			reallocate_pool(cmd);
@@ -261,7 +378,9 @@ namespace vk
 			return;
 		}
 
+#ifdef __APPLE__
 		std::lock_guard lock(m_query_pool_cache_lock);
+#endif
 		m_query_pool_cache.emplace_back(std::move(pool));
 	}
 

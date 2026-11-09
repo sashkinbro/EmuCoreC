@@ -18,6 +18,7 @@
 
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
+#include <TargetConditionals.h>
 #endif
 
 #if defined(__DragonFly__) || defined(__FreeBSD__) || defined(__NetBSD__)
@@ -235,7 +236,12 @@ namespace rsx
 					{
 						std::string executablePath = dirname(result);
 #ifdef __APPLE__
+#if TARGET_OS_IPHONE
+						// An iOS .app bundle is flat, so resources sit beside the binary
+						src = executablePath + "/Icons/ui/" + res;
+#else
 						src = executablePath + "/../Resources/Icons/ui/" + res;
+#endif
 #else
 						src = executablePath + "/../share/rpcs3/Icons/ui/" + res;
 #endif
@@ -509,13 +515,10 @@ namespace rsx
 		{
 			if (font_name.empty())
 			{
-				font_ref = fontmgr::get(g_cfg.video.ui.default_font.get(), font_size);
-			}
-			else
-			{
-				font_ref = fontmgr::get(font_name, font_size);
+				font_name = g_cfg.video.ui.default_font.get();
 			}
 
+			font_ref = fontmgr::get(font_name, font_size);
 			m_is_compiled = false;
 		}
 
@@ -1311,6 +1314,41 @@ namespace rsx
 			rounded_rect::get_compiled();
 			auto& config = compiled_resources.draw_commands.front().config;
 			configure_sdf(config, sdf_function::ellipse);
+
+			m_is_compiled = true;
+			return compiled_resources;
+		}
+
+		void pie::set_cutoff_angle(f32 degrees)
+		{
+			degrees = std::clamp(degrees, 0.f, 360.f);
+			if (degrees != m_cutoff_angle)
+			{
+				m_cutoff_angle = degrees;
+				m_is_compiled = false;
+			}
+		}
+
+		compiled_resource& pie::get_compiled()
+		{
+			if (is_compiled())
+			{
+				return compiled_resources;
+			}
+
+			compiled_resources.clear();
+
+			// An empty wedge still has a zero-distance edge along 12 o'clock which would bleed through the AA, so emit nothing instead.
+			if (!is_visible() || m_cutoff_angle <= 0.f)
+			{
+				m_is_compiled = true;
+				return compiled_resources;
+			}
+
+			ellipse::get_compiled();
+			auto& config = compiled_resources.draw_commands.front().config;
+			configure_sdf(config, sdf_function::pie);
+			config.sdf_config.ca = m_cutoff_angle;
 
 			m_is_compiled = true;
 			return compiled_resources;

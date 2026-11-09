@@ -29,6 +29,9 @@ namespace
         std::atomic<bool> awaiting_run{false};
         bool captured = false;
         u64 resume_identifier = 0;
+        u64 copied_history_size = 0;
+        s64 copied_history_mtime = 0;
+        bool reader_released = false;
 
         operation(long id, unsigned index, std::string game_title, bool saving, std::string file)
             : progress_id(id), slot(index), title(std::move(game_title)), save(saving), path(std::move(file)) {}
@@ -169,6 +172,37 @@ namespace
         return true;
     }
 
+    std::string history_note(const std::string& title, unsigned slot)
+    {
+        return slot_directory(title) + "slot" + std::to_string(slot) + ".history";
+    }
+
+    bool owned_history_path(const std::string& title, const std::string& path)
+    {
+        if (!valid_title(title) || path.find('\0') != std::string::npos) return false;
+        const auto normalized = std::filesystem::path(path).lexically_normal();
+        const auto directory = (std::filesystem::path(fs::get_config_dir()) / "savestates" / title).lexically_normal();
+        const auto name = normalized.filename().string();
+        return normalized.parent_path() == directory && name.starts_with(title + "_") &&
+            name.ends_with(".SAVESTAT.zst");
+    }
+
+    // Only called after Run has released the restore reader, or from the completed Kill
+    // callback before any restore starts. Never remove the history used by an active Load.
+    void remove_completed_history(const operation& op)
+    {
+        if (!op.save || !op.captured || !op.reader_released || !owned_history_path(op.title, op.path)) return;
+        fs::stat_t current{};
+        if (!fs::get_stat(op.path, current)) return;
+        if (current.size != op.copied_history_size || current.mtime != op.copied_history_mtime) return;
+        if (!fs::remove_file(op.path))
+        {
+            save_state_log.warning("Could not remove completed slot history: %s", op.path);
+            return;
+        }
+        fs::remove_file(history_note(op.title, op.slot));
+    }
+
     bool owned_slot_path(const std::string& path)
     {
         const auto normalized = std::filesystem::path(path).lexically_normal();
@@ -188,7 +222,7 @@ namespace
         return false;
     }
 
-    bool capture_slot(const operation& op, std::string& destination)
+    bool capture_slot(operation& op, std::string& destination)
     {
         if (!op.written || op.path.empty()) return false;
         fs::file source(op.path);
@@ -224,6 +258,18 @@ namespace
         // A failed payload rename leaves the previous payload in place, still
         // matching the previous record in the already-published manifest.
         if (!output.commit()) return false;
+        fs::stat_t copied{};
+        if (owned_history_path(op.title, op.path) && fs::get_stat(op.path, copied) && copied.size == candidate.size)
+        {
+            op.copied_history_size = copied.size;
+            op.copied_history_mtime = copied.mtime;
+            // Crash recovery names just the file copied. On startup the payload and its
+            // committed slot integrity record must match before that history can be deleted.
+            const auto name = std::filesystem::path(op.path).filename().string();
+            fs::pending_file note;
+            if (!note.open(history_note(op.title, op.slot)) || note.file.write(name.data(), name.size()) != name.size() || !note.commit())
+                save_state_log.warning("Could not record slot history cleanup: %s", op.path);
+        }
         // Publication is complete. Failed compaction merely leaves two valid
         // records; do not turn a committed overwrite into a reported failure.
         try
@@ -343,8 +389,12 @@ namespace
               {
                 std::string path = op->path;
                 const bool saved = !op->save || capture_slot(*op, path);
+                op->captured = saved;
                 if (op->stop_requested)
                 {
+                    // after_kill_callback runs after System has reset its state reader.
+                    op->reader_released = true;
+                    remove_completed_history(*op);
                     Emu.SetContinuousMode(false);
                     finish(op, op->save && saved);
                     return;
@@ -353,7 +403,6 @@ namespace
                 // A failed capture never overwrites a previous numbered slot.
                 const std::string resume_path = op->save ? op->path : path;
                 op->awaiting_run = true;
-                op->captured = saved;
                 op->resume_identifier = static_cast<u64>(Emu.GetEmulationIdentifier());
                 const bool restored = !resume_path.empty() &&
                     Emu.BootGame(resume_path, "", true) == game_boot_result::no_errors;
@@ -386,6 +435,37 @@ namespace save_states
         }
     }
 
+    void cleanup_history()
+    {
+        std::lock_guard lock(g_emu_lifecycle_mutex);
+        if (pending || !Emu.IsStopped(true)) return;
+        const auto root = fs::get_config_dir() + "savestates/";
+        for (const auto& title : fs::dir(root))
+        {
+            if (!title.is_directory || !valid_title(title.name)) continue;
+            for (unsigned slot = 0; slot < slot_count; ++slot)
+            {
+                const auto note_path = history_note(title.name, slot);
+                fs::file note(note_path);
+                if (!note || note.size() == 0 || note.size() > 512) continue;
+                const auto name = note.to_string();
+                note.close();
+                // A bare file name only: notes cannot reach another directory or title.
+                if (name.find_first_of("/\\") != std::string::npos) continue;
+                const auto history = root + title.name + "/" + name;
+                if (!owned_history_path(title.name, history)) continue;
+                if (!fs::is_file(history)) { fs::remove_file(note_path); continue; }
+                integrity_record committed, actual;
+                const auto slot_path = find_slot(title.name, slot);
+                if (slot_path.empty() || !verified_payload(slot_path, &committed)) continue;
+                fs::file source(history);
+                if (!source || source.size() != committed.size || !hash_payload(source, actual) || actual != committed) continue;
+                source.close();
+                if (fs::remove_file(history)) fs::remove_file(note_path);
+            }
+        }
+    }
+
     void stopped()
     {
         const auto op = active_operation();
@@ -394,7 +474,11 @@ namespace save_states
         if (!op || !op->awaiting_run.load()) return;
         Emu.CallFromMainThread([op]
         {
-            run_operation(op, [op] { finish(op, false); });
+            run_operation(op, [op] {
+                op->reader_released = true;
+                remove_completed_history(*op);
+                finish(op, false);
+            });
         }, nullptr, false);
     }
 
@@ -406,6 +490,9 @@ namespace save_states
             std::lock_guard lock(g_emu_lifecycle_mutex);
             const auto op = pending;
             if (!op || !op->awaiting_run || op->resume_identifier != identifier) return;
+            // System::Run resets m_ar before on_run_completed invokes this hook.
+            op->reader_released = true;
+            remove_completed_history(*op);
             finish(op, op->captured);
         }, nullptr, false);
     }

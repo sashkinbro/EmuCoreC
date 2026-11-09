@@ -1,10 +1,6 @@
 R"(
 #define ZS_READ(index, coord) vec2(texture(TEX_NAME(index), coord).r, float(texture(TEX_NAME_STENCIL(index), coord).x))
-#ifdef RSX_GLES
-#define TEX1D_Z24X8_RGBA8(index, coord1) _process_texel(convert_z24x8_to_rgba8(ZS_READ(index, vec2(COORD_SCALE1(index, coord1), 0.5)), TEX_PARAM(index).remap, TEX_FLAGS(index)), TEX_FLAGS(index))
-#else
 #define TEX1D_Z24X8_RGBA8(index, coord1) _process_texel(convert_z24x8_to_rgba8(ZS_READ(index, COORD_SCALE1(index, coord1)), TEX_PARAM(index).remap, TEX_FLAGS(index)), TEX_FLAGS(index))
-#endif
 #define TEX2D_Z24X8_RGBA8(index, coord2) _process_texel(convert_z24x8_to_rgba8(ZS_READ(index, COORD_SCALE2(index, coord2)), TEX_PARAM(index).remap, TEX_FLAGS(index)), TEX_FLAGS(index))
 #define TEX3D_Z24X8_RGBA8(index, coord3) _process_texel(convert_z24x8_to_rgba8(ZS_READ(index, COORD_SCALE3(index, coord3)), TEX_PARAM(index).remap, TEX_FLAGS(index)), TEX_FLAGS(index))
 

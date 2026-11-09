@@ -4,11 +4,11 @@
 
 #include "Emu/RSX/RSXThread.h"
 #include "Emu/RSX/Common/BufferUtils.h"
+#include "Emu/RSX/Host/MM.h"
+#include "Emu/RSX/rsx_profiler.h"
 #include "Emu/system_config.h"
 
-#define RSX(ctx) ctx->rsxthr
-#define REGS(ctx) (&rsx::method_registers)
-#define RSX_CAPTURE_EVENT(name) if (RSX(ctx)->capture_current_frame) { RSX(ctx)->capture_frame(name); }
+#include "context_accessors.define.h"
 
 namespace rsx
 {
@@ -18,10 +18,10 @@ namespace rsx
 
 		void set_shader_program_dirty(context* ctx, u32, u32)
 		{
-			RSX(ctx)->m_graphics_state |= rsx::pipeline_state::fragment_program_ucode_dirty;
+			ctx->graphics_state |= rsx::pipeline_state::fragment_program_ucode_dirty;
 		}
 
-		set_transform_constant::write_range set_transform_constant::compute_write_range([[maybe_unused]] context* ctx, u32 reg, u32 count)
+		set_transform_constant::write_range set_transform_constant::compute_write_range(context* ctx, u32 reg, u32 count)
 		{
 			const u32 load = REGS(ctx)->transform_constant_load();
 			if (load >= max_transform_constants)
@@ -39,7 +39,7 @@ namespace rsx
 			return { first_word, std::min(count, max_words - first_word) };
 		}
 
-		u32* set_transform_constant::get_constants_ptr([[maybe_unused]] context* ctx, u32 word)
+		u32* set_transform_constant::get_constants_ptr(context* ctx, u32 word)
 		{
 			return &REGS(ctx)->transform_constants[word / 4][word % 4];
 		}
@@ -72,7 +72,7 @@ namespace rsx
 
 			if (!notify || !notify(ctx, first_constant, constant_count))
 			{
-				RSX(ctx)->patch_transform_constants(ctx, first_constant, constant_count);
+				RSX(ctx)->renderer()->patch_transform_constants(ctx, first_constant, constant_count);
 			}
 		}
 
@@ -80,7 +80,7 @@ namespace rsx
 		{
 			const auto dst = get_constants_ptr(ctx, first_word);
 
-			if (RSX(ctx)->m_graphics_state & rsx::pipeline_state::transform_constants_dirty)
+			if (ctx->graphics_state & rsx::pipeline_state::transform_constants_dirty)
 			{
 				// Minor optimization: don't compare values if we already know we need invalidation
 				copy_data_swap_u32(dst, src, count);
@@ -90,12 +90,17 @@ namespace rsx
 			if (copy_data_swap_u32_cmp(dst, src, count))
 			{
 				// Transform constants invalidation is expensive (~8k bytes per update)
-				RSX(ctx)->m_graphics_state |= rsx::pipeline_state::transform_constants_dirty;
+				ctx->graphics_state |= rsx::pipeline_state::transform_constants_dirty;
 			}
 		}
 
 		void set_transform_constant::impl(context* ctx, u32 reg, [[maybe_unused]] u32 arg)
 		{
+			// The other batching handler, and 13% of dispatches across its load/write pair.
+			RSX_PROF_SCOPE(xform_const);
+
+			if (rsx::prof::enabled()) [[unlikely]] rsx::prof::g_xform_const_calls++;
+
 			const u32 index = reg - NV4097_SET_TRANSFORM_CONSTANT;
 			const bool non_increment = (RSX(ctx)->fifo_ctrl->last_cmd() & RSX_METHOD_NON_INCREMENT_CMD_MASK) == RSX_METHOD_NON_INCREMENT_CMD;
 
@@ -108,7 +113,12 @@ namespace rsx
 			const u32 method_range = non_increment ? fifo_args_cnt : 32 - index;
 
 			// Get limit imposed by FIFO PUT (if put is behind get it will result in a number ignored by min)
-			const u32 fifo_read_limit = static_cast<u32>(((RSX(ctx)->ctrl->put & ~3ull) - (RSX(ctx)->fifo_ctrl->get_pos())) / 4);
+			// observe(), not the default load: atomic_t reads are seq_cst, which is an ldar on
+			// ARM64, and `put` shares a cache line with `get` that the guest PPU writes from
+			// another cluster. These are the two hottest FIFO handlers, so the barrier was paid
+			// thousands of times a frame on a contended line. A stale value only shrinks the
+			// batch; the remainder is picked up next time.
+			const u32 fifo_read_limit = static_cast<u32>(((RSX(ctx)->ctrl->put.observe() & ~3ull) - (RSX(ctx)->fifo_ctrl->get_pos())) / 4);
 
 			// Number of args owned by this method. Every one of these must be consumed, even if the write is trimmed or dropped entirely.
 			const u32 count = std::min<u32>({ fifo_args_cnt, fifo_read_limit, method_range });
@@ -120,8 +130,10 @@ namespace rsx
 			const auto range = compute_write_range(ctx, reg, write_count);
 			if (range.word_count < write_count)
 			{
-				static std::atomic<bool> reported = false;
-				if (!reported.exchange(true, std::memory_order_relaxed))
+				// ARMSX3: Skyrim does this on every draw, ~200 times a second, and the log lives on the SD
+				// card. Once per run says the same thing.
+				static bool s_reported = false;
+				if (!std::exchange(s_reported, true))
 				{
 					rsx_log.warning("Invalid transform register index (load=%u, index=%u, count=%u)", REGS(ctx)->transform_constant_load(), index, write_count);
 				}
@@ -135,7 +147,7 @@ namespace rsx
 				return;
 			}
 
-			if (RSX(ctx)->in_begin_end && !REGS(ctx)->current_draw_clause.empty())
+			if (ctx->in_begin_end && !REGS(ctx)->current_draw_clause.empty())
 			{
 				// Updating constants mid-draw is messy. Defer the writes
 				REGS(ctx)->current_draw_clause.insert_command_barrier(
@@ -164,16 +176,31 @@ namespace rsx
 					write_constants(ctx, range.first_word, fifo_span.data(), available);
 				}
 
+				if (rsx::prof::enabled()) [[unlikely]] rsx::prof::g_xform_const_words += available;
+
 				RSX(ctx)->fifo_ctrl->skip_methods(available - 1);
 				return;
 			}
 
 			write_constants(ctx, range.first_word, fifo_span.data() + src_offset, range.word_count);
+
+			// Words, not calls: the profiler reports average batch size as words/calls, so a
+			// missing increment here reads as 0 rather than as absent. Counts the args this call
+			// consumes, as skip_methods does.
+			if (rsx::prof::enabled()) [[unlikely]] rsx::prof::g_xform_const_words += count;
+
 			RSX(ctx)->fifo_ctrl->skip_methods(count - 1);
 		}
 
 		void set_transform_program::impl(context* ctx, u32 reg, u32 /*arg*/)
 		{
+			// Biggest single entry in the method histogram at 16% of all dispatches, and one of
+			// only two handlers that batches, so the histogram counts the methods it consumes
+			// rather than the times it ran. Scoped per call, which is what the cost divides by.
+			RSX_PROF_SCOPE(xform_program);
+
+			if (rsx::prof::enabled()) [[unlikely]] rsx::prof::g_xform_program_calls++;
+
 			const u32 index = reg - NV4097_SET_TRANSFORM_PROGRAM;
 
 			// FIFO args count including this one
@@ -183,14 +210,14 @@ namespace rsx
 			const u32 method_range = 32 - index;
 
 			// Get limit imposed by FIFO PUT (if put is behind get it will result in a number ignored by min)
-			const u32 fifo_read_limit = static_cast<u32>(((RSX(ctx)->ctrl->put & ~3ull) - (RSX(ctx)->fifo_ctrl->get_pos())) / 4);
+			const u32 fifo_read_limit = static_cast<u32>(((RSX(ctx)->ctrl->put.observe() & ~3ull) - (RSX(ctx)->fifo_ctrl->get_pos())) / 4);
 
 			// Number of args owned by this method. Every one of these must be consumed, even if the write is trimmed or dropped entirely.
 			const u32 count = std::min<u32>({ fifo_args_cnt, fifo_read_limit, method_range });
 
 			// Writes start at the current load position, which advances by one instruction per 4 words written
 			const u32 load_pos = REGS(ctx)->transform_program_load();
-			constexpr u32 max_words = max_vertex_program_instructions * 4;
+			const u32 max_words = max_vertex_program_instructions * 4;
 			const u32 first_word = load_pos < max_vertex_program_instructions ? load_pos * 4 + index % 4 : max_words;
 			const u32 write_count = std::min(count, max_words - first_word);
 
@@ -199,7 +226,7 @@ namespace rsx
 				rsx_log.warning("Program buffer overflow! (load=%u, index=%u, count=%u)", load_pos, index, count);
 			}
 
-			if (write_count == 0 || first_word >= REGS(ctx)->transform_program.size())
+			if (write_count == 0)
 			{
 				// Out-of-bounds write is a NOP
 				rsx_log.trace("Out of bounds write for transform program block.");
@@ -214,7 +241,7 @@ namespace rsx
 
 			pipeline_state to_set_dirty = rsx::pipeline_state::vertex_program_ucode_dirty;
 
-			if (rcount >= 4 && !RSX(ctx)->m_graphics_state.test(rsx::pipeline_state::vertex_program_ucode_dirty))
+			if (rcount >= 4 && !ctx->graphics_state.test(rsx::pipeline_state::vertex_program_ucode_dirty))
 			{
 				// Assume clean
 				to_set_dirty = {};
@@ -222,8 +249,19 @@ namespace rsx
 				const usz first_index_off = 0;
 				const usz second_index_off = (((rcount / 4) - 1) / 2) * 4;
 
-				const u64 src_op1_2 = read_from_ptr<be_t<u64>>(fifo_span, first_index_off);
-				const u64 src_op2_2 = read_from_ptr<be_t<u64>>(fifo_span, second_index_off);
+				// Rotated by 32: the destination holds each word already byte-swapped
+				// individually (copy_data_swap_u32), but be_t<u64> swaps all eight bytes,
+				// which additionally EXCHANGES the two words. Without the rotate this
+				// compares (w0,w1) against (w1,w0) and can only match when w0 == w1, so the
+				// redundant-upload check never fired: every upload set the ucode dirty,
+				// forcing a vertex program re-analysis, a program cache hint drop and a full
+				// transform constant re-upload on every draw.
+				//
+				// Lost once already, in the ROP output remap merge: this hunk sits inside the
+				// same handler upstream rewrote, and re-applying the profiler scopes around it
+				// did not put it back. Restored in b9689d07f's follow-up.
+				const u64 src_op1_2 = std::rotl<u64>(read_from_ptr<be_t<u64>>(fifo_span, first_index_off), 32);
+				const u64 src_op2_2 = std::rotl<u64>(read_from_ptr<be_t<u64>>(fifo_span, second_index_off), 32);
 
 				// Fast comparison
 				if (src_op1_2 != read_from_ptr_unsafe<u64>(out_ptr, first_index_off) || src_op2_2 != read_from_ptr_unsafe<u64>(out_ptr, second_index_off))
@@ -241,7 +279,12 @@ namespace rsx
 				to_set_dirty = rsx::pipeline_state::vertex_program_ucode_dirty;
 			}
 
-			RSX(ctx)->m_graphics_state |= to_set_dirty;
+			// Pairs with g_xform_program_calls: the profiler reports words/calls, so without
+			// this the average batch size prints 0 rather than printing nothing. Also lost in
+			// the ROP remap merge, alongside the rotl above.
+			if (rsx::prof::enabled()) [[unlikely]] rsx::prof::g_xform_program_words += rcount;
+
+			ctx->graphics_state |= to_set_dirty;
 			REGS(ctx)->transform_program_load_set(load_pos + ((rcount + index % 4) / 4));
 
 			// If the FIFO span came up short, the remaining in-range args are dispatched again. Otherwise consume everything, including the trimmed tail.
@@ -262,18 +305,18 @@ namespace rsx
 			switch (reg)
 			{
 			case NV4097_SET_SURFACE_COLOR_TARGET:
-				RSX(ctx)->m_graphics_state |= rsx::pipeline_state::pipeline_config_dirty;
+				ctx->graphics_state |= rsx::pipeline_state::pipeline_config_dirty;
 				break;
 			case NV4097_SET_SURFACE_CLIP_VERTICAL:
 			case NV4097_SET_SURFACE_CLIP_HORIZONTAL:
-				RSX(ctx)->m_graphics_state |= rsx::pipeline_state::vertex_state_dirty;
+				ctx->graphics_state |= rsx::pipeline_state::vertex_state_dirty;
 				break;
 			default:
 				break;
 			}
 
-			RSX(ctx)->m_graphics_state.set(rtt_config_dirty);
-			RSX(ctx)->m_graphics_state.clear(rtt_config_contested);
+			ctx->graphics_state.set(rtt_config_dirty);
+			ctx->graphics_state.clear(rtt_config_contested);
 		}
 
 		void set_zmin_max_control(context* ctx, u32 /*reg*/, u32 arg)
@@ -283,12 +326,12 @@ namespace rsx
 				return;
 			}
 
-			RSX(ctx)->m_graphics_state |= rsx::pipeline_state::pipeline_config_dirty;
+			ctx->graphics_state |= rsx::pipeline_state::pipeline_config_dirty;
 
 			// Depth clip and clamp are read by the fragment epilogue when the depth range is emulated
 			if (!RSX(ctx)->get_backend_config().supports_extended_depth_range && g_cfg.video.emulate_extended_depth_range)
 			{
-				RSX(ctx)->m_graphics_state |= rsx::pipeline_state::fragment_state_dirty;
+				ctx->graphics_state |= rsx::pipeline_state::fragment_state_dirty;
 			}
 		}
 
@@ -301,7 +344,7 @@ namespace rsx
 			}
 
 			// The important parameters have changed (format, type, antialias)
-			RSX(ctx)->m_graphics_state |= rsx::pipeline_state::pipeline_config_dirty;
+			ctx->graphics_state |= rsx::pipeline_state::pipeline_config_dirty;
 
 			// Check if we need to also update fragment state
 			const auto current = REGS(ctx)->decode<NV4097_SET_SURFACE_FORMAT>(arg);
@@ -310,25 +353,25 @@ namespace rsx
 			// Check for different ROP emulation
 			if (current.is_integer_color_format() != previous.is_integer_color_format())
 			{
-				RSX(ctx)->m_graphics_state |= rsx::pipeline_state::fragment_program_state_dirty;
+				ctx->graphics_state |= rsx::pipeline_state::fragment_program_state_dirty;
 			}
 
 			// If swizzle remap changed, we have to flag both the shader and the ROP parameters
 			if (current.is_remapped_format() != previous.is_remapped_format())
 			{
-				RSX(ctx)->m_graphics_state |=
+				ctx->graphics_state |=
 					rsx::pipeline_state::fragment_program_state_dirty |
 					rsx::pipeline_state::fragment_state_dirty;
 			}
 			// If we're still remapping outputs but the format changed, reload ROP params
 			else if ((current.is_remapped_format() && *current.color_fmt() != *previous.color_fmt()))
 			{
-				RSX(ctx)->m_graphics_state |= rsx::pipeline_state::fragment_state_dirty;
+				ctx->graphics_state |= rsx::pipeline_state::fragment_state_dirty;
 			}
 			// If antialias control has changed, also update ROP parameters
 			else if (*current.antialias() != *previous.antialias())
 			{
-				RSX(ctx)->m_graphics_state |= rsx::pipeline_state::fragment_state_dirty;
+				ctx->graphics_state |= rsx::pipeline_state::fragment_state_dirty;
 			}
 
 			set_surface_dirty_bit(ctx, reg, arg);
@@ -339,7 +382,7 @@ namespace rsx
 			if (arg != REGS(ctx)->latch)
 			{
 				RSX(ctx)->on_framebuffer_options_changed(reg);
-				RSX(ctx)->m_graphics_state |= rsx::pipeline_config_dirty;
+				ctx->graphics_state |= rsx::pipeline_config_dirty;
 			}
 		}
 
@@ -386,7 +429,7 @@ namespace rsx
 			}
 
 			// Reconfigure pipeline.
-			RSX(ctx)->m_graphics_state |= rsx::pipeline_config_dirty;
+			ctx->graphics_state |= rsx::pipeline_config_dirty;
 
 			// If we support A2C in hardware, leave the rest upto the hardware. The pipeline config should take care of it.
 			const auto& backend_config = RSX(ctx)->get_backend_config();
@@ -401,7 +444,7 @@ namespace rsx
 			const auto a2c_new = REGS(ctx)->decode<NV4097_SET_ANTI_ALIASING_CONTROL>(arg).msaa_alpha_to_coverage();
 			if (a2c_old != a2c_new)
 			{
-				RSX(ctx)->m_graphics_state |= rsx::fragment_program_state_dirty;
+				ctx->graphics_state |= rsx::fragment_program_state_dirty;
 			}
 		}
 
@@ -409,7 +452,7 @@ namespace rsx
 
 		void set_array_element16(context* ctx, u32, u32 arg)
 		{
-			if (RSX(ctx)->in_begin_end)
+			if (ctx->in_begin_end)
 			{
 				RSX(ctx)->GRAPH_frontend().append_array_element(arg & 0xFFFF);
 				RSX(ctx)->GRAPH_frontend().append_array_element(arg >> 16);
@@ -418,11 +461,11 @@ namespace rsx
 
 		void set_array_element32(context* ctx, u32, u32 arg)
 		{
-			if (RSX(ctx)->in_begin_end)
+			if (ctx->in_begin_end)
 				RSX(ctx)->GRAPH_frontend().append_array_element(arg);
 		}
 
-		void draw_arrays(context* /*rsx*/, u32 /*reg*/, u32 arg)
+		void draw_arrays(context* ctx, u32 /*reg*/, u32 arg)
 		{
 			REGS(ctx)->current_draw_clause.command = rsx::draw_command::array;
 			rsx::registers_decoder<NV4097_DRAW_ARRAYS>::decoded_type v(arg);
@@ -430,7 +473,7 @@ namespace rsx
 			REGS(ctx)->current_draw_clause.append(v.start(), v.count());
 		}
 
-		void draw_index_array(context* /*rsx*/, u32 /*reg*/, u32 arg)
+		void draw_index_array(context* ctx, u32 /*reg*/, u32 arg)
 		{
 			REGS(ctx)->current_draw_clause.command = rsx::draw_command::indexed;
 			rsx::registers_decoder<NV4097_DRAW_INDEX_ARRAY>::decoded_type v(arg);
@@ -438,7 +481,7 @@ namespace rsx
 			REGS(ctx)->current_draw_clause.append(v.start(), v.count());
 		}
 
-		void draw_inline_array(context* /*rsx*/, u32 /*reg*/, u32 arg)
+		void draw_inline_array(context* ctx, u32 /*reg*/, u32 arg)
 		{
 			arg = std::bit_cast<u32, be_t<u32>>(arg);
 			REGS(ctx)->current_draw_clause.command = rsx::draw_command::inlined_array;
@@ -449,7 +492,7 @@ namespace rsx
 		{
 			if (REGS(ctx)->registers[reg] != REGS(ctx)->latch)
 			{
-				RSX(ctx)->m_graphics_state |= rsx::pipeline_state::vertex_program_ucode_dirty;
+				ctx->graphics_state |= rsx::pipeline_state::vertex_program_ucode_dirty;
 			}
 		}
 
@@ -457,7 +500,7 @@ namespace rsx
 		{
 			if (REGS(ctx)->registers[reg] != REGS(ctx)->latch)
 			{
-				RSX(ctx)->m_graphics_state |= rsx::pipeline_state::vertex_program_state_dirty;
+				ctx->graphics_state |= rsx::pipeline_state::vertex_program_state_dirty;
 			}
 		}
 
@@ -494,7 +537,7 @@ namespace rsx
 				const auto primitive_type = to_primitive_type(prim);
 				if (!primitive_type)
 				{
-					RSX(ctx)->in_begin_end = true;
+					ctx->in_begin_end = true;
 
 					rsx_log.warning("Invalid NV4097_SET_BEGIN_END value: 0x%x", arg);
 					return;
@@ -536,22 +579,21 @@ namespace rsx
 
 				if (g_cfg.video.disable_video_output)
 				{
-					RSX(ctx)->execute_nop_draw();
-					RSX(ctx)->rsx::thread::end();
+					RSX(ctx)->discard_draw();
 					return;
 				}
 
 				// Notify the backend if the drawing style changes (instanced vs non-instanced)
-				if (REGS(ctx)->current_draw_clause.is_trivial_instanced_draw != RSX(ctx)->is_current_vertex_program_instanced())
+				if (REGS(ctx)->current_draw_clause.is_trivial_instanced_draw != ctx->program.is_vertex_program_instanced())
 				{
-					RSX(ctx)->m_graphics_state |= rsx::pipeline_state::xform_instancing_state_dirty;
+					ctx->graphics_state |= rsx::pipeline_state::xform_instancing_state_dirty;
 				}
 
 				RSX(ctx)->end();
 			}
 			else
 			{
-				RSX(ctx)->in_begin_end = false;
+				ctx->in_begin_end = false;
 			}
 
 			if (RSX(ctx)->pause_on_draw && RSX(ctx)->pause_on_draw.exchange(false))
@@ -594,7 +636,7 @@ namespace rsx
 
 			if (valid) [[ likely ]]
 			{
-				RSX(ctx)->m_graphics_state |= rsx::pipeline_config_dirty;
+				ctx->graphics_state |= rsx::pipeline_config_dirty;
 			}
 			else
 			{
@@ -612,7 +654,7 @@ namespace rsx
 			if (to_blend_equation(arg & 0xFFFF) &&
 				to_blend_equation((arg >> 16) & 0xFFFF)) [[ likely ]]
 			{
-				RSX(ctx)->m_graphics_state |= rsx::pipeline_config_dirty;
+				ctx->graphics_state |= rsx::pipeline_config_dirty;
 				return;
 			}
 
@@ -630,7 +672,7 @@ namespace rsx
 			if (to_blend_factor(arg & 0xFFFF) &&
 				to_blend_factor((arg >> 16) & 0xFFFF)) [[ likely ]]
 			{
-				RSX(ctx)->m_graphics_state |= rsx::pipeline_config_dirty;
+				ctx->graphics_state |= rsx::pipeline_config_dirty;
 				return;
 			}
 
@@ -738,7 +780,7 @@ namespace rsx
 
 			if (to_shading_mode(arg))
 			{
-				RSX(ctx)->m_graphics_state |= rsx::vertex_program_state_dirty | rsx::fragment_program_state_dirty;
+				ctx->graphics_state |= rsx::vertex_program_state_dirty | rsx::fragment_program_state_dirty;
 				return;
 			}
 
@@ -776,6 +818,7 @@ namespace rsx
 			}
 
 			const u32 addr = RSX(ctx)->iomap_table.get_addr(0xf100000 + (index * 0x40));
+
 			ensure(addr != umax);
 
 			// Notify ticks are strongly ordered
@@ -804,9 +847,9 @@ namespace rsx
 				return;
 			}
 
-			const u32 addr = get_address(offset, REGS(ctx)->semaphore_context_dma_4097());
+			const u32 addr = get_address(ctx, offset, REGS(ctx)->semaphore_context_dma_4097());
 
-			if (RSX(ctx)->label_addr >> 28 != addr >> 28)
+			if (ctx->fw.label_addr >> 28 != addr >> 28)
 			{
 				rsx_log.error("NV4097 semaphore unexpected address. Please report to the developers. (offset=0x%x, addr=0x%x)", offset, addr);
 			}
@@ -834,14 +877,31 @@ namespace rsx
 				return;
 			}
 
-			const u32 addr = get_address(offset, REGS(ctx)->semaphore_context_dma_4097());
+			const u32 addr = get_address(ctx, offset, REGS(ctx)->semaphore_context_dma_4097());
 
-			if (RSX(ctx)->label_addr >> 28 != addr >> 28)
+			if (ctx->fw.label_addr >> 28 != addr >> 28)
 			{
 				rsx_log.error("NV4097 semaphore unexpected address. Please report to the developers. (offset=0x%x, addr=0x%x)", offset, addr);
 			}
 
 			const u32 val = (arg & 0xff00ff00) | ((arg & 0xff) << 16) | ((arg >> 16) & 0xff);
+
+			// Who writes the label that nv406e::semaphore_acquire waits on.
+			//
+			// Across 15 captured hangs the acquire ALWAYS times out on 0x40300CC0 and ALWAYS
+			// exactly one increment short (awaited - observed == 1), 2.7-9.9s BEFORE the FIFO
+			// freezes -- i.e. it is the trigger, not a symptom. An earlier trace cleared the
+			// self-deadlock theory by watching nv406e::semaphore_release and seeing no writes to
+			// that address, but THIS is the other writer, reached by a different method
+			// (NV4097_BACK_END_WRITE_SEMAPHORE_RELEASE, 0x1d70) -- and 0x1d70 is the last command
+			// in every FIFO ring dump. If the value written here never reaches what the acquire
+			// awaits, that pair is the whole bug.
+			if (addr == 0x40300CC0)
+			{
+				rsx_log.success("BACK_END label write: addr=0x%X arg=0x%08x -> val=0x%08x (prev=0x%08x)",
+					addr, arg, val, static_cast<u32>(vm::_ref<RsxSemaphore>(addr)));
+			}
+
 			util::write_gcm_label<true, true>(ctx, reg, addr, val);
 		}
 

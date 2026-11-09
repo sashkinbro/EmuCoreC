@@ -20,6 +20,12 @@ namespace vk
 	/**
 	 * "[]" when the device supports unsized arrays in uniform blocks, otherwise a
 	 * concrete "[N]" sized to the bindable window.
+	 *
+	 * Upstream declares these arrays unsized unconditionally, which requires
+	 * VK_EXT_shader_uniform_buffer_unsized_array. Adreno does not have it, so every
+	 * game pipeline failed to compile (VK_ERROR_UNKNOWN) and nothing but overlays
+	 * ever drew. element_size is the divisor the C++ side already uses to turn a
+	 * dynamic offset into a shader index (see VKGSRender's *_offset locals).
 	 */
 	std::string ubo_array_dim(u32 element_size);
 
@@ -129,12 +135,15 @@ namespace vk
 	void leave_uninterruptible();
 	bool is_uninterruptible();
 
-	// Ask the renderer to retire finished work so the data heaps can reclaim ring memory.
-	// Ring memory comes back through frame retirement (check_present_status inside
-	// flush_command_queue), and a heap that is full has no other way to ask for it. Declines
-	// while uninterruptible.
+	// Ask the renderer to retire finished work so the data heaps can reclaim.
+	//
+	// Ring memory is returned by frame_context_cleanup, reached through check_present_status(),
+	// which flush_command_queue() calls. A heap that is full has no other way to ask for that.
 	bool reclaim_ring_memory();
 
+	// Set only while the allocator is making its final attempt before ending the RSX thread.
+	// on_vram_exhausted normally refuses the hard sync while uninterruptible, which is correct
+	// while there is still a way out; this says there is not one, so the sync is the cheaper risk.
 	bool is_last_ditch_eviction();
 	void set_last_ditch_eviction(bool state);
 

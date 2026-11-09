@@ -76,6 +76,7 @@ add_library(rpcs3_ui STATIC
     pad_led_settings_dialog.cpp
     pad_motion_settings_dialog.cpp
     pad_settings_dialog.cpp
+    pad_skateboard_settings_dialog.cpp
     patch_creator_dialog.cpp
     patch_manager_dialog.cpp
     permissions.cpp
@@ -142,6 +143,7 @@ add_library(rpcs3_ui STATIC
     pad_led_settings_dialog.ui
     pad_motion_settings_dialog.ui
     pad_settings_dialog.ui
+    pad_skateboard_settings_dialog.ui
     patch_creator_dialog.ui
     patch_manager_dialog.ui
     ps_move_tracker_dialog.ui

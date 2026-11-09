@@ -1,9 +1,10 @@
 #include "stdafx.h"
+#include "Emu/android_app_state.h"
 
 #include "Emu/Memory/vm.h"
+#include "Host/MM.h"
 #include "Common/BufferUtils.h"
 #include "Core/RSXReservationLock.hpp"
-#include "Host/MM.h"
 #include "RSXOffload.h"
 #include "RSXThread.h"
 
@@ -79,16 +80,71 @@ namespace rsx
 		atomic_t<u64> m_processed_count = 0;
 		transport_packet* m_current_job = nullptr;
 
+		// Whoever holds this runs queued jobs: the offloader, or the RSX thread inside sync()
+		// when the offloader has not picked them up yet (see sync()). Jobs run one batch at a
+		// time in push order either way, so a later copy can never overtake an earlier one.
+		atomic_t<u32> m_exec_claim = 0;
+
+		// Set while the RSX thread runs jobs itself. Only that thread reads or writes it.
+		bool m_rsx_running_jobs = false;
+
 		thread_base* current_thread_ = nullptr;
+
+		static void execute(transport_packet& job)
+		{
+			switch (job.type)
+			{
+			case raw_copy:
+			{
+				const u32 vm_addr = vm::try_get_addr(job.src).first;
+#ifdef __ANDROID__
+				prepare_guest_read(vm_addr, job.length);
+#endif
+				rsx::reservation_lock<true, 1> rsx_lock(vm_addr, job.length, g_cfg.video.strict_rendering_mode && vm_addr);
+				std::memcpy(job.dst, job.src, job.length);
+				break;
+			}
+			case vector_copy:
+			{
+				std::memcpy(job.dst, job.opt_storage.data(), job.length);
+				break;
+			}
+			case index_emulate:
+			{
+				write_index_array_for_non_indexed_non_native_primitive_to_buffer(static_cast<char*>(job.dst), static_cast<rsx::primitive_type>(job.aux_param0), job.length);
+				break;
+			}
+			case callback:
+			{
+				rsx::get_current_renderer()->renderctl(job.aux_param0, job.src);
+				break;
+			}
+			default: fmt::throw_exception("Unreachable");
+			}
+		}
 
 		void operator ()()
 		{
-			if (!g_cfg.video.multithreaded_rsx)
-			{
-				// Abort if disabled
-				return;
-			}
-
+			// Deliberately NOT gated on multithreaded_rsx.
+			//
+			// This used to return immediately when the setting was off, which reads as harmless and
+			// is not: the setting is sampled once, here, at the moment the thread starts, and the
+			// per-game configuration is applied AFTER the RSX initialises. A title whose config
+			// turns MTRSX on therefore starts this thread while it is still off, the thread exits,
+			// and the setting then reads true for the rest of the session with no thread behind it.
+			//
+			// Everything that offloads work checks the setting, not the thread, so from that point
+			// on jobs are pushed onto a queue nobody drains, m_enqueued_count climbs away from
+			// m_processed_count, and dma_manager::sync() -- called from the flip -- waits for a
+			// drain that cannot come. It presents as the emulator locking up with the RSX thread at
+			// 100%, and because sync() is reached from the flip the thread cannot be joined, so the
+			// game cannot be closed either.
+			//
+			// It also means MTRSX has been silently inert for anyone in that configuration rather
+			// than doing what they asked for.
+			//
+			// Staying alive costs one parked thread when the feature is off. can_offload() still
+			// gates the work, so nothing is handed over that should not be.
 			current_thread_ = thread_ctrl::get_current();
 			ensure(current_thread_);
 
@@ -99,49 +155,50 @@ namespace rsx
 
 			while (thread_ctrl::state() != thread_state::aborting)
 			{
+				if (!m_exec_claim.compare_and_swap_test(0, 1))
+				{
+					// The RSX thread is running the queue itself (see sync()). It is a short
+					// batch, and anything it leaves is ours on the next pass.
+					std::this_thread::yield();
+					continue;
+				}
+
 				for (auto&& job : m_work_queue.pop_all())
 				{
 					m_current_job = &job;
-
-					switch (job.type)
-					{
-					case raw_copy:
-					{
-						const u32 vm_addr = vm::try_get_addr(job.src).first;
-#ifdef __ANDROID__
-						prepare_guest_read(vm_addr, job.length);
-#endif
-						rsx::reservation_lock<true, 1> rsx_lock(vm_addr, job.length, g_cfg.video.strict_rendering_mode && vm_addr);
-						std::memcpy(job.dst, job.src, job.length);
-						break;
-					}
-					case vector_copy:
-					{
-						std::memcpy(job.dst, job.opt_storage.data(), job.length);
-						break;
-					}
-					case index_emulate:
-					{
-						write_index_array_for_non_indexed_non_native_primitive_to_buffer(static_cast<char*>(job.dst), static_cast<rsx::primitive_type>(job.aux_param0), job.length);
-						break;
-					}
-					case callback:
-					{
-						rsx::get_current_renderer()->renderctl(job.aux_param0, job.src);
-						break;
-					}
-					default: fmt::throw_exception("Unreachable");
-					}
-
-					m_processed_count.release(m_processed_count + 1);
+					execute(job);
+					m_processed_count++;
 				}
 
 				m_current_job = nullptr;
+				m_exec_claim.release(0);
 
 				if (m_enqueued_count.load() == m_processed_count.load())
 				{
 					m_processed_count.notify_all();
-					std::this_thread::yield();
+
+					// Sleep until work arrives rather than spinning on yield().
+					//
+					// The queue is drained and every job is accounted for, so there is nothing
+					// to spin for, but yield() made this a busy loop that ate a whole core for
+					// as long as the emulator ran. Measured on an Adreno 740 handheld: 1142s of
+					// CPU over a 1145s session, 85% of it SYSTEM time -- that is the sched_yield
+					// syscall itself, not transfer work. On a 16-core desktop it merely wastes a
+					// core; on an 8-core handheld it competes with the RSX and SPU threads that
+					// actually need the silicon, and burns battery and thermal budget doing it.
+					//
+					// lf_queue::push notifies this atomic when the queue goes empty -> non-empty,
+					// so a real job still wakes us immediately and transfer latency is unchanged.
+					// If a push lands between the check above and the wait below, the atomic is
+					// already non-zero and wait() returns at once, so there is no lost wakeup.
+					//
+					// The timeout exists only so the loop can re-check thread_ctrl::state():
+					// aborting does not push anything, so an untimed wait would never return and
+					// shutdown would hang instead of spin -- a worse bug than the one being fixed.
+					//
+					// ARMSX3: so out of sight it can be long. 5 ms was 227 wakeups a second in a locked
+					// device (#196); a job still wakes it at once either way.
+					m_work_queue.get_wait_atomic().wait(0, atomic_wait_timeout{g_android_app_backgrounded ? u64{250'000'000} : u64{5'000'000}});
 				}
 			}
 
@@ -161,7 +218,7 @@ namespace rsx
 	// General transport
 	void dma_manager::copy(void *dst, std::vector<u8>& src, u32 length) const
 	{
-		if (length <= max_immediate_transfer_size || !(g_cfg.video.multithreaded_rsx && is_offloader_running()))
+		if (length <= max_immediate_transfer_size || !can_offload())
 		{
 			std::memcpy(dst, src.data(), length);
 		}
@@ -174,7 +231,7 @@ namespace rsx
 
 	void dma_manager::copy(void *dst, void *src, u32 length) const
 	{
-		if (length <= max_immediate_transfer_size || !(g_cfg.video.multithreaded_rsx && is_offloader_running()))
+		if (length <= max_immediate_transfer_size || !can_offload())
 		{
 			const u32 vm_addr = vm::try_get_addr(src).first;
 #ifdef __ANDROID__
@@ -193,7 +250,7 @@ namespace rsx
 	// Vertex utilities
 	void dma_manager::emulate_as_indexed(void *dst, rsx::primitive_type primitive, u32 count)
 	{
-		if (!(g_cfg.video.multithreaded_rsx && is_offloader_running()))
+		if (!can_offload())
 		{
 			write_index_array_for_non_indexed_non_native_primitive_to_buffer(
 				static_cast<char*>(dst), primitive, count);
@@ -214,6 +271,14 @@ namespace rsx
 		m_thread->m_work_queue.push(request_code, args);
 	}
 
+	bool dma_manager::can_offload() const
+	{
+		// Not to a thread that is being stopped: join() aborts it, its loop exits on that without
+		// draining, and anything handed over afterwards would never run.
+		return g_cfg.video.multithreaded_rsx && is_offloader_running() &&
+			static_cast<thread_state>(*m_thread) == thread_state::created;
+	}
+
 	bool dma_manager::is_offloader_running() const
 	{
 		return m_thread && m_thread->current_thread_ != nullptr;
@@ -230,7 +295,7 @@ namespace rsx
 		return false;
 	}
 
-	bool dma_manager::sync() const
+	bool dma_manager::sync(bool run_here) const
 	{
 		// The offloader thread is created when the RSX thread first runs (thread::on_task), but the
 		// renderer is built while the game is still loading. A stop in between tears down a renderer
@@ -258,10 +323,101 @@ namespace rsx
 				return false;
 			}
 
-			while (_thr.m_enqueued_count.load() > _thr.m_processed_count.load())
+			if (_thr.m_rsx_running_jobs)
 			{
-				rsxthr->on_semaphore_acquire_wait();
-				utils::pause();
+				// Re-entered from a fault inside a job this thread is running itself: the fault
+				// handler flushes the command queue, and the submit syncs. The rest of the batch
+				// cannot run until we return, so answer as the offloader-fault path above does.
+				return false;
+			}
+
+			// Spin briefly for the short common handoff, then park until the offloader
+			// drains the queue (it notify_all()s m_processed_count then -- see operator()
+			// above) or 100us pass, whichever is first. Before this, the loop was a pure
+			// pause() spin: measured on MGR gameplay (Odin, warm shader cache), it held
+			// 26.6% of the RSX thread's wall time while the offloader sat parked at 99.8%,
+			// burning a core per wake latency on every small handoff.
+			//
+			// The timeout is load-bearing, not a formality. Two conditions leave the
+			// drain-notify unable to fire while work is outstanding: the offloader can be
+			// stopped mid-job by a memory fault (it then spins in on_access_violation
+			// until THIS thread's upkeep clears the deadlock flag), and the upkeep below
+			// can itself enqueue new jobs from inside the wait (queue_submit callbacks
+			// reach backend_ctrl through flush_command_queue), which pushes the
+			// equal-counters notify out to the next drain. Both resolve within one
+			// timeout tick, and neither may ever be used to justify removing it.
+			//
+			// on_semaphore_acquire_wait() runs on every iteration because it is the only
+			// agent that clears an offloader fault-deadlock, and, on paths that have not
+			// set the 'flushing' guard, it services pending flushes and async flips.
+			//
+			// Park only when the upkeep call made no progress visible: the drain-notify
+			// is one-shot, so parking on a value read before the upkeep would absorb a
+			// whole timeout when the offloader drained during it -- and parking on a
+			// blind re-read makes any PARTIAL progress during the upkeep return the
+			// wait immediately, degrading the park into a hot upkeep loop for the whole
+			// drain. If the count moved, loop and re-evaluate; if it did not, the
+			// pre-upkeep value is still current and is the correct wait target.
+			//
+			// If the offloader thread is not running -- never started because the config
+			// was off at boot and toggled on mid-session, aborting, or dead from an
+			// unrecoverable fault -- the drain can never come. Do not park then: keep the
+			// visible spin, so the (pre-existing) hang shows up as a busy RSX thread in
+			// any profiler instead of an idle one that reads as a healthy app.
+			u32 spins = 0;
+
+			while (true)
+			{
+				const u64 processed = _thr.m_processed_count.load();
+
+				if (_thr.m_enqueued_count.load() <= processed)
+				{
+					break;
+				}
+
+				// Run the queue here when the offloader has not picked it up. The offloader parks
+				// when idle (see operator()), so waiting meant a wake-up each way per handoff: in
+				// GTA IV this thread spent 79% of its time in this function under
+				// NV4097_TEXTURE_READ_SEMAPHORE_RELEASE while the offloader slept 99.4% of the
+				// time, 16-18 fps against 25-30 with Multithreaded RSX off (Odin 3, 10-12). These
+				// are the same copies and submits the non-MTRSX path runs on this thread anyway,
+				// and the claim keeps them in push order with any batch the offloader runs.
+				if (run_here && _thr.m_exec_claim.compare_and_swap_test(0, 1))
+				{
+					bool ran = false;
+					_thr.m_rsx_running_jobs = true;
+
+					for (auto&& job : _thr.m_work_queue.pop_all())
+					{
+						offload_thread::execute(job);
+						_thr.m_processed_count++;
+						ran = true;
+					}
+
+					_thr.m_rsx_running_jobs = false;
+					_thr.m_exec_claim.release(0);
+
+					if (ran)
+					{
+						continue;
+					}
+				}
+
+				rsxthr->renderer()->on_semaphore_acquire_wait();
+
+				if (++spins < 500 || static_cast<thread_state>(_thr) != thread_state::created)
+				{
+					utils::pause();
+					continue;
+				}
+
+				if (_thr.m_processed_count.load() != processed)
+				{
+					// Progress during the upkeep call -- re-evaluate before parking.
+					continue;
+				}
+
+				_thr.m_processed_count.wait(processed, atomic_wait_timeout{100'000});
 			}
 		}
 		else

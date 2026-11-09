@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "system_progress.hpp"
+#include "Emu/android_app_state.h"
 #include "Emu/Cell/Modules/cellMsgDialog.h"
 #include "Emu/RSX/RSXThread.h"
 #include "Emu/RSX/Overlays/overlay_manager.h"
@@ -135,7 +136,8 @@ void progress_dialog_server::operator()()
 				}
 			}
 
-			thread_ctrl::wait_for(5000);
+			// ARMSX3: 4 checks a second instead of 200 while the app is out of sight (#196)
+			thread_ctrl::wait_for(g_android_app_backgrounded ? 250'000 : 5000);
 			text0 = g_progr_text;
 		}
 
@@ -192,9 +194,13 @@ void progress_dialog_server::operator()()
 		usz time_left_queue_idx = 0;
 
 		// Update progress
+		//
+		// ARMSX3: each turn takes at least 250 ms while the app is out of sight, where nobody sees
+		// the dialog; 10 ms turns were 113 wakeups a second in a locked device (#196). The watchdog
+		// and the forced refresh below count turns, so out of sight they take longer, which is fine.
 		for (u64 sleep_until = get_system_time(), sleep_for = 500;
 			!g_system_progress_stopping && thread_ctrl::state() != thread_state::aborting;
-			thread_ctrl::wait_until(&sleep_until, std::exchange(sleep_for, 500)))
+			thread_ctrl::wait_until(&sleep_until, std::max<u64>(std::exchange(sleep_for, 500), g_android_app_backgrounded ? 250'000 : 0)))
 		{
 			const auto [text_new, ftotal_new, fdone_new, ftotal_bits_new, fknown_bits_new, ptotal_new, pdone_new] = get_state();
 
@@ -383,6 +389,28 @@ void progress_dialog_server::operator()()
 			if (ftotal == fdone && ptotal == pdone && text_new.empty())
 			{
 				// Complete state, empty message: close dialog
+				break;
+			}
+
+			// Watchdog: all work is accounted for, but the progress TEXT is still held.
+			//
+			// g_progr_text is refcounted across nested scoped_progress_dialog scopes, and a
+			// leaked reference leaves this loop spinning forever: the dialog is never closed
+			// and the cleanup below never runs, so g_progr_ptotal also never returns to 0 --
+			// which is what ppu_thread::cpu_task waits on before switching to overlay-message
+			// mode. Observed on Android with a booted, running game sitting behind a
+			// "Building SPU Cache... 941 of 941" dialog for 10+ minutes with nothing left to
+			// compile.
+			//
+			// Safe because it is gated on the counters being COMPLETE and completely idle:
+			// wait_no_update_count resets on any change to any counter or to the text, so
+			// real work in progress can never reach this threshold. 500 * 10ms = ~5s, well
+			// under the 20s force-update that also resets the counter.
+			if (ftotal == fdone && ptotal == pdone && wait_no_update_count >= 500)
+			{
+				sys_log.warning("Progress dialog: closing after %u idle polls with a held "
+					"text reference (f:%u/%u p:%u/%u, text='%s')",
+					wait_no_update_count, fdone, ftotal, pdone, ptotal, text1);
 				break;
 			}
 

@@ -1879,4 +1879,51 @@ OpenGL を使用する場合、これは必要ありません。</string>
     <string name="settings_gamepad_action_right_stick_down">右スティック下</string>
     <string name="settings_gamepad_action_right_stick_left">右スティック左</string>
     <string name="settings_gamepad_action_right_stick_right">右スティック右</string>
+
+    <string name="ps3_core_pending_restart">保存した変更はゲームの再起動時に適用されます。</string>
+    <string name="ps3_core_apply_restart">適用して再起動</string>
+
+    <string name="core_label_snapdragon_game_super_resolution">Snapdragon Game Super Resolution</string>
+    <string name="core_label_snapdragon_game_super_resolution_edge_direction">Snapdragon Game Super Resolution (エッジ方向)</string>
+
+    <string name="core_label_oboe">Oboe</string>
+    <string name="core_label_x2">x2</string>
+    <string name="core_label_x3">x3</string>
+    <string name="core_label_x4">x4</string>
+
+    <!-- Current Android renderer, audio and presentation settings. -->
+    <string name="core_label_frame_generation" formatted="false">フレーム生成</string>
+    <string name="core_help_video_frame_generation" formatted="false">ゲームのフレーム間に生成したフレームを挿入します。所有する Lossless Scaling のファイル内のシェーダーを使い、GPU 負荷と遅延が増えます。</string>
+    <string name="core_label_frame_generation_performance_mode" formatted="false">パフォーマンスモード</string>
+    <string name="core_help_video_frame_generation_performance_mode" formatted="false">軽量なシェーダーを使用します。変更後はフレーム生成を再起動してください。</string>
+    <string name="core_label_frame_generation_flow_scale" formatted="false">動きの詳細度 (%)</string>
+    <string name="core_help_video_frame_generation_flow_scale" formatted="false">動き解析の解像度を百分率で指定します。低いほど高速で滑らかな画質になります。適用にはフレーム生成の再起動が必要です。</string>
+    <string name="core_label_frame_generation_target_rate" formatted="false">目標リフレッシュレート (Hz)</string>
+    <string name="core_help_video_frame_generation_target_rate" formatted="false">目標出力レートを Hz で指定します。0 は選択した固定倍率を使用します。</string>
+    <string name="core_label_frame_generation_lossless_path" formatted="false">Lossless Scaling ファイル</string>
+    <string name="core_help_video_frame_generation_lossless_path" formatted="false">所有する Lossless Scaling DLL の絶対パスです。必要に応じてこのファイルからシェーダーキャッシュを作成します。</string>
+    <string name="core_label_cubeb_backend" formatted="false">Cubeb バックエンド</string>
+    <string name="core_help_audio_cubeb_backend" formatted="false">Cubeb の出力経路です。空欄は Android の OpenSL ES を使用します。aaudio または opensl も指定できます。再起動が必要です。</string>
+    <string name="core_label_recording_compatible" formatted="false">録画対応オーディオ</string>
+    <string name="core_help_audio_recording_compatible" formatted="false">システムミキサーを経由して録画アプリが Oboe の音声を取得できるようにします。遅延が増える場合があります。</string>
+    <string name="core_label_sgsr_edge_sharpness" formatted="false">SGSR エッジの鮮明度</string>
+    <string name="core_help_video_sgsr_edge_sharpness" formatted="false">SGSR 拡大時のエッジの鮮明度です。値を高くすると輪郭を強調します。</string>
+    <string name="core_label_early_submit_draw_threshold" formatted="false">早期送信する描画回数</string>
+    <string name="core_help_video_vulkan_early_submit_draw_threshold" formatted="false">この回数の描画後に GPU コマンドを送信します。0 は早期送信を無効にします。再起動が必要です。</string>
+    <string name="core_label_vertex_fetch_specialization" formatted="false">頂点フェッチの特殊化</string>
+    <string name="core_help_video_vulkan_vertex_fetch_specialization" formatted="false">このゲーム用に頂点の読み込みを特殊化します。GPU 性能が向上する場合があります。再起動が必要です。</string>
+    <string name="core_label_disable_swap_chain_pre_rotation" formatted="false">Swap Chainの事前回転を無効化</string>
+    <string name="core_help_video_disable_swap_chain_pre_rotation" formatted="false">Vulkan：横向きに取り付けられた画面での映像の回転を、以前のバージョンと同じくシステムに任せます。トラブルシューティング専用です。これらの画面ではGPU時間を消費します。</string>
+    <string name="core_label_shader_preset_resolution" formatted="false">シェーダー解像度</string>
+    <string name="core_help_video_shader_preset_resolution" formatted="false">シェーダーを低い解像度で動かし、その画像を画面サイズへ拡大します。低いほど重いプリセットで大幅に速くなり、少し柔らかい見た目になります。</string>
+    <string name="core_label_cardboard_vr" formatted="false">Cardboard VR</string>
+    <string name="core_help_video_cardboard_vr" formatted="false">ゲームを左右に2つ並べて表示し、片目ずつに1枚の映像を映します。Cardboard 型の VR ビューアーにスマートフォンを入れて使います。端末は横向きで使用してください。立体視 3D に対応したゲームでは、すべてのコア設定で 3D Display Enabled をオンにし、PS3 の解像度を 1280x720 にすると、左右の目にそれぞれの視点が表示されます。このモードでは RetroArch シェーダーと SGSR は適用されません。FSR は引き続き使えます。</string>
+    <string name="core_label_vr_picture_size" formatted="false">VR 映像サイズ</string>
+    <string name="core_help_video_vr_picture_size" formatted="false">各映像が画面の半分をどれだけ占めるか。</string>
+    <string name="core_label_vr_eye_spacing" formatted="false">VR 目の間隔</string>
+    <string name="core_help_video_vr_eye_spacing" formatted="false">値を上げると2つの映像が離れ、下げると近づきます。ビューアーのレンズに合わせて調整します。</string>
+    <string name="core_label_vr_height" formatted="false">VR 高さ</string>
+    <string name="core_help_video_vr_height" formatted="false">値を上げると両方の映像が上に、下げると下に移動します。ビューアーのレンズに合わせて調整します。</string>
+    <string name="core_label_show_spu_compilation_hint" formatted="false">SPU コンパイルのヒントを表示する</string>
+    <string name="core_help_miscellaneous_show_spu_compilation_hint" formatted="false">ネイティブオーバーレイに「SPUモジュールをコンパイル中」の案内を表示します。</string>
 </resources>

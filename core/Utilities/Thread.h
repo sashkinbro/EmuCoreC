@@ -13,7 +13,11 @@ enum class native_core_arrangement : u32
 	undefined,
 	generic,
 	intel_ht,
-	amd_ccx
+	amd_ccx,
+	// ARM heterogeneous (big.LITTLE / DynamIQ). Cores differ in throughput by
+	// ~3x, so "any core" is not a sane default for a thread that must keep up
+	// with an emulated SPE.
+	arm_big_little
 };
 
 enum class thread_class : u32
@@ -135,6 +139,10 @@ private:
 	// Thread handle (platform-specific)
 	atomic_t<u64> m_thread{0};
 
+#ifdef ANDROID
+	atomic_t<u32> m_native_tid{0};
+#endif
+
 	// Thread cycles
 	atomic_t<u64> m_cycles{0};
 
@@ -195,14 +203,14 @@ private:
 	void exec();
 };
 
-// Last RSX/Vulkan operation recorded on this thread, for crash diagnostics.
+// Collection of global function for current thread
 extern thread_local char g_tls_last_rsx_op[256];
 
-// Collection of global function for current thread
 class thread_ctrl final
 {
 	// Current thread
 	static thread_local thread_base* g_tls_this_thread;
+
 	// Error handling details
 	static thread_local void(*g_tls_error_callback)();
 
@@ -265,6 +273,16 @@ public:
 	{
 		return static_cast<thread_base&>(thread).get_native_id();
 	}
+
+#ifdef ANDROID
+	// The thread's Linux tid, 0 before it starts and after it exits, so another thread can read its
+	// scheduler statistics or change its priority (vm::writer_lock does, for a PPU it waits on).
+	template <typename T>
+	static u32 get_native_tid(named_thread<T>& thread)
+	{
+		return static_cast<thread_base&>(thread).m_native_tid;
+	}
+#endif
 
 	// Read current state, possibly executing some tasks
 	static thread_state state();

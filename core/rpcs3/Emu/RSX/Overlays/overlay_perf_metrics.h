@@ -118,6 +118,21 @@ namespace rsx
 			compiled_resource get_compiled() override;
 		};
 
+		namespace thermals
+		{
+			// Below any real temperature, so one comparison separates "could not read" from
+			// "cold" without carrying a second flag per value. A device with no readable zone is
+			// a normal outcome, not an error.
+			constexpr f32 none = -1000.0f;
+
+			extern atomic_t<f32> g_cpu;
+			extern atomic_t<f32> g_gpu;
+			extern atomic_t<f32> g_battery;
+			extern atomic_t<bool> g_show;
+
+			// "45°C  GPU 43°C  BAT 31°C", or empty when off or nothing is readable.
+			std::string status_text();
+		}
 		void reset_performance_overlay();
 
 		// App/build/device identity for the overlay header (provided by the host app via JNI).

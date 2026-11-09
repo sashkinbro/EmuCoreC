@@ -56,7 +56,13 @@ internal object BundledPatchInstaller {
         BundledPatch("PPU-ae204e2198c9a051a44a69913c48f6591b811082", "Disable MLAA(Post-processing On SPU)", "BCUS98234", "01.00"),
         BundledPatch("PPU-4836b8e74c47919f50b030ee6b47d96bc7305387", "Disable MLAA (Post-processing on SPU)", "BCES01007", "01.14"),
         BundledPatch("PPU-4836b8e74c47919f50b030ee6b47d96bc7305387", "Disable MLAA (Post-processing on SPU)", "BCUS98234", "01.14"),
+        BundledPatch("SPU-7d3b6a847736ef3198deee3620f00c648e5e9588", "ARMSX3 graphics SPU speed-up", "NPUB30828", "all"),
+        BundledPatch("SPU-7d3b6a847736ef3198deee3620f00c648e5e9588", "ARMSX3 graphics SPU speed-up", "NPEB01054", "all"),
     ) + listOf(
+        "NPUA80275", "NPEA00288", "NPHA80188", "NPUA70218", "NPEA00438", "BCUS98377", "BCES01740", "NPUA70230",
+    ).map { serial ->
+        BundledPatch("SPU-9001b44fd7278b5a6fa5385939fe928a0e549394", "Disable SPU MLAA (Journey)", serial, "all")
+    } + listOf(
         "PPU-42367707f4caac2668f10cb46498f64bde9db440" to "BCUS99247",
         "PPU-4f1e9acd7d98961b4b742fb324a2faba6212ea67" to "BCUS98296",
         "PPU-6ac472e1f334f54ec4753cde9e8e1515bfab4d17" to "BCUS98296",
@@ -77,7 +83,7 @@ internal object BundledPatchInstaller {
 }
 
 internal object BundledPatches {
-    private const val REVISION = 6
+    private const val REVISION = 7
 
     fun ensureInstalled(context: Context, root: String) {
         // Each storage root has its own patch database and its own installation state.

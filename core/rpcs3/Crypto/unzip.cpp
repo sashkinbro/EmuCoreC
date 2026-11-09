@@ -135,7 +135,7 @@ bool unzip(const void* src, usz size, fs::file& out)
 
 bool unzip(const u8* src, usz size, u8* dst, usz dst_size)
 {
-	if (!src || !size || !dst || !dst_size || size > std::numeric_limits<uInt>::max() || dst_size > std::numeric_limits<uInt>::max())
+	if (!src || !size || !dst || !dst_size || size > std::numeric_limits<uInt>::max() || dst_size > std::numeric_limits<uInt>::max()) [[unlikely]]
 	{
 		return false;
 	}
@@ -145,23 +145,28 @@ bool unzip(const u8* src, usz size, u8* dst, usz dst_size)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wold-style-cast"
 #endif
-	const int init_result = inflateInit2(&zs, 16 + 15);
-#ifndef _MSC_VER
-#pragma GCC diagnostic pop
-#endif
-	if (init_result != Z_OK)
+	int res = inflateInit2(&zs, 16 + 15);
+	if (res != Z_OK)
 	{
 		return false;
 	}
-
+#ifndef _MSC_VER
+#pragma GCC diagnostic pop
+#endif
 	zs.avail_in = static_cast<uInt>(size);
 	zs.next_in = src;
 	zs.avail_out = static_cast<uInt>(dst_size);
 	zs.next_out = dst;
-	const int result = inflate(&zs, Z_FINISH);
-	const bool valid = result == Z_STREAM_END && zs.total_out == dst_size;
+
+	// The whole output has to fit into dst, so a single call must reach the end of the stream.
+	// Z_BUF_ERROR means that dst was too small or that the input was truncated.
+	res = inflate(&zs, Z_FINISH);
+
+	const bool is_valid = res == Z_STREAM_END && zs.total_out == dst_size;
+
 	inflateEnd(&zs);
-	return valid;
+
+	return is_valid;
 }
 
 bool zip(const void* src, usz size, fs::file& out, bool multi_thread_it)

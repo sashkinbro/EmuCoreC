@@ -221,7 +221,12 @@ private:
 	std::string m_path;
 	iso_fs_node m_root {};
 	std::shared_ptr<iso_file_decryption> m_dec;
-	std::shared_ptr<chd::image> m_chd;
+	std::shared_ptr<chd::image> m_chd; // Set when the image is a CHD, which every file reads through
+#ifdef __APPLE__
+	// Set for a plain image file, which every file on the disc reads through.
+	std::shared_ptr<fs::file> m_image;
+#endif
+
 
 public:
 	// Parses the volume descriptor set and the directory records of an ISO9660 file system out of an already

@@ -1,9 +1,11 @@
 #pragma once
 
 #include "util/types.hpp"
+#include "util/endian.hpp"
 #include "Emu/RSX/gcm_enums.h"
 
 #include <span>
+#include <string>
 
 struct RsxDmaControl;
 
@@ -126,6 +128,25 @@ namespace rsx
 			inline flatten_op test(register_pair& command);
 		};
 
+		// A context's virtual FIFO channel while the puller runs another one.
+		// Real hardware construct. PFIFO keeps these in RAMFC.
+		struct channel_state
+		{
+			RsxDmaControl* ctrl = nullptr;
+			u32 dma_address = 0;
+
+			// Where the puller stopped. Channels only switch between packets.
+			u32 get = 0;
+
+			// Call stack and rollback point
+			u32 ret_addr = RSX_CALL_STACK_EMPTY;
+			u32 saved_ret_addr = RSX_CALL_STACK_EMPTY;
+			u32 restore_point = 0;
+
+			state puller_state = state::running;
+			flattening_helper flattener;
+		};
+
 		class FIFO_control
 		{
 		private:
@@ -142,11 +163,37 @@ namespace rsx
 			u32 m_remaining_commands = 0;
 			u32 m_args_ptr = 0;
 			u32 m_cmd = ~0u;
+
+			// Where the next command header is, for the refill to follow the command stream: GET
+			// must not be published past a JUMP, CALL or RET (RPCS3 #19820, elad335). umax while
+			// a flow control command is being executed, until set_get gives its target.
 			u32 m_next_cmd_entry = ~0u;
 
 			u32 m_cache_addr = 0;
 			u32 m_cache_size = 0;
-			alignas(64) std::byte m_cache[8][128];
+			// 32 lines rather than 8.
+			//
+			// The refill's fixed cost -- read_put, the iotable lookup, the reservation lock
+			// and one reservation_acquire per line -- is paid once per refill regardless of
+			// how much it fetches. Measured on Minecraft at about 10us per refill against
+			// roughly 1us of actual copying, so nine tenths of it was that fixed cost, and
+			// a heavy scene took over 1200 refills per frame for 1.29MB of FIFO. Fetching
+			// 4KB at a time pays it a quarter as often for the same bytes moved.
+			static constexpr u32 cache_line_count = 32;
+
+			// Since RPCS3 #19606 GET is the read pointer, the end of what the puller has fetched.
+			// Upstream fetches 8 lines, so its GET runs at most 1KB ahead of execution, and that
+			// is what its fixes were tested against: guests that wait for GET to reach PUT, or
+			// that write new commands at GET. Reporting our 4KB would tell them we had read up to
+			// 3KB further than upstream ever claims. So the cache is served one upstream-sized
+			// window at a time: moving to the next window inside data we already hold costs a
+			// compare and a GET publish, and only data we do not hold costs a refill.
+			static constexpr u32 fetch_window_size = 8 * 128;
+
+			// Bytes from m_cache_addr that count as fetched: the end of the current window.
+			u32 m_hit_size = 0;
+
+			alignas(64) std::byte m_cache[cache_line_count][128];
 
 		public:
 			FIFO_control(rsx::thread* pctrl);
@@ -154,23 +201,72 @@ namespace rsx
 
 			u32 translate_address(u32 addr) const;
 
-			std::pair<bool, u32> fetch_u32(u32 addr);
-			void invalidate_cache() { m_cache_size = 0; }
+			/**
+			 * Read one command word, serving it from the local cache when possible.
+			 *
+			 * The hit path is inlined and the refill is not, deliberately. This is called
+			 * once per FIFO command word and the guest pushes on the order of 52,000 of
+			 * them per frame, while the cache refills only about 208 times, so better than
+			 * 99% of calls are a compare and a load. Leaving the whole thing out of line
+			 * made every one of them a real call into another translation unit for the sake
+			 * of the rare case, and fetch_u32 was 15.6% of RSX thread samples against only
+			 * 18us of actual refill work per frame.
+			 */
+			std::pair<bool, u32> fetch_u32_refill(u32 addr);
+
+			inline std::pair<bool, u32> fetch_u32(u32 addr)
+			{
+				if (addr - m_cache_addr >= m_hit_size) [[unlikely]]
+				{
+					return fetch_u32_refill(addr);
+				}
+
+				return {true, read_from_ptr_unsafe<be_t<u32>>(+m_cache[0], addr - m_cache_addr)};
+			}
+			void invalidate_cache() { m_cache_size = 0; m_hit_size = 0; }
 
 			u32 get_pos() const { return m_fifo_pos; }
 			u32 last_cmd() const { return m_cmd; }
+			// Publishing GET is a release store into guest DMA memory, and `get` shares a
+			// 64-byte line with `put` which the guest PPU writes from another CPU cluster. At
+			// ~36700 packets/frame that is a cross-cluster coherence miss per packet. Bounded
+			// lag instead, with sync_get_force on every path that can idle or block.
 			void sync_get() const;
 			void sync_get_force() const;
+			u32 reported_get() const;
+			mutable u32 m_get_sync_counter = 0;
+
+			// Last value actually stored into ctrl->get. GET is ours to write -- the guest only
+			// writes put -- so an unchanged value need not be republished.
+			//
+			// This matters because the force paths are re-entered continuously while GET stands
+			// still. An empty or blocked ring returns to the run loop immediately, so a producer
+			// that has gone quiet leaves us taking the cross-cluster miss above tens of thousands
+			// of times a frame against a line the guest PPU is trying to write. Announcing
+			// progress once is the whole requirement; announcing it repeatedly holds up the
+			// producer we are waiting for.
+			mutable u32 m_published_get = umax;
+
+			// Snapshot of g_cfg.core.rsx_fifo_accuracy, refreshed once per packet. Reading the
+			// config goes through a seq_cst atomic load, an ldar on ARM64 the compiler cannot
+			// hoist, and it was consulted once per FIFO argument.
+			bool m_accurate_fetch = false;
 			std::span<const u32> get_current_arg_ptr(u32 length_in_words) const;
 			u32 get_remaining_args_count() const { return m_remaining_commands; }
 			void restore_state(u32 cmd, u32 count, u32 position);
-			void inc_get(bool wait);
 
+			// Channel switch. The caller is expected to manually set GET afterwards.
+			void set_channel(RsxDmaControl* ctrl);
+
+			void inc_get(bool wait);
 			void set_get(u32 get, u32 spin_cmd = 0);
 			void abort();
 
 			template <bool = true>
 			u32 read_put() const;
+
+			// Diagnostic snapshot for the stuck-FIFO report; see rsx::profiler poll_stall().
+			std::string debug_snapshot() const;
 
 			void read(register_pair& data);
 			inline bool read_unsafe(register_pair& data);

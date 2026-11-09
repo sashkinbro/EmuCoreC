@@ -122,3 +122,9 @@
 [submodule "3rdparty/oboe/oboe"]
 	path = core/3rdparty/oboe/oboe
 	url = https://github.com/google/oboe.git
+[submodule "3rdparty/spirv-cross/SPIRV-Cross"]
+	path = core/3rdparty/spirv-cross/SPIRV-Cross
+	url = https://github.com/KhronosGroup/SPIRV-Cross.git
+[submodule "3rdparty/librashader"]
+	path = core/3rdparty/librashader
+	url = https://github.com/SnowflakePowered/librashader.git

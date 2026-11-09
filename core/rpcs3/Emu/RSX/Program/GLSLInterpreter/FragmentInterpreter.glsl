@@ -4,7 +4,7 @@ layout(location=1) out vec4 ocol1;
 layout(location=2) out vec4 ocol2;
 layout(location=3) out vec4 ocol3;
 
-layout(location=0) in vec4 in_regs[15];
+layout(location=0) in vec4 in_regs[16];
 
 #define RSX_FP_OPCODE_NOP 0x00 // No-Operation
 #define RSX_FP_OPCODE_MOV 0x01 // Move
@@ -214,17 +214,17 @@ vec4 read_src(const in int index)
 		case 0:
 			vr0 = wpos; break;
 		case 1:
-			vr0 = gl_FrontFacing? in_regs[2] : in_regs[0]; break;
-		case 2:
 			vr0 = gl_FrontFacing? in_regs[3] : in_regs[1]; break;
+		case 2:
+			vr0 = gl_FrontFacing? in_regs[4] : in_regs[2]; break;
 		case 3:
 			vr0 = fogc; break;
 		case 13:
-			vr0 = in_regs[5]; break;
+			vr0 = in_regs[6]; break;
 		case 14:
 			vr0 = gl_FrontFacing? vr_one : -vr_one; break;
 		default:
-			ur1 += 2;
+			ur1 += 3;
 			vr0 = in_regs[ur1]; break;
 		}
 
@@ -508,7 +508,7 @@ void initialize()
 	}
 
 	// Fog coord
-	fogc = in_regs[4];
+	fogc = in_regs[5];
 	switch(fog_mode)
 	{
 	case 0:
@@ -536,7 +536,7 @@ void initialize()
 		fogc.y = fog_param1 * abs(fogc.x) + (fog_param0 - 1.);
 		break;
 	default:
-		fogc = in_regs[4];
+		fogc = in_regs[5];
 	}
 	fogc.y = clamp(fogc.y, 0., 1.);
 

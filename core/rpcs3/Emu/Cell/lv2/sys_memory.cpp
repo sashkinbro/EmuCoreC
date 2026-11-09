@@ -403,7 +403,7 @@ error_code sys_memory_get_user_memory_size(cpu_thread& cpu, vm::ptr<sys_memory_i
 	if (now.prev_total != out.total_user_memory || now.prev_avail != out.available_user_memory)
 	{
 		// Log on change
-		sys_memory.warning("sys_memory_get_user_memory_size(mem_info=*0x%x): Avail=0x%x, Total=0x%x", mem_info, out.available_user_memory, out.total_user_memory);
+		sys_memory.trace("sys_memory_get_user_memory_size(mem_info=*0x%x): Avail=0x%x, Total=0x%x", mem_info, out.available_user_memory, out.total_user_memory);
 	}
 	else
 	{
@@ -499,7 +499,7 @@ error_code sys_memory_container_get_size(cpu_thread& cpu, vm::ptr<sys_memory_inf
 {
 	cpu.state += cpu_flag::wait;
 
-	sys_memory.warning("sys_memory_container_get_size(mem_info=*0x%x, cid=0x%x)", mem_info, cid);
+	sys_memory.trace("sys_memory_container_get_size(mem_info=*0x%x, cid=0x%x)", mem_info, cid);
 
 	const auto ct = idm::get_unlocked<lv2_memory_container>(cid);
 

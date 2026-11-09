@@ -6,6 +6,7 @@
 #include "VKResourceManager.h"
 
 #include "Emu/RSX/Common/simple_array.hpp"
+#include "Emu/RSX/rsx_profiler.h"
 #include "Emu/RSX/Utils/rsx_utils.h"
 #include "Emu/RSX/rsx_cache.h"
 #include "Utilities/mutex.h"
@@ -22,7 +23,12 @@
 #define VK_FRAGMENT_CONSTANTS_BUFFER_SIZE_M 16
 #define VK_INDEX_RING_BUFFER_SIZE_M 16
 
+#ifdef __APPLE__
+// MoltenVK keeps a command buffer's commands until it is reset, so a 512-entry ring holds hundreds of frames
+#define VK_MAX_ASYNC_CB_COUNT 32
+#else
 #define VK_MAX_ASYNC_CB_COUNT 512
+#endif
 
 #define FRAME_PRESENT_TIMEOUT 10000000ull // 10 seconds
 #define GENERAL_WAIT_TIMEOUT  2000000ull  // 2 seconds
@@ -105,30 +111,60 @@ namespace vk
 				return false;
 			}
 
-			if (vkGetFenceStatus(pool->get_owner(), m_submit_fence->handle) == VK_SUCCESS)
+			VkResult fence_status;
 			{
-				lock.upgrade();
-
-				if (is_pending)
-				{
-					m_submit_fence->reset();
-					vk::on_event_completed(eid_tag);
-
-					// The GPU is done with this buffer, so the ring memory it consumed is free.
-					// This is what decouples reclaim from presentation.
-					if (heap_snapshot_id)
-					{
-						data_heap_manager::restore_snapshot(heap_snapshot, heap_snapshot_id);
-						heap_snapshot.clear();
-						heap_snapshot_id = 0;
-					}
-
-					is_pending = false;
-					eid_tag = 0;
-				}
+				// Every caller of this wants "is it done, do not wait". vkGetFenceStatus is
+				// the obvious way to ask and the wrong one here: on Adreno it measured 19.7ms
+				// per call and returned VK_NOT_READY exactly zero times out of 300 frames,
+				// which is a wait wearing a query's name. One of those per frame is what kept
+				// the CPU and the GPU running in series.
+				//
+				// vkWaitForFences with a zero timeout is specified to return VK_TIMEOUT
+				// without waiting, and is the same question with an answer that arrives.
+				RSX_PROF_SCOPE(fence_poll);
+				fence_status = vkWaitForFences(pool->get_owner(), 1, &m_submit_fence->handle, VK_TRUE, 0);
 			}
 
-			return !is_pending;
+			if (rsx::prof::enabled()) [[unlikely]]
+			{
+				rsx::prof::g_fence_polls++;
+				if (fence_status != VK_SUCCESS) rsx::prof::g_fence_polls_not_ready++;
+			}
+
+			switch (fence_status)
+			{
+			case VK_SUCCESS:
+				break;
+			case VK_TIMEOUT:
+			case VK_NOT_READY:
+				return false;
+			default:
+				// A lost device never signals the fence. Retire the work so that waiters are released.
+				if (vk::die_with_error(fence_status)) break;
+				return false;
+			}
+
+			lock.upgrade();
+
+			if (is_pending)
+			{
+				m_submit_fence->reset();
+				vk::on_event_completed(eid_tag);
+
+				// The GPU is done with this buffer, so the ring memory it consumed is free.
+				// This is what decouples reclaim from presentation.
+				if (heap_snapshot_id)
+				{
+					data_heap_manager::restore_snapshot(heap_snapshot, heap_snapshot_id);
+					heap_snapshot.clear();
+					heap_snapshot_id = 0;
+				}
+
+				is_pending = false;
+				eid_tag = 0;
+			}
+
+			return true;
 		}
 
 		VkResult wait(u64 timeout = 0ull)
@@ -141,18 +177,30 @@ namespace vk
 			}
 
 			const auto ret = vk::wait_for_fence(m_submit_fence, timeout);
+			switch (ret)
+			{
+			case VK_SUCCESS:
+				break;
+			default:
+				// A lost device never signals the fence. Retire the work so that waiters are released.
+				// NOTE: A timeout also means the device is hung. Some drivers fail to report the loss, so VK_TIMEOUT is handled as a device loss.
+				if (vk::die_with_error(ret)) break;
+				return ret;
+			}
 
 			lock.upgrade();
 
-			if (is_pending)
+			// Retest
+			if (!is_pending)
 			{
-				m_submit_fence->reset();
-				vk::on_event_completed(eid_tag);
-
-				is_pending = false;
-				eid_tag = 0;
+				return ret;
 			}
 
+			m_submit_fence->reset();
+			vk::on_event_completed(eid_tag);
+
+			is_pending = false;
+			eid_tag = 0;
 			return ret;
 		}
 
@@ -205,6 +253,12 @@ namespace vk
 
 		u32 present_image = -1;
 		command_buffer_chunk* swap_command_buffer = nullptr;
+
+		// The command buffers that put this frame's generated frames on screen. They are submitted
+		// after swap_command_buffer and draw the overlays from this frame's uploads and descriptors,
+		// so the frame is not finished, and those not reclaimable, until they are too.
+		command_buffer_chunk* framegen_cbs[3] = {};
+		u32 framegen_cb_count = 0;
 
 		data_heap_manager::managed_heap_snapshot_t heap_snapshot;
 		u64 last_frame_sync_time = 0;
@@ -364,6 +418,12 @@ namespace vk
 			}
 
 			return result;
+		}
+
+		// The command buffer taken from the chain just before the current one
+		inline command_buffer_chunk* previous()
+		{
+			return &m_cb_list[(m_current_index % Count + Count - 1) % Count];
 		}
 
 		inline command_buffer_chunk* get()

@@ -22,6 +22,34 @@ namespace vk
 	{
 		virtual ~upscaler() {}
 
+		// Real format of the image `present_surface` refers to.
+		//
+		// Only matters to a pass that RENDERS into the present target instead of blitting to
+		// it. vkCmdBlitImage converts between formats, so the blit passes never had to know;
+		// a render pass and image view must be built from the format the image actually has,
+		// and a wrong one reinterprets the bits instead of converting them. Reported as
+		// RetroArch shaders shifting the colours: the swapchain is BGRA and the RSX output
+		// image is RGBA, so red and blue swapped and the picture came out pink.
+		//
+		// Set from the present path, which is the only place the swapchain is known, and set
+		// per frame rather than once at construction so a swapchain rebuilt at a new format
+		// (rotation, resolution change) cannot leave a stale value behind.
+		void set_present_format(VkFormat format) { m_present_format = format; }
+
+		// True for a pass that records its own render passes into the present target, rather than
+		// ending in a vkCmdBlitImage.
+		//
+		// The present path has to flush such a pass before anything waits on it: queue_submit
+		// defers to the offloader thread under multithreaded RSX, and a wait against work that has
+		// not been submitted yet never completes. A blit leaves nothing to synchronise against, so
+		// the blit passes do not pay for this.
+		virtual bool is_rendering_pass() const { return false; }
+
+	protected:
+		VkFormat m_present_format = VK_FORMAT_B8G8R8A8_UNORM;
+
+	public:
+
 		virtual vk::viewable_image* scale_output(
 			const vk::command_buffer& cmd,          // CB
 			vk::viewable_image* src,                // Source input

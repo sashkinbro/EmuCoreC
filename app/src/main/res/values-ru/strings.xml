@@ -2028,4 +2028,51 @@ Over-Under ближе к собственному стереовыходу, но
     <string name="settings_gamepad_action_right_stick_down">Правый стик вниз</string>
     <string name="settings_gamepad_action_right_stick_left">Правый стик влево</string>
     <string name="settings_gamepad_action_right_stick_right">Правый стик вправо</string>
+
+    <string name="ps3_core_pending_restart">Сохранённые изменения применятся после перезапуска игры.</string>
+    <string name="ps3_core_apply_restart">Применить и перезапустить</string>
+
+    <string name="core_label_snapdragon_game_super_resolution">Snapdragon Game Super Resolution</string>
+    <string name="core_label_snapdragon_game_super_resolution_edge_direction">Snapdragon Game Super Resolution (Направление краёв)</string>
+
+    <string name="core_label_oboe">Oboe</string>
+    <string name="core_label_x2">x2</string>
+    <string name="core_label_x3">x3</string>
+    <string name="core_label_x4">x4</string>
+
+    <!-- Current Android renderer, audio and presentation settings. -->
+    <string name="core_label_frame_generation" formatted="false">Генерация кадров</string>
+    <string name="core_help_video_frame_generation" formatted="false">Вставляет сгенерированные кадры между кадрами игры. Использует шейдеры из вашей копии Lossless Scaling; повышает нагрузку на GPU и задержку.</string>
+    <string name="core_label_frame_generation_performance_mode" formatted="false">Режим производительности</string>
+    <string name="core_help_video_frame_generation_performance_mode" formatted="false">Использует облегчённые шейдеры. После изменения перезапустите генерацию кадров.</string>
+    <string name="core_label_frame_generation_flow_scale" formatted="false">Детализация движения (%)</string>
+    <string name="core_help_video_frame_generation_flow_scale" formatted="false">Разрешение анализа движения в процентах. Меньше — быстрее и мягче. Для применения перезапустите генерацию кадров.</string>
+    <string name="core_label_frame_generation_target_rate" formatted="false">Целевая частота обновления (Гц)</string>
+    <string name="core_help_video_frame_generation_target_rate" formatted="false">Целевая частота вывода в Гц. 0 использует выбранный постоянный множитель.</string>
+    <string name="core_label_frame_generation_lossless_path" formatted="false">Файл Lossless Scaling</string>
+    <string name="core_help_video_frame_generation_lossless_path" formatted="false">Полный путь к вашей DLL Lossless Scaling. Кэш шейдеров создаётся из этого файла по необходимости.</string>
+    <string name="core_label_cubeb_backend" formatted="false">Аудиобэкенд Cubeb</string>
+    <string name="core_help_audio_cubeb_backend" formatted="false">Аудиопуть Cubeb: пустое значение выбирает OpenSL ES на Android; можно указать aaudio или opensl. Нужен перезапуск.</string>
+    <string name="core_label_recording_compatible" formatted="false">Звук для записи экрана</string>
+    <string name="core_help_audio_recording_compatible" formatted="false">Позволяет записи экрана захватывать звук Oboe через системный микшер. Может увеличить задержку.</string>
+    <string name="core_label_sgsr_edge_sharpness" formatted="false">Резкость границ SGSR</string>
+    <string name="core_help_video_sgsr_edge_sharpness" formatted="false">Резкость границ при масштабировании SGSR. Большие значения усиливают контуры.</string>
+    <string name="core_label_early_submit_draw_threshold" formatted="false">Порог отрисовок для ранней отправки</string>
+    <string name="core_help_video_vulkan_early_submit_draw_threshold" formatted="false">Отправляет команды GPU после этого числа отрисовок. 0 отключает раннюю отправку. Нужен перезапуск.</string>
+    <string name="core_label_vertex_fetch_specialization" formatted="false">Специализация чтения вершин</string>
+    <string name="core_help_video_vulkan_vertex_fetch_specialization" formatted="false">Специализирует чтение вершин для этой игры. Может повысить производительность GPU. Нужен перезапуск.</string>
+    <string name="core_label_disable_swap_chain_pre_rotation" formatted="false">Отключить предварительный поворот цепочки обмена</string>
+    <string name="core_help_video_disable_swap_chain_pre_rotation" formatted="false">Vulkan: поворот изображения на экранах, установленных боком, остаётся за системой, как в прежних версиях. Только для устранения неполадок; на таких экранах тратит время GPU.</string>
+    <string name="core_label_shader_preset_resolution" formatted="false">Разрешение шейдера</string>
+    <string name="core_help_video_shader_preset_resolution" formatted="false">Запускает шейдер в меньшем разрешении, а затем растягивает его изображение на экран. Ниже значит намного быстрее на тяжёлых пресетах и чуть мягче.</string>
+    <string name="core_label_cardboard_vr" formatted="false">Cardboard VR</string>
+    <string name="core_help_video_cardboard_vr" formatted="false">Показывает игру дважды, бок о бок, по одной картинке для каждого глаза, для телефона в VR-очках типа Cardboard. Держите телефон в альбомной ориентации. Игры со стереоскопическим 3D дают каждому глазу свой вид, если в разделе «Все настройки ядра» включён параметр 3D Display Enabled и разрешение PS3 равно 1280x720. Шейдеры RetroArch и SGSR в этом режиме не применяются; FSR продолжает работать.</string>
+    <string name="core_label_vr_picture_size" formatted="false">Размер картинки VR</string>
+    <string name="core_help_video_vr_picture_size" formatted="false">Какую часть своей половины экрана занимает каждая картинка.</string>
+    <string name="core_label_vr_eye_spacing" formatted="false">Расстояние между глазами VR</string>
+    <string name="core_help_video_vr_eye_spacing" formatted="false">Большие значения разводят картинки в стороны, меньшие сближают их, чтобы совместить с линзами очков.</string>
+    <string name="core_label_vr_height" formatted="false">Высота VR</string>
+    <string name="core_help_video_vr_height" formatted="false">Большие значения поднимают обе картинки, меньшие опускают их, чтобы совместить с линзами очков.</string>
+    <string name="core_label_show_spu_compilation_hint" formatted="false">Показать подсказку о компиляции SPU</string>
+    <string name="core_help_miscellaneous_show_spu_compilation_hint" formatted="false">Показывает подсказку «Компиляция модулей SPU» с использованием собственного наложения.</string>
 </resources>

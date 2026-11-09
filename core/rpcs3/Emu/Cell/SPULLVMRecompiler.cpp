@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#include <charconv>
 #include "SPURecompiler.h"
 
 #include "Emu/System.h"
@@ -8,8 +9,11 @@
 #include "Emu/Cell/lv2/sys_time.h"
 #include "Emu/Memory/vm_reservation.h"
 #include "Emu/RSX/Core/RSXReservationLock.hpp"
+#include "Emu/RSX/Overlays/overlay_compile_notification.h"
 #include "Crypto/sha1.h"
 #include "Utilities/JIT.h"
+
+bool spu_is_killzone3(); // SPUThread.cpp
 
 #include "SPUThread.h"
 #include "SPUAnalyser.h"
@@ -20,17 +24,21 @@
 #include "util/v128.hpp"
 #include "util/simd.hpp"
 #include "util/sysinfo.hpp"
-
-// ARM64-only i8mm (smmla/ummla) byte gather used by GBB/GBH. Disabled: it is the one live
-// ARM64-only SPU codegen path that the scalar fallback below does not share, and it matches
-// the register-file corruption / STOP 0x0 signature seen when several titles fail to boot.
-// The suspicion is not proven, so the path stays available behind this switch; the cost of
-// leaving it off is negligible because GBB/GBH are rare bit-gather operations.
-#define SPU_ARM64_BYTE_GATHER 0
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#endif
 
 const extern spu_decoder<spu_itype> g_spu_itype;
 const extern spu_decoder<spu_iname> g_spu_iname;
 const extern spu_decoder<spu_iflag> g_spu_iflag;
+
+namespace vm
+{
+	// The page flag table, so an inlined DMA can ask whether its effective address is backed
+	// before it copies. vm.h only declares this inside its own inline helpers, which puts the
+	// name in namespace vm; a block-scope extern here would name ::g_pages instead.
+	extern std::array<memory_page, 0x100000000 / 4096> g_pages;
+}
 
 #ifdef LLVM_AVAILABLE
 
@@ -74,6 +82,21 @@ const extern spu_decoder<spu_iflag> g_spu_iflag;
 namespace
 {
 	thread_local spu_llvm_compile_context* g_spu_llvm_compile_context = nullptr;
+
+	// Calculate the expected SHA state with the same instruction emitted by the JIT
+	// Keep native SHA code in a feature-targeted function for baseline ARM builds
+#if defined(__clang__)
+	__attribute__((target("sha3")))
+#elif defined(__GNUC__)
+	__attribute__((target("+sha3")))
+#endif
+	void update_sha512_checksum(u32* state, const u32* input0, const u32* input1)
+	{
+		const auto old = vreinterpretq_u64_u32(vld1q_u32(state));
+		const auto x = vreinterpretq_u64_u32(vld1q_u32(input0));
+		const auto y = vreinterpretq_u64_u32(vld1q_u32(input1));
+		vst1q_u32(state, vreinterpretq_u32_u64(vsha512su1q_u64(old, x, y)));
+	}
 }
 
 void spu_llvm_set_compile_context(spu_llvm_compile_context* context) noexcept
@@ -81,6 +104,135 @@ void spu_llvm_set_compile_context(spu_llvm_compile_context* context) noexcept
 	g_spu_llvm_compile_context = context;
 }
 #endif
+
+// The ARM64-only i8mm (smmla/ummla) and dotprod (sdot/udot) byte-gather used by GBB/GBH.
+// Disabled: it is the one live ARM64-only SPU codegen path that the working Android
+// reference fork does not have, and it matches the SPU regfile-corruption / STOP 0x0
+// signature behind several games failing to boot. This is a SUSPICION, not a proven
+// diagnosis -- an earlier Android fork (4d5a30618) disabled it on the same grounds.
+// The scalar fallback below is what stock RPCS3 uses and the cost is negligible, since
+// GBB/GBH are rare bit-gather ops. Set to 1 to restore the vector path.
+#if defined(ARCH_ARM64)
+#define ARMSX3_SPU_ARM64_BYTE_GATHER 0
+#else
+#define ARMSX3_SPU_ARM64_BYTE_GATHER 0
+#endif
+
+// Defined in SPUCommonRecompiler.cpp; ranges forced to the interpreter.
+#include "Emu/Cell/SPUDisAsm.h"
+
+
+// ARMSX3_SHUFB_SKIP=<hex bits>: switch off individual ARM64 SHUFB fast paths, each falling
+// through to the general tbx2 one at the end of the block, which is always correct.
+//
+// SPU integer instructions pass ps3autotests byte-exact, so a SHUFB bug here is not the semantics
+// but one of these special cases firing on operand shapes the tests never produce -- which is
+// exactly what Borderlands 2's hang turned out to be (upstream a7fc31f32, reverted in this file).
+// Killzone 3 builds the value it later mis-uses as an address with a SHUFB, so the same class of
+// bug is the first thing to rule in or out. Bit per path:
+//   1 consts_only, 2 single+splat+perm_or_zero, 4 single+splat, 8 single+perm_only,
+//   0x10 both-splat+perm_only, 0x20 both-splat, 0x40 perm_only (tbl2)
+// ARMSX3_SHUFB_CHECK=1: verify every folded SHUFB against the real shuffle at runtime.
+// ARMSX3_SPU_TRAP_PC=<hex LS pc>[:<gpr>]: after the instruction at that address, look at the given
+// register (default r67) and log the neighbourhood when the value it holds would become an
+// unmapped address once the job shifts it up by four bits -- which is the exact shape of Killzone
+// 3's bad pointers (0x0145bf10 -> 0x145bf100).
+//
+// Swapping in the interpreter cannot answer this: interpreting the job for real is far too slow to
+// reach the level. Checking one instruction costs a compare on the path it sits on.
+static std::pair<u32, u32> spu_trap_pc()
+{
+	static const std::pair<u32, u32> s_trap = []() -> std::pair<u32, u32>
+	{
+		const char* env = std::getenv("ARMSX3_SPU_TRAP_PC");
+
+		if (!env || !*env)
+		{
+			return {umax, 0};
+		}
+
+		const std::string_view item{env};
+		const usz colon = item.find(':');
+		u32 pc = 0, reg = 67;
+
+		if (std::from_chars(item.data(), item.data() + std::min(colon, item.size()), pc, 16).ec != std::errc() ||
+			(colon != umax && std::from_chars(item.data() + colon + 1, item.data() + item.size(), reg, 10).ec != std::errc()) ||
+			pc >= SPU_LS_SIZE || reg >= 128)
+		{
+			spu_log.error("ARMSX3_SPU_TRAP_PC: could not read '%s', expected <hex pc>[:<gpr>]", env);
+			return {umax, 0};
+		}
+
+		spu_log.success("ARMSX3_SPU_TRAP_PC: watching r%u after LS 0x%05x", reg, pc);
+		return {pc, reg};
+	}();
+
+	return s_trap;
+}
+
+// Raw mode: ARMSX3_SPU_TRAP_PC=<pc>[:<reg>]:raw logs the register every time the pc is reached,
+// with no filter. The default filter encodes one specific hypothesis (a pointer whose x16 is
+// unmapped) and silently drops everything else, which is useless for reading a value that is
+// simply a number -- an allocator's top-of-heap, say.
+static bool spu_trap_raw()
+{
+	static const bool s_raw = []()
+	{
+		const char* env = std::getenv("ARMSX3_SPU_TRAP_PC");
+		return env && std::string_view{env}.ends_with(":raw");
+	}();
+
+	return s_raw;
+}
+
+static bool spu_shufb_check_enabled()
+{
+	static const bool s_on = []()
+	{
+		const char* env = std::getenv("ARMSX3_SHUFB_CHECK");
+		const bool on = env && *env && *env != '0';
+
+		if (on)
+		{
+			spu_log.success("ARMSX3_SHUFB_CHECK: checking every folded SHUFB against the real shuffle");
+		}
+
+		return on;
+	}();
+
+	return s_on;
+}
+
+static u32 spu_shufb_skip_mask()
+{
+	// No default: the fold stays on. It was off here for part of 2026-09-20 on the strength of
+	// Killzone 3 running ~25000 frames clean against a fault every ~1800, but that did not hold --
+	// with the fold off the fault came back after 896 frames, worse than the baseline, and
+	// ARMSX3_SHUFB_CHECK had already shown every folded shuffle computing the correct value. The
+	// clean runs were luck. Kept as a lever, not a fix.
+	static const u32 s_mask = []() -> u32
+	{
+		const char* env = std::getenv("ARMSX3_SHUFB_SKIP");
+
+		if (!env || !*env)
+		{
+			return 0;
+		}
+
+		u32 mask = 0;
+
+		if (std::from_chars(env, env + std::strlen(env), mask, 16).ec != std::errc())
+		{
+			spu_log.error("ARMSX3_SHUFB_SKIP: could not read '%s', expected hex bits", env);
+			return 0;
+		}
+
+		spu_log.success("ARMSX3_SHUFB_SKIP: ARM64 SHUFB fast paths disabled: 0x%x", mask);
+		return mask;
+	}();
+
+	return s_mask;
+}
 
 class spu_llvm_recompiler : public spu_recompiler_base, public cpu_translator
 {
@@ -102,6 +254,10 @@ class spu_llvm_recompiler : public spu_recompiler_base, public cpu_translator
 	// Module name
 	std::string m_hash;
 
+#ifdef __APPLE__
+	std::vector<std::pair<u32, u32>> m_poll_park_sites;
+
+#endif
 	// Patchpoint unique id
 	u32 m_pp_id = 0;
 
@@ -488,7 +644,7 @@ class spu_llvm_recompiler : public spu_recompiler_base, public cpu_translator
 				// Tail call to the real function
 				call_function(pfinfo->fn, true);
 
-				if (!llvm_has_terminator(result))
+				if (!result->getTerminator())
 					ret_function();
 			}
 			else
@@ -1335,6 +1491,9 @@ class spu_llvm_recompiler : public spu_recompiler_base, public cpu_translator
 					return false;
 				}
 
+				// The line's version this commit replaces: the key its waiters sleep on (see below).
+				u64 replaced_time = 0;
+
 				{
 					rsx::reservation_lock rsx_lock(raddr, 128);
 
@@ -1364,6 +1523,7 @@ class spu_llvm_recompiler : public spu_recompiler_base, public cpu_translator
 					}
 
 					// Success
+					replaced_time = old_res;
 					res.release(old_res + 128);
 				}
 
@@ -1372,7 +1532,9 @@ class spu_llvm_recompiler : public spu_recompiler_base, public cpu_translator
 
 				if (notify)
 				{
-					res.notify_all();
+					// Same wake as do_putllc's: waiters park on vm::reservation_notifier(line, version)'s
+					// wait_flag. res.notify_all() woke waiters on the counter word, and there are none.
+					vm::reservation_notifier_notify(raddr & -128, replaced_time);
 				}
 
 				return true;
@@ -1414,7 +1576,11 @@ class spu_llvm_recompiler : public spu_recompiler_base, public cpu_translator
 		// Touch memory (on the opposite side of the page)
 		m_ir->CreateAtomicRMW(llvm::AtomicRMWInst::Or, _ptr(m_memptr, m_ir->CreateXor(_eal, 4096 / 2)), m_ir->getInt8(0), llvm::MaybeAlign{16}, llvm::AtomicOrdering::SequentiallyConsistent);
 
+#ifdef __APPLE__
+		const auto rptr = _ptr(m_ir->CreateLoad(get_type<u8*>(), spu_ptr(&spu_thread::reserv_base_addr)), vm::reservation_slot_offset(eal_val).eval(m_ir));
+#else
 		const auto rptr = _ptr(m_ir->CreateLoad(get_type<u8*>(), spu_ptr(&spu_thread::reserv_base_addr)), ((eal_val & 0xff80) >> 1).eval(m_ir));
+#endif
 		const auto rtime = m_ir->CreateLoad(get_type<u64>(), spu_ptr(&spu_thread::rtime));
 
 		m_ir->CreateBr(_repeat_lock);
@@ -1456,7 +1622,17 @@ class spu_llvm_recompiler : public spu_recompiler_base, public cpu_translator
 
 			m_ir->CreateCondBr(compare_data_change_res, notify_block, notify_next);
 			m_ir->SetInsertPoint(notify_block);
-			call("atomic_wait_engine::notify_all", static_cast<void(*)(const void*)>(atomic_wait_engine::notify_all), rptr);
+
+			// Wake the SPUs and PPUs waiting on this line. They park on the wait_flag of
+			// vm::reservation_notifier(line, version), keyed by the version they observed, which is
+			// rval: the counter this commit replaced (stored above as rval + 128). do_putllc notifies
+			// the same key. This used to notify the counter word itself (rptr), on which nothing
+			// waits, so a PUTLLC16 commit woke no one and every waiter sat out its 50-200 us timeout.
+			call("spu_putllc16_notify", +[](u32 eal, u64 replaced_time)
+			{
+				vm::reservation_notifier_notify(eal & -128, replaced_time);
+			}, _eal, rval);
+
 			m_ir->CreateBr(notify_next);
 			m_ir->SetInsertPoint(notify_next);
 		}
@@ -1465,7 +1641,11 @@ class spu_llvm_recompiler : public spu_recompiler_base, public cpu_translator
 
 		// Perform unlocked vm::reservation_update if no physical memory changes needed
 		m_ir->SetInsertPoint(_inc_res);
+#ifdef __APPLE__
+		const auto rptr2 = _ptr(m_ir->CreateLoad(get_type<u8*>(), spu_ptr(&spu_thread::reserv_base_addr)), vm::reservation_slot_offset(eal_val).eval(m_ir));
+#else
 		const auto rptr2 = _ptr(m_ir->CreateLoad(get_type<u8*>(), spu_ptr(&spu_thread::reserv_base_addr)), ((eal_val & 0xff80) >> 1).eval(m_ir));
+#endif
 
 		llvm::Value* old_val{};
 
@@ -1575,7 +1755,11 @@ class spu_llvm_recompiler : public spu_recompiler_base, public cpu_translator
 		value_t<u32> eal_val;
 		eal_val.value = _eal;
 
+#ifdef __APPLE__
+		const auto rptr = _ptr(m_ir->CreateLoad(get_type<u8*>(), spu_ptr(&spu_thread::reserv_base_addr)), vm::reservation_slot_offset(eal_val).eval(m_ir));
+#else
 		const auto rptr = _ptr(m_ir->CreateLoad(get_type<u8*>(), spu_ptr(&spu_thread::reserv_base_addr)), ((eal_val & 0xff80) >> 1).eval(m_ir));
+#endif
 		const auto rval = m_ir->CreateLoad(get_type<u64>(), spu_ptr(&spu_thread::rtime));
 		m_ir->CreateCondBr(
 			m_ir->CreateExtractValue(m_ir->CreateAtomicCmpXchg(rptr, rval, m_ir->CreateAdd(rval, m_ir->getInt64(128)), llvm::MaybeAlign{16}, llvm::AtomicOrdering::SequentiallyConsistent, llvm::AtomicOrdering::SequentiallyConsistent), 1)
@@ -1612,6 +1796,43 @@ public:
 			m_spurt = &g_fxo->get<spu_runtime>();
 			cpu_translator::initialize(m_jit.get_context(), m_jit.get_engine());
 
+#ifdef __APPLE__
+			// SPU Poll Park Sites: "<hex pc>:<hex word>" entries separated by commas; a bad entry is logged and skipped
+			const std::string park_text = g_cfg.core.spu_poll_park_sites.to_string();
+
+			for (usz pos = 0; pos < park_text.size();)
+			{
+				const usz comma = std::min(park_text.find(',', pos), park_text.size());
+				const std::string_view entry = std::string_view{park_text}.substr(pos, comma - pos);
+				pos = comma + 1;
+
+				const usz colon = entry.find(':');
+				u32 pc = 0, word = 0;
+				const auto whole_hex = [](std::string_view field, u32& out)
+				{
+					const auto [ptr, ec] = std::from_chars(field.data(), field.data() + field.size(), out, 16);
+					return !field.empty() && ec == std::errc() && ptr == field.data() + field.size();
+				};
+
+				if (colon == umax || !whole_hex(entry.substr(0, colon), pc) || !whole_hex(entry.substr(colon + 1), word) ||
+					pc >= SPU_LS_SIZE || pc % 4)
+				{
+					spu_log.error("SPU Poll Park Sites: could not read '%s', expected <hex LS pc>:<hex instruction word>", entry);
+					continue;
+				}
+
+				m_poll_park_sites.emplace_back(pc, word);
+			}
+#if defined(__APPLE__) && defined(ARCH_ARM64)
+			m_jit.set_obj_cache_stats(&m_spurt->obj_cache_stats);
+#endif
+
+#endif
+#if defined(__ANDROID__) && defined(ARCH_ARM64)
+			// Cached objects are counted and checked, and a module that still bakes a host
+			// address runs but is never written (JITLLVM.cpp, module_bakes_host_address).
+			m_jit.set_obj_cache_stats(&m_spurt->obj_cache_stats);
+#endif
 			const auto md_name = llvm::MDString::get(m_context, "branch_weights");
 			const auto md_low = llvm::ValueAsMetadata::get(llvm::ConstantInt::get(GetType<u32>(), 1));
 			const auto md_high = llvm::ValueAsMetadata::get(llvm::ConstantInt::get(GetType<u32>(), 999));
@@ -1679,6 +1900,8 @@ public:
 		{
 			return compile_interpreter();
 		}
+
+		reset_transforms();
 
 		const u32 start0 = _func.entry_point;
 		const usz func_size = _func.data.size();
@@ -1791,7 +2014,7 @@ public:
 			sha1_finish(&ctx, output);
 
 			m_hash.clear();
-			// The letter is a codegen generation tag, not decoration.
+			// The 'a' is a codegen generation tag, not decoration.
 			//
 			// This name keys the on-disk object cache and is built purely from the GUEST
 			// function's bytes, so it is identical before and after any change to how we compile
@@ -1801,7 +2024,39 @@ public:
 			//
 			// The PPU side already learned this and versions its objects (v8-kusa -> v9-kusa
 			// after the XER fix). Bump this letter whenever ARM64 SPU codegen changes semantics.
-			fmt::append(m_hash, "__spu-b-0x%05x-%s", func.entry_point, fmt::base57(output));
+			fmt::append(m_hash, "__spu-a-0x%05x-%s", func.entry_point, fmt::base57(output));
+
+#if (defined(__ANDROID__) || defined(__APPLE__)) && defined(ARCH_ARM64)
+			// The name is also the persistent object cache's only key per function, and the code
+			// emitted for it depends on where the function's code starts as well (compile() begins
+			// at m_pos = lower_bound). The same bytes and entry with a different start would share
+			// one cached object, so a start other than the entry is part of the name.
+			if (func.lower_bound != func.entry_point)
+			{
+				fmt::append(m_hash, "-lb%05x", func.lower_bound);
+			}
+#endif
+
+#ifdef ARCH_ARM64
+			// The ARM64 retry recompiles the SAME guest function with different codegen -- it
+			// drops tbl2, then fma, to get past the register scavenger. Those attempts produce
+			// different machine code from identical guest bytes, so without this they would all
+			// claim one cache entry and a later run could load the wrong variant. Only the
+			// non-default combinations are tagged, so the common case keeps its name and existing
+			// caches stay valid.
+			if (g_spu_llvm_compile_context)
+			{
+				if (!g_spu_llvm_compile_context->use_tbl2)
+				{
+					m_hash += "-notbl2";
+				}
+
+				if (!g_spu_llvm_compile_context->use_fma)
+				{
+					m_hash += "-nofma";
+				}
+			}
+#endif
 
 			be_t<u64> hash_start;
 			std::memcpy(&hash_start, output, sizeof(hash_start));
@@ -1810,6 +2065,14 @@ public:
 
 #ifdef ARCH_ARM64
 		m_use_tbl2 = !g_spu_llvm_compile_context || g_spu_llvm_compile_context->use_tbl2;
+
+		// NOTE: clearing m_use_fma here does NOT unfuse multiply-add on ARM64, and was tried.
+		// The flag only picks llvm.fma vs llvm.fmuladd, and AArch64 reports a fast FMA, so the
+		// backend contracts llvm.fmuladd into FMLA regardless. Verified: ps3autotests cpu/spu_fpu
+		// produced a byte-identical file with the flag both ways (cache confirmed rebuilt via the
+		// codegen build stamp), so this only costs the f64 widening in fma32x4 for no behaviour
+		// change. x86 gets the unfused two-rounding form because it lacks the FMA target feature
+		// entirely, not because of this flag. Forcing separate fmul+fadd would take explicit IR.
 		m_use_fma = !g_spu_llvm_compile_context || g_spu_llvm_compile_context->use_fma;
 
 		if (g_spu_llvm_compile_context)
@@ -1818,7 +2081,21 @@ public:
 		}
 #endif
 
+#ifdef __APPLE__
+		// One notice per compiled function, cache hits included, floods the log
+		spu_log.trace("Building function 0x%x... (size %u, %s)", func.entry_point, func.data.size(), m_hash);
+#else
 		spu_log.notice("Building function 0x%x... (size %u, %s)", func.entry_point, func.data.size(), m_hash);
+#endif
+
+		// Say so on screen when SPU code compiles during play. That happens on the SPU thread that
+		// needs the code; the boot-time precompile runs on worker threads under its own progress
+		// dialog, so it is left out. Without this a first run after a cache wipe stutters for
+		// minutes with nothing to explain it (Metal Gear Solid V built 2,000 functions a minute).
+		if (g_cfg.misc.show_spu_compilation_hint && cpu_thread::get_current<spu_thread>())
+		{
+			rsx::overlays::show_spu_compile_notification();
+		}
 
 		m_pos = func.lower_bound;
 		m_base = func.entry_point;
@@ -1829,24 +2106,31 @@ public:
 		m_pp_id = 0;
 
 		std::string function_log;
+
 		bool to_log_func = false;
+
 		for (u32 data : func.data)
 		{
 			const spu_opcode_t op{std::bit_cast<be_t<u32>>(data)};
+
 			if (op.ra == SPU_RdDec && g_spu_itype.decode(op.opcode) == spu_itype::RDCH)
 			{
 				to_log_func = true;
 				break;
 			}
 		}
+
+		// The disassembly is expensive, only create it if it's going to be logged
 		if (g_cfg.core.spu_debug || to_log_func)
 		{
 			this->dump(func, function_log);
 		}
+
 		if (g_cfg.core.spu_debug && !add_loc->logged.exchange(1))
 		{
 			if (!fs::write_file(m_spurt->get_cache_path() + "spu.log", fs::write + fs::append, function_log))
 			{
+				// Fallback: write to main log
 				to_log_func = true;
 			}
 		}
@@ -1897,31 +2181,41 @@ public:
 
 		if (g_cfg.core.mfc_transfers_shuffling)
 		{
-			const auto spu_work = [](spu_thread* thread)
+			const auto spu_work = [](spu_thread* _this)
 			{
-				bool work_left = thread->do_mfc();
-				if (thread->interrupts_enabled)
+				bool work_left = _this->do_mfc();
+
+				if (_this->interrupts_enabled)
 				{
-					thread->get_events(SPU_EVENT_TM);
+					_this->get_events(SPU_EVENT_TM);
 					work_left = true;
 				}
-				if (work_left) thread->mfc_queued_ops_timeout = g_cfg.core.mfc_shuffling_instructions;
-				if (thread->check_mfc_interrupts(thread->pc)) spu_runtime::g_escape(thread);
+
+				if (work_left)
+				{
+					_this->mfc_queued_ops_timeout = g_cfg.core.mfc_shuffling_instructions;
+				}
+
+				if (_this->check_mfc_interrupts(_this->pc))
+				{
+					spu_runtime::g_escape(_this);
+				}
 			};
+
 			const auto mfc_ops = spu_ptr(&spu_thread::mfc_queued_ops_timeout);
-			const auto next = BasicBlock::Create(m_context, "ShuffleNext", m_function);
-			const auto check = BasicBlock::Create(m_context, "MfcCheck", m_function);
-			const auto work = BasicBlock::Create(m_context, "MfcOps", m_function);
-			const auto old_timeout = spu_context_attr(m_ir->CreateLoad(get_type<u64>(), mfc_ops));
-			m_ir->CreateCondBr(m_ir->CreateIsNull(old_timeout), next, check);
-			m_ir->SetInsertPoint(check);
-			const auto timeout = m_ir->CreateSub(old_timeout, m_ir->getInt64(1));
-			m_ir->CreateStore(timeout, mfc_ops);
-			m_ir->CreateCondBr(m_ir->CreateIsNull(timeout), work, next);
-			m_ir->SetInsertPoint(work);
+			const auto label_next = BasicBlock::Create(m_context, "ShuffleNext", m_function);
+			const auto label_mfc_check = BasicBlock::Create(m_context, "MfcCheck", m_function);
+			const auto label_mfc_ops = BasicBlock::Create(m_context, "MfcOps", m_function);
+			const auto old_mfc_timeout = spu_context_attr(m_ir->CreateLoad(get_type<u64>(), mfc_ops));
+			m_ir->CreateCondBr(m_ir->CreateIsNull(old_mfc_timeout), label_next, label_mfc_check);
+			m_ir->SetInsertPoint(label_mfc_check);
+			const auto store_timeout = m_ir->CreateSub(old_mfc_timeout, m_ir->getInt64(1));
+			m_ir->CreateStore(store_timeout, mfc_ops);
+			m_ir->CreateCondBr(m_ir->CreateIsNull(store_timeout), label_mfc_ops, label_next);
+			m_ir->SetInsertPoint(label_mfc_ops);
 			call("spu_work", +spu_work, m_thread);
-			m_ir->CreateBr(next);
-			m_ir->SetInsertPoint(next);
+			m_ir->CreateBr(label_next);
+			m_ir->SetInsertPoint(label_next);
 		}
 
 		// Set block hash for profiling (if enabled)
@@ -2003,337 +2297,465 @@ public:
 			if ((end - starta) >= 192 && !g_cfg.core.precise_spu_verification)
 			{
 #ifdef ARCH_ARM64
-				// Loop if there is at least 288 bytes of data to checksum on ARM.
-				// Each ARM checksum block consumes 6 NEON vectors: 2 direct adds and 2 UABD accumulates.
-				constexpr u32 checksum_block_size = 96;
+				// Each 96-byte step consumes six 16-byte NEON vectors and maintains four states:
+				// ADD, EOR3, ADD and SHA512SU1 use ADD for all states without SHA3/SHA512
+				// EOR3 and SHA512SU1 can both consume 2 loads per instr
+				const bool use_crypto = utils::has_sha512() && utils::has_sha3();
+				constexpr u32 lanes = 4;
+				constexpr u32 states = 4;
+				constexpr u32 inputs = 6;
+				constexpr u32 loop_blocks = 3;
+				constexpr u32 counter_bytes = 96;
 #else
-				// Loop if there is atleast (16 * stride) bytes of data to checksum to save some instruction cache
-				constexpr u32 checksum_block_size = 64;
+				// Each step consumes four 512-bit vectors, split between two XOR states
+				// A pair containing a protected instruction uses ADD instead
+				constexpr u32 lanes = 16;
+				constexpr u32 states = 2;
+				constexpr u32 inputs = 4;
+				constexpr u32 loop_blocks = 4;
+				constexpr u32 counter_bytes = 64;
 #endif
-				constexpr u32 checksum_loop_vectors = 16;
-				const u32 checksum_vectors_per_block = checksum_block_size / stride;
-				const u32 checksum_loop_blocks = (checksum_loop_vectors + checksum_vectors_per_block - 1) / checksum_vectors_per_block;
-				const u32 checksum_loop_size = checksum_block_size * checksum_loop_blocks;
-				const u32 checksum_loop_end = starta + ((end - starta) / checksum_loop_size) * checksum_loop_size;
+				const u32 width = lanes * 4;
+				const u32 block_bytes = inputs * width;
 
-				bool use_checksum_loop = (checksum_loop_end - starta) >= checksum_loop_size * 2;
+				// Roll three ARM steps (288 bytes) or four x86 steps (1024 bytes)
+				// into one loop body to limit instruction-cache use for large blocks
+				const u32 loop_bytes = block_bytes * loop_blocks;
+				const u32 loop_end = starta + (end - starta) / loop_bytes * loop_bytes;
+				const auto type = FixedVectorType::get(m_ir->getInt32Ty(), lanes);
+				const auto zero = ConstantAggregateZero::get(type);
 
-				for (u32 j = starta; use_checksum_loop && j < checksum_loop_end; j += 4)
+				std::array<llvm::Value*, states> accumulators;
+				accumulators.fill(zero);
+
+				using words_t = std::array<std::array<u32, 16>, inputs>;
+				std::array<std::array<u32, 16>, states> expected{};
+
+				// We are operating under the assumption that addition based "checksumming"
+				// is only required in retail games when dealing with relative branch operations
+				// so use a cursed combination of xorsum/checksum/sha operations in loop
+				// lanes that feature relative branch operations. Nuke me if this doesn't work!
+				const auto protected_word = [](u32 word)
 				{
-					if (!func.data[(j - start) / 4])
+					switch (g_spu_itype.decode(std::bit_cast<be_t<u32>>(word)))
 					{
-						use_checksum_loop = false;
-						break;
-					}
-				}
-
-#ifndef ARCH_ARM64
-				if (use_checksum_loop)
-				{
-					const auto acc_init = ConstantAggregateZero::get(get_type<u32[16]>());
-					const auto loop_block = BasicBlock::Create(m_context, "spu_checksum_loop", m_function);
-					const auto loop_next = BasicBlock::Create(m_context, "spu_checksum_next", m_function);
-					const auto loop_preheader = m_ir->GetInsertBlock();
-					m_ir->CreateBr(loop_block);
-
-					m_ir->SetInsertPoint(loop_block);
-					const auto offset = m_ir->CreatePHI(get_type<u32>(), 2);
-					const auto acc0_phi = m_ir->CreatePHI(get_type<u32[16]>(), 2);
-					const auto acc1_phi = m_ir->CreatePHI(get_type<u32[16]>(), 2);
-
-					offset->addIncoming(m_ir->getInt32(0), loop_preheader);
-					acc0_phi->addIncoming(acc_init, loop_preheader);
-					acc1_phi->addIncoming(acc_init, loop_preheader);
-
-					const auto offset64 = m_ir->CreateZExt(offset, get_type<u64>());
-					llvm::Value* next_acc0 = acc0_phi;
-					llvm::Value* next_acc1 = acc1_phi;
-
-					for (u32 block = 0; block < checksum_loop_blocks; block++)
-					{
-						const auto vls = m_ir->CreateAlignedLoad(get_type<u32[16]>(), _ptr(data_addr, m_ir->CreateAdd(offset64, m_ir->getInt64(block * checksum_block_size))), llvm::MaybeAlign{4});
-
-						if (block & 1)
-						{
-							next_acc1 = m_ir->CreateAdd(next_acc1, vls);
-						}
-						else
-						{
-							next_acc0 = m_ir->CreateAdd(next_acc0, vls);
-						}
-					}
-
-					const auto next_offset = m_ir->CreateAdd(offset, m_ir->getInt32(checksum_loop_size));
-					const auto loop_again = m_ir->CreateICmpULT(next_offset, m_ir->getInt32(checksum_loop_end - starta));
-					m_ir->CreateCondBr(loop_again, loop_block, loop_next);
-
-					offset->addIncoming(next_offset, loop_block);
-					acc0_phi->addIncoming(next_acc0, loop_block);
-					acc1_phi->addIncoming(next_acc1, loop_block);
-					acc0 = next_acc0;
-					acc1 = next_acc1;
-
-					check_iterations += (checksum_loop_end - starta) / checksum_block_size;
-
-					m_ir->SetInsertPoint(loop_next);
-				}
-
-				for (u32 j = use_checksum_loop ? checksum_loop_end : starta; j < end; j += checksum_block_size)
-				{
-					int indices[16];
-					bool holes = false;
-					bool data = false;
-
-					for (u32 i = 0; i < 16; i++)
-					{
-						const u32 k = j + i * 4;
-
-						if (k < start || k >= end || !func.data[(k - start) / 4])
-						{
-							indices[i] = 16;
-							holes      = true;
-						}
-						else
-						{
-							indices[i] = i;
-							data       = true;
-						}
-					}
-
-					if (!data)
-					{
-						// Skip full-sized holes
-						continue;
-					}
-
-					llvm::Value* vls = nullptr;
-
-					// Load unaligned code block from LS
-					vls = m_ir->CreateAlignedLoad(get_type<u32[16]>(), _ptr(data_addr, j - starta), llvm::MaybeAlign{4});
-
-					// Mask if necessary
-					if (holes)
-					{
-						vls = m_ir->CreateShuffleVector(vls, ConstantAggregateZero::get(vls->getType()), llvm::ArrayRef(indices, 16));
-					}
-
-					// Interleave accumulators for more performance
-					if (toggle)
-					{
-						acc0 = acc0 ? m_ir->CreateAdd(acc0, vls) : vls;
-					}
-					else
-					{
-						acc1 = acc1 ? m_ir->CreateAdd(acc1, vls) : vls;
-					}
-					toggle = !toggle;
-					check_iterations++;
-				}
-
-				llvm::Value* acc = (acc0 && acc1) ? m_ir->CreateAdd(acc0, acc1): (acc0 ? acc0 : acc1);
-
-				// Create the checksum
-				u32 checksum[16] = {0};
-
-				for (u32 j = 0; j < func.data.size(); j += 16) // Process 16 elements per iteration
-				{
-					for (u32 i = 0; i < 16; i++)
-					{
-						if (j + i < func.data.size())
-						{
-							checksum[i] += func.data[j + i];
-						}
-					}
-				}
-
-				auto* const_vector = ConstantDataVector::get(m_context, llvm::ArrayRef(checksum, 16));
-				acc = m_ir->CreateXor(acc, const_vector);
-
-				// Pattern for PTEST
-				acc = m_ir->CreateBitCast(acc, get_type<u64[8]>());
-
-				llvm::Value* elem = m_ir->CreateExtractElement(acc, u64{0});
-
-				for (u32 i = 1; i < 8; i++)
-				{
-					elem = m_ir->CreateOr(elem, m_ir->CreateExtractElement(acc, i));
-				}
-
-				// Compare result with zero
-				const auto cond = m_ir->CreateICmpNE(elem, m_ir->getInt64(0));
-				m_ir->CreateCondBr(cond, label_diff, label_body, m_md_unlikely);
-#else
-				// Very cursed "checksumming" code
-				// 96 bytes per ARM checksum step
-				//vls[0] -> add
-				//vls[1], vls[2] -> uaba
-				//vls[3] -> add
-				//vls[4], vls[5] -> uaba
-				//This allows us to save on some ALU ops relative to load instructions
-				const auto acc_init = ConstantAggregateZero::get(get_type<u32[4]>());
-				llvm::Value* checksum_parts[4] = {acc_init, acc_init, acc_init, acc_init};
-				u32 checksum[16] = {0};
-
-				const auto update_checksum = [&](const u32* words)
-				{
-					for (u32 i = 0; i < 4; i++)
-					{
-						checksum[i] += words[i];
-						checksum[4 + i] += words[4 + i] > words[8 + i] ? words[4 + i] - words[8 + i] : words[8 + i] - words[4 + i];
-						checksum[8 + i] += words[12 + i];
-						checksum[12 + i] += words[16 + i] > words[20 + i] ? words[16 + i] - words[20 + i] : words[20 + i] - words[16 + i];
+					case spu_itype::BR:
+					case spu_itype::BRSL:
+					case spu_itype::BRZ:
+					case spu_itype::BRNZ:
+					case spu_itype::BRHZ:
+					case spu_itype::BRHNZ:
+					case spu_itype::HBRR:
+					case spu_itype::HBRA:
+					case spu_itype::HBR:
+						return true;
+					default:
+						return false;
 					}
 				};
 
-				if (use_checksum_loop)
+				const auto get_words = [&](u32 address)
 				{
-					for (u32 j = starta; j < checksum_loop_end; j += checksum_block_size)
-					{
-						u32 words[24];
+					words_t words{};
 
-						for (u32 i = 0; i < 24; i++)
+					for (u32 part = 0; part < inputs; part++)
+					{
+						for (u32 lane = 0; lane < lanes; lane++)
 						{
-							words[i] = func.data[(j + i * 4 - start) / 4];
-						}
-
-						update_checksum(words);
-					}
-
-					const auto loop_block = BasicBlock::Create(m_context, "spu_checksum_loop", m_function);
-					const auto loop_next = BasicBlock::Create(m_context, "spu_checksum_next", m_function);
-					const auto loop_preheader = m_ir->GetInsertBlock();
-					m_ir->CreateBr(loop_block);
-
-					m_ir->SetInsertPoint(loop_block);
-					const auto offset = m_ir->CreatePHI(get_type<u32>(), 2);
-					llvm::PHINode* acc_phi[4];
-					llvm::Value* next_acc[4];
-
-					for (u32 part = 0; part < 4; part++)
-					{
-						acc_phi[part] = m_ir->CreatePHI(get_type<u32[4]>(), 2);
-						acc_phi[part]->addIncoming(checksum_parts[part], loop_preheader);
-						next_acc[part] = acc_phi[part];
-					}
-
-					offset->addIncoming(m_ir->getInt32(0), loop_preheader);
-
-					const auto offset64 = m_ir->CreateZExt(offset, get_type<u64>());
-
-					for (u32 block = 0; block < checksum_loop_blocks; block++)
-					{
-						llvm::Value* vls[6];
-
-						for (u32 part = 0; part < 6; part++)
-						{
-							vls[part] = m_ir->CreateAlignedLoad(get_type<u32[4]>(), _ptr(data_addr, m_ir->CreateAdd(offset64, m_ir->getInt64(block * checksum_block_size + part * 16))), llvm::MaybeAlign{4});
-						}
-
-						next_acc[0] = m_ir->CreateAdd(next_acc[0], vls[0]);
-						next_acc[1] = m_ir->CreateAdd(next_acc[1], m_ir->CreateCall(get_intrinsic<u32[4]>(llvm::Intrinsic::aarch64_neon_uabd), {vls[1], vls[2]}));
-						next_acc[2] = m_ir->CreateAdd(next_acc[2], vls[3]);
-						next_acc[3] = m_ir->CreateAdd(next_acc[3], m_ir->CreateCall(get_intrinsic<u32[4]>(llvm::Intrinsic::aarch64_neon_uabd), {vls[4], vls[5]}));
-					}
-
-					const auto next_offset = m_ir->CreateAdd(offset, m_ir->getInt32(checksum_loop_size));
-					const auto loop_again = m_ir->CreateICmpULT(next_offset, m_ir->getInt32(checksum_loop_end - starta));
-					m_ir->CreateCondBr(loop_again, loop_block, loop_next);
-
-					offset->addIncoming(next_offset, loop_block);
-
-					for (u32 part = 0; part < 4; part++)
-					{
-						acc_phi[part]->addIncoming(next_acc[part], loop_block);
-						checksum_parts[part] = next_acc[part];
-					}
-
-					check_iterations += (checksum_loop_end - starta) / checksum_block_size;
-
-					m_ir->SetInsertPoint(loop_next);
-				}
-
-				for (u32 j = use_checksum_loop ? checksum_loop_end : starta; j < end; j += checksum_block_size)
-				{
-					llvm::Value* vls[6] = {};
-					u32 words[24] = {};
-					bool any_data = false;
-
-					for (u32 part = 0; part < 6; part++)
-					{
-						int indices[4];
-						bool holes = false;
-						bool data = false;
-
-						for (u32 i = 0; i < 4; i++)
-						{
-							const u32 k = j + (part * 4 + i) * 4;
-
-							if (k < start || k >= end || !func.data[(k - start) / 4])
+							if (const u32 pc = address + part * width + lane * 4; pc < end)
 							{
-								indices[i] = 4;
-								holes      = true;
+								words[part][lane] = func.data[(pc - start) / 4];
+							}
+						}
+					}
+
+					return words;
+				};
+
+				// Mark windows containing relative branch instructions or relative branch hints
+				const auto protection = [&](const words_t& words)
+				{
+					std::array<bool, inputs> result{};
+
+					for (u32 part = 0; part < inputs; part++)
+					{
+						for (u32 lane = 0; lane < lanes; lane++)
+						{
+							result[part] = result[part] || protected_word(words[part][lane]);
+						}
+					}
+
+					return result;
+				};
+
+				// Map fixed operation slots to original input windows
+				// Protection flags move with the windows when their assignments change
+				struct checksum_plan
+				{
+					std::array<u32, inputs> order{};
+					std::array<bool, inputs> protect{};
+				};
+
+				// Choose the input permutation at compile time rather than emitting a runtime shuffle
+				// Use the same assignment for the expected checksum and generated verifier
+				const auto make_plan = [&](const bool* protect)
+				{
+					checksum_plan plan;
+					for (u32 part = 0; part < inputs; part++)
+					{
+						plan.order[part] = part;
+						plan.protect[part] = protect[part];
+					}
+
+#ifdef ARCH_ARM64
+					// With crypto, ARM slots 0/3 use ADD, 1/2 use EOR3, and 4/5 use SHA512SU1
+					constexpr std::array<u32, 2> xor_inputs{1, 2};
+					// Prefer individual SHA inputs before displacing an ADD input
+					constexpr std::array<u32, 4> replacements{4, 5, 0, 3};
+					if (!use_crypto)
+					{
+						return plan;
+					}
+
+					// Exchange the pairs when possible, keeping inputs 0/3 on ADD
+					// Preserve the two ADD, one EOR3 and one SHA512SU1 updates
+					if ((plan.protect[1] || plan.protect[2]) && !plan.protect[4] && !plan.protect[5])
+					{
+						std::swap(plan.order[1], plan.order[4]);
+						std::swap(plan.order[2], plan.order[5]);
+						std::swap(plan.protect[1], plan.protect[4]);
+						std::swap(plan.protect[2], plan.protect[5]);
+						return plan;
+					}
+#else
+					// With up to two protected inputs, collect them in the first pair for ADD
+					// Leave the second pair eligible for XOR, using 512-bit banks on every x86 target
+					constexpr std::array<u32, 2> xor_inputs{2, 3};
+					constexpr std::array<u32, 2> replacements{0, 1};
+#endif
+					// Without an eligible pair, retain the original order
+					// ARM uses four ADDs plus SHA512SU1, x86 uses two ADD pairs
+					if (std::count(plan.protect.begin(), plan.protect.end(), false) < 2)
+					{
+						return plan;
+					}
+
+					for (const u32 slot : xor_inputs)
+					{
+						if (!plan.protect[slot])
+						{
+							continue;
+						}
+
+						for (const u32 replacement : replacements)
+						{
+							if (plan.protect[replacement])
+							{
+								continue;
+							}
+
+							std::swap(plan.order[slot], plan.order[replacement]);
+							std::swap(plan.protect[slot], plan.protect[replacement]);
+							break;
+						}
+					}
+
+					return plan;
+				};
+
+				// Calculate the expected checksum from the original program
+				// Keep these operations in sync with the generated code in update()
+				const auto update_expected = [&](const words_t& words, const checksum_plan& plan)
+				{
+					const auto& order = plan.order;
+					const auto& protect = plan.protect;
+#ifdef ARCH_ARM64
+					for (u32 lane = 0; lane < lanes; lane++)
+					{
+						if (use_crypto)
+						{
+							expected[0][lane] += words[order[0]][lane];
+							expected[2][lane] += words[order[3]][lane];
+
+							if (protect[1] || protect[2])
+							{
+								expected[1][lane] += words[order[1]][lane] + words[order[2]][lane];
 							}
 							else
 							{
-								indices[i] = i;
-								data       = true;
-								words[part * 4 + i] = func.data[(k - start) / 4];
+								expected[1][lane] ^= words[order[1]][lane] ^ words[order[2]][lane];
 							}
+						}
+						else
+						{
+							expected[0][lane] += words[0][lane] + (protect[1] ? words[1][lane] : 0);
+							expected[2][lane] += words[3][lane] + (protect[2] ? words[2][lane] : 0);
+							expected[1][lane] += (protect[1] ? 0 : words[1][lane]) + (protect[2] ? 0 : words[2][lane]);
+							expected[3][lane] += words[4][lane] + words[5][lane];
+						}
+					}
+					if (use_crypto)
+					{
+						update_sha512_checksum(expected[3].data(), words[order[4]].data(), words[order[5]].data());
+					}
+#else
+					for (u32 lane = 0; lane < lanes; lane++)
+					{
+						for (u32 bank = 0; bank < states; bank++)
+						{
+							if (protect[bank * 2] || protect[bank * 2 + 1])
+							{
+								expected[bank][lane] += words[order[bank * 2]][lane] + words[order[bank * 2 + 1]][lane];
+							}
+							else
+							{
+								expected[bank][lane] ^= words[order[bank * 2]][lane] ^ words[order[bank * 2 + 1]][lane];
+							}
+						}
+					}
+#endif
+				};
+
+				// Generate the runtime checksum using the same operations and protected windows
+				const auto update = [&](auto& acc, const auto& value, const checksum_plan& plan)
+				{
+					const auto& order = plan.order;
+					const auto& protect = plan.protect;
+#ifdef ARCH_ARM64
+					acc[0] = m_ir->CreateAdd(acc[0], value[order[0]]);
+					acc[2] = m_ir->CreateAdd(acc[2], value[order[3]]);
+
+					if (use_crypto)
+					{
+						const auto x = value[order[1]];
+						const auto y = value[order[2]];
+						if (protect[1] || protect[2])
+						{
+							acc[1] = m_ir->CreateAdd(acc[1], m_ir->CreateAdd(x, y));
+						}
+						else if (x != zero || y != zero)
+						{
+							acc[1] = m_ir->CreateCall(get_intrinsic<u32[4]>(llvm::Intrinsic::aarch64_crypto_eor3u), {acc[1], x, y});
+						}
+
+						if (value[order[4]] != zero || value[order[5]] != zero)
+						{
+							acc[3] = m_ir->CreateBitCast(m_ir->CreateCall(get_intrinsic(llvm::Intrinsic::aarch64_crypto_sha512su1),
+								{m_ir->CreateBitCast(acc[3], get_type<u64[2]>()),
+									m_ir->CreateBitCast(value[order[4]], get_type<u64[2]>()),
+									m_ir->CreateBitCast(value[order[5]], get_type<u64[2]>())}), type);
+						}
+					}
+					else
+					{
+						if (protect[1])
+						{
+							acc[0] = m_ir->CreateAdd(acc[0], value[1]);
+						}
+
+						if (protect[2])
+						{
+							acc[2] = m_ir->CreateAdd(acc[2], value[2]);
+						}
+
+						const auto x = protect[1] ? zero : value[1];
+						const auto y = protect[2] ? zero : value[2];
+						acc[1] = m_ir->CreateAdd(acc[1], m_ir->CreateAdd(x, y));
+						acc[3] = m_ir->CreateAdd(acc[3], m_ir->CreateAdd(value[4], value[5]));
+					}
+#else
+					for (u32 bank = 0; bank < states; bank++)
+					{
+						if (protect[bank * 2] || protect[bank * 2 + 1])
+						{
+							acc[bank] = m_ir->CreateAdd(acc[bank], m_ir->CreateAdd(value[order[bank * 2]], value[order[bank * 2 + 1]]));
+						}
+						else
+						{
+							acc[bank] = m_ir->CreateXor(acc[bank], m_ir->CreateXor(value[order[bank * 2]], value[order[bank * 2 + 1]]));
+						}
+					}
+#endif
+				};
+
+				// Count nonempty 96-byte ARM / 64-byte x86 chunks as before
+				for (u32 j = starta; j < end; j += counter_bytes)
+				{
+					for (u32 k = j; k < std::min(end, j + counter_bytes); k += 4)
+					{
+						if (func.data[(k - start) / 4])
+						{
+							check_iterations++;
+							break;
+						}
+					}
+				}
+
+				// Keep short spans unrolled and only loop over complete, hole-free bodies
+				bool use_loop = loop_end - starta >= loop_bytes * 2;
+
+				for (u32 j = starta; use_loop && j < loop_end; j += 4)
+				{
+					if (!func.data[(j - start) / 4])
+					{
+						use_loop = false;
+					}
+				}
+
+				std::array<bool, inputs * loop_blocks> loop_protection{};
+				std::array<checksum_plan, loop_blocks> loop_plans{};
+				if (use_loop)
+				{
+					// Find protected window positions across all iterations before calculating
+					// the expected checksum
+					// Each position uses the same operation in every iteration
+					for (u32 j = starta; j < loop_end; j += block_bytes)
+					{
+						const auto flags = protection(get_words(j));
+						const u32 slot = ((j - starta) / block_bytes % loop_blocks) * inputs;
+						for (u32 part = 0; part < inputs; part++)
+						{
+							loop_protection[slot + part] |= flags[part];
+						}
+					}
+
+					// Build shared plans only after every iteration has contributed its flags
+					for (u32 block = 0; block < loop_blocks; block++)
+					{
+						loop_plans[block] = make_plan(loop_protection.data() + block * inputs);
+					}
+
+					for (u32 j = starta; j < loop_end; j += block_bytes)
+					{
+						update_expected(get_words(j), loop_plans[(j - starta) / block_bytes % loop_blocks]);
+					}
+				}
+
+
+				if (use_loop)
+				{
+					const auto preheader = m_ir->GetInsertBlock();
+					const auto body = BasicBlock::Create(m_context, "spu_checksum_loop", m_function);
+					const auto next = BasicBlock::Create(m_context, "spu_checksum_next", m_function);
+					m_ir->CreateBr(body);
+					m_ir->SetInsertPoint(body);
+					const auto offset = m_ir->CreatePHI(m_ir->getInt32Ty(), 2);
+					offset->addIncoming(m_ir->getInt32(0), preheader);
+					std::array<llvm::PHINode*, states> phis;
+					for (u32 bank = 0; bank < states; bank++)
+					{
+						phis[bank] = m_ir->CreatePHI(type, 2);
+						phis[bank]->addIncoming(accumulators[bank], preheader);
+						accumulators[bank] = phis[bank];
+					}
+					const auto offset64 = m_ir->CreateZExt(offset, m_ir->getInt64Ty());
+					for (u32 block = 0; block < loop_blocks; block++)
+					{
+						std::array<llvm::Value*, inputs> value;
+
+						for (u32 part = 0; part < inputs; part++)
+						{
+							value[part] = m_ir->CreateAlignedLoad(type, _ptr(data_addr, m_ir->CreateAdd(offset64, m_ir->getInt64(block * block_bytes + part * width))), llvm::MaybeAlign{4});
+						}
+
+						update(accumulators, value, loop_plans[block]);
+					}
+					const auto next_offset = m_ir->CreateAdd(offset, m_ir->getInt32(loop_bytes));
+					m_ir->CreateCondBr(m_ir->CreateICmpULT(next_offset, m_ir->getInt32(loop_end - starta)), body, next);
+					offset->addIncoming(next_offset, body);
+					for (u32 bank = 0; bank < states; bank++)
+					{
+						phis[bank]->addIncoming(accumulators[bank], body);
+					}
+					m_ir->SetInsertPoint(next);
+				}
+
+				for (u32 j = use_loop ? loop_end : starta; j < end; j += block_bytes)
+				{
+					const auto words = get_words(j);
+					const auto flags = protection(words);
+					const auto plan = make_plan(flags.data());
+					std::array<llvm::Value*, inputs> value;
+					value.fill(zero);
+					bool any_data = false;
+
+					for (u32 part = 0; part < inputs; part++)
+					{
+						int indices[16];
+						bool data = false;
+						bool holes = false;
+
+						for (u32 lane = 0; lane < lanes; lane++)
+						{
+							const bool active = words[part][lane] != 0;
+							indices[lane] = active ? lane : lanes;
+							data |= active;
+							holes |= !active;
 						}
 
 						if (!data)
 						{
-							vls[part] = acc_init;
 							continue;
 						}
 
 						any_data = true;
+						const u32 address = j + part * width;
 
-						// Load unaligned code block from LS
-						vls[part] = m_ir->CreateAlignedLoad(get_type<u32[4]>(), _ptr(data_addr, j + part * 16 - starta), llvm::MaybeAlign{4});
-
-						// Mask if necessary
-						if (holes)
+						if (address + width <= end)
 						{
-							vls[part] = m_ir->CreateShuffleVector(vls[part], acc_init, llvm::ArrayRef(indices, 4));
+							value[part] = m_ir->CreateAlignedLoad(type, _ptr(data_addr, address - starta), llvm::MaybeAlign{4});
+							if (holes)
+							{
+								value[part] = m_ir->CreateShuffleVector(value[part], zero, llvm::ArrayRef(indices, lanes));
+							}
+						}
+						else
+						{
+							// Do not read past the declared tail for an incomplete vector
+							for (u32 lane = 0; lane < lanes; lane++)
+							{
+								if (words[part][lane])
+								{
+									value[part] = m_ir->CreateInsertElement(value[part], m_ir->CreateAlignedLoad(m_ir->getInt32Ty(), _ptr(data_addr, address + lane * 4 - starta), llvm::MaybeAlign{4}), lane);
+								}
+							}
 						}
 					}
 
-					if (!any_data)
+					if (any_data)
 					{
-						// Skip full-sized holes
-						continue;
+						update(accumulators, value, plan);
+						update_expected(words, plan);
 					}
-
-					checksum_parts[0] = m_ir->CreateAdd(checksum_parts[0], vls[0]);
-					checksum_parts[1] = m_ir->CreateAdd(checksum_parts[1], m_ir->CreateCall(get_intrinsic<u32[4]>(llvm::Intrinsic::aarch64_neon_uabd), {vls[1], vls[2]}));
-					checksum_parts[2] = m_ir->CreateAdd(checksum_parts[2], vls[3]);
-					checksum_parts[3] = m_ir->CreateAdd(checksum_parts[3], m_ir->CreateCall(get_intrinsic<u32[4]>(llvm::Intrinsic::aarch64_neon_uabd), {vls[4], vls[5]}));
-
-					update_checksum(words);
-
-					check_iterations++;
 				}
 
-				llvm::Value* elem = nullptr;
+#ifdef ARCH_ARM64
+				constexpr u32 checksum_states = states;
+#else
+				accumulators[0] = m_ir->CreateAdd(accumulators[0], accumulators[1]);
 
-				for (u32 part = 0; part < 4; part++)
+				for (u32 lane = 0; lane < lanes; lane++)
 				{
-					auto* const_vector = ConstantDataVector::get(m_context, llvm::ArrayRef(checksum + part * 4, 4));
-					llvm::Value* acc = m_ir->CreateXor(checksum_parts[part], const_vector);
-					acc = m_ir->CreateBitCast(acc, get_type<u64[2]>());
+					expected[0][lane] += expected[1][lane];
+				}
 
-					for (u32 i = 0; i < 2; i++)
+				constexpr u32 checksum_states = 1;
+#endif
+				llvm::Value* difference = nullptr;
+
+				for (u32 bank = 0; bank < checksum_states; bank++)
+				{
+					const auto constant = ConstantDataVector::get(m_context, llvm::ArrayRef(expected[bank].data(), lanes));
+					const auto halves = m_ir->CreateBitCast(m_ir->CreateXor(accumulators[bank], constant), FixedVectorType::get(m_ir->getInt64Ty(), lanes / 2));
+					for (u32 lane = 0; lane < lanes / 2; lane++)
 					{
-						const auto lane = m_ir->CreateExtractElement(acc, i);
-						elem = elem ? m_ir->CreateOr(elem, lane) : lane;
+						const auto item = m_ir->CreateExtractElement(halves, lane);
+						difference = difference ? m_ir->CreateOr(difference, item) : item;
 					}
 				}
 
 				// Compare result with zero
-				const auto cond = m_ir->CreateICmpNE(elem, m_ir->getInt64(0));
-				m_ir->CreateCondBr(cond, label_diff, label_body, m_md_unlikely);
-#endif
+				m_ir->CreateCondBr(m_ir->CreateICmpNE(difference, m_ir->getInt64(0)), label_diff, label_body, m_md_unlikely);
 			}
 #ifdef ARCH_ARM64
 			else
@@ -2780,7 +3202,7 @@ public:
 
 										m_ir->SetInsertPoint(cblock);
 
-										ensure(llvm_has_terminator(bfound->second.block_end));
+										ensure(bfound->second.block_end->getTerminator());
 									}
 
 									_phi->addIncoming(value, bfound->second.block_end);
@@ -2842,47 +3264,83 @@ public:
 				if (need_check || (bi == 0 && g_cfg.core.spu_block_size != spu_block_size_type::safe))
 				{
 					check_state(baddr);
+
+					// Improve MFC command shuffling for specific short loops
 					bool is_self_jump = false;
+
 					for (u32 pred : bb.preds)
 					{
-						if (pred == baddr) { is_self_jump = true; break; }
+						if (pred == baddr)
+						{
+							// If this block is a target of a backward branch (possibly loop), emit a check
+							is_self_jump = true;
+							break;
+						}
 					}
-					bool contains_store = false, contains_load = false, contains_floating = false;
+
+					// They must contain a load, but not a astore
+					bool contains_store = false;
+					bool contains_load = false;
+					bool contains_floating = false;
+
 					if (is_self_jump && m_bbs.at(baddr).size < 16)
 					{
 						for (u32 iaddr = baddr, counter = 0; counter < m_bbs.at(baddr).size; iaddr += 4, counter++)
 						{
 							const u32 op = std::bit_cast<be_t<u32>>(func.data[(iaddr - start) / 4]);
 							const auto itype = g_spu_itype.decode(op);
+
 							if (itype & spu_itype::memory)
 							{
-								if (itype & spu_itype::zregmod) contains_store = true;
-								else contains_load = true;
+								if (itype & spu_itype::zregmod)
+								{
+									contains_store = true;
+								}
+								else
+								{
+									contains_load = true;
+								}
 							}
-							else if (itype & spu_itype::floating) contains_floating = true;
+							else if (itype & spu_itype::floating)
+							{
+								contains_floating = true;
+							}
 						}
 					}
+
 					if (is_self_jump && !contains_store && !contains_floating && contains_load && m_bbs.at(baddr).size < 12 && g_cfg.core.mfc_transfers_shuffling)
 					{
-						const auto spu_work_limited = [](spu_thread* thread)
+						const auto spu_work_limted = [](spu_thread* _this)
 						{
-							if (thread->interrupts_enabled) { thread->mfc_queued_ops_timeout++; return; }
-							if (thread->do_mfc()) thread->mfc_queued_ops_timeout = g_cfg.core.mfc_shuffling_instructions;
+							if (_this->interrupts_enabled)
+							{
+								// Undo changes
+								_this->mfc_queued_ops_timeout++;
+								return;
+							}
+
+							const bool work_left = _this->do_mfc();
+
+							if (work_left)
+							{
+								_this->mfc_queued_ops_timeout = g_cfg.core.mfc_shuffling_instructions;
+							}
 						};
+
 						const auto mfc_ops = spu_ptr(&spu_thread::mfc_queued_ops_timeout);
-						const auto next = BasicBlock::Create(m_context, "ShuffleNext2", m_function);
-						const auto check = BasicBlock::Create(m_context, "MfcCheck2", m_function);
-						const auto work = BasicBlock::Create(m_context, "MfcOps2", m_function);
-						const auto old_timeout = spu_context_attr(m_ir->CreateLoad(get_type<u64>(), mfc_ops));
-						m_ir->CreateCondBr(m_ir->CreateIsNull(old_timeout), next, check);
-						m_ir->SetInsertPoint(check);
-						const auto timeout = m_ir->CreateSub(old_timeout, m_ir->getInt64(1));
-						m_ir->CreateStore(timeout, mfc_ops);
-						m_ir->CreateCondBr(m_ir->CreateIsNull(timeout), work, next);
-						m_ir->SetInsertPoint(work);
-						call("spu_work_limited", +spu_work_limited, m_thread);
-						m_ir->CreateBr(next);
-						m_ir->SetInsertPoint(next);
+						const auto label_next = BasicBlock::Create(m_context, "ShuffleNext2", m_function);
+						const auto label_mfc_check = BasicBlock::Create(m_context, "MfcCheck2", m_function);
+						const auto label_mfc_ops = BasicBlock::Create(m_context, "MfcOps2", m_function);
+						const auto old_mfc_timeout = spu_context_attr(m_ir->CreateLoad(get_type<u64>(), mfc_ops));
+						m_ir->CreateCondBr(m_ir->CreateIsNull(old_mfc_timeout), label_next, label_mfc_check);
+						m_ir->SetInsertPoint(label_mfc_check);
+						const auto store_timeout = m_ir->CreateSub(old_mfc_timeout, m_ir->getInt64(1));
+						m_ir->CreateStore(store_timeout, mfc_ops);
+						m_ir->CreateCondBr(m_ir->CreateIsNull(store_timeout), label_mfc_ops, label_next);
+						m_ir->SetInsertPoint(label_mfc_ops);
+						call("spu_work_limited", +spu_work_limted, m_thread);
+						m_ir->CreateBr(label_next);
+						m_ir->SetInsertPoint(label_next);
 					}
 				}
 
@@ -3432,6 +3890,18 @@ public:
 					else
 						m_next_op = func.data[(m_pos - start) / 4 + 1];
 
+#ifdef __APPLE__
+					// Park a failed guest poll before a listed instruction; the pc and the word must both match
+					for (const auto& [site_pc, site_word] : m_poll_park_sites)
+					{
+						if (m_pos == site_pc && op == site_word)
+						{
+							spu_log.notice("SPU poll park: compiled in at 0x%05x in %s", m_pos, m_hash);
+							call("spu_poll_park", &exec_poll_park, m_thread);
+						}
+					}
+
+#endif
 					switch (m_inst_attrs[(m_pos - start) / 4])
 					{
 					case inst_attr::putllc0:
@@ -3452,8 +3922,40 @@ public:
 					default: break;
 					}
 
+					// ARMSX3_SHUFB_CHECK: verify EVERY shuffle, not only the folded ones -- the
+					// first version of this check sat inside the insert fold, so the ARM64
+					// tbl/tbx paths were never verified at all.
+					//
+					// The operands are captured BEFORE the instruction and the result after it.
+					// Capturing all four afterwards reads the result back as the operands
+					// whenever a shuffle writes to its own source (shufb rX,rX,rX,mask, the
+					// byteswap idiom), which reported 32 mismatches that were all this mistake.
+					const bool check_shufb = g_spu_itype.decode(op) == spu_itype::SHUFB && spu_shufb_check_enabled();
+
+					if (check_shufb)
+					{
+						const spu_opcode_t sop{op};
+
+						m_ir->CreateStore(get_vr<u8[16]>(sop.ra).value, spu_ptr(&spu_thread::shufb_dbg_a));
+						m_ir->CreateStore(get_vr<u8[16]>(sop.rb).value, spu_ptr(&spu_thread::shufb_dbg_b));
+						m_ir->CreateStore(get_vr<u8[16]>(sop.rc).value, spu_ptr(&spu_thread::shufb_dbg_c));
+					}
+
 					// Execute recompiler function (TODO)
 					(this->*decode(op))({op});
+
+					if (check_shufb && !llvm_has_terminator(m_ir->GetInsertBlock()))
+					{
+						m_ir->CreateStore(get_vr<u8[16]>(spu_opcode_t{op}.rt4).value, spu_ptr(&spu_thread::shufb_dbg_res));
+						update_pc();
+						call("spu_shufb_check", &exec_shufb_check, m_thread);
+					}
+
+					if (m_pos == spu_trap_pc().first)
+					{
+						ensure_gpr_stores();
+						call("spu_trap_pc", &exec_trap_pc, m_thread);
+					}
 				}
 
 				// Finalize block with fallthrough if necessary
@@ -4057,17 +4559,24 @@ public:
 		std::string& llvm_log = function_log;
 		raw_string_ostream out(llvm_log);
 
+		// Printing the IR is expensive, only do it when it's needed (verification failure or debug log)
 		const auto print_ir = [&]()
 		{
 			fmt::append(llvm_log, "LLVM IR at 0x%x:\n", func.entry_point);
-			out << *_module;
+			out << *_module; // print IR
 			out << "\n\n";
 		};
+
 		std::string verify_log;
 		raw_string_ostream verify_out(verify_log);
+
 		if (verifyModule(*_module, &verify_out))
 		{
-			if (function_log.empty()) this->dump(func, function_log);
+			if (function_log.empty())
+			{
+				this->dump(func, function_log);
+			}
+
 			print_ir();
 			out << verify_out.str();
 			out.flush();
@@ -4088,9 +4597,13 @@ public:
 
 			fmt::throw_exception("Compilation failed");
 		}
-		if (g_cfg.core.spu_debug) print_ir();
 
-#if defined(__APPLE__)
+		if (g_cfg.core.spu_debug)
+		{
+			print_ir();
+		}
+
+#if defined(__APPLE__) && !TARGET_OS_IPHONE && !defined(ARCH_ARM64)
 		// Apple Silicon W^X: enter write mode for JIT memory and pair
 		// it with an RAII guard so execute mode is restored on every
 		// exit path (the early "return nullptr" below would otherwise
@@ -4119,6 +4632,49 @@ public:
 				{
 					// Testing only
 					added = m_jit.try_add(std::move(_module), m_spurt->get_cache_path() + "llvm/", llvm_error);
+				}
+				else if (const std::string& obj_cache = m_spurt->get_obj_cache_path(); !obj_cache.empty())
+				{
+					// ON again since 11-08, with the cause below fixed. Every host address the
+					// recompiler used to bake (g_timebase_offs in RDCH and WRCH SPU_RdDec/SPU_WrDec,
+					// vm::g_pages in WRCH's MFC check and the Killzone 3 guard in A) now goes
+					// through host_data_ptr, a relocatable global resolved when the object loads,
+					// from Jeen's iOS port (231adcea6). As a backstop, JITLLVM.cpp walks each
+					// module's IR before writing it and never writes one that still turns a
+					// constant in [2^32, 2^48) into a pointer, and checks every object it reads
+					// back. ARMSX3_SPU_OBJ_CACHE=0 in driver_env.txt turns the cache off.
+					//
+					// What it was disabled for: cached SPU objects were not safe to reuse across
+					// processes on ARM64.
+					//
+					// This branch used to call the cache-less try_add overload, so ARM64 never wrote
+					// SPU objects at all and recompiled every session. Passing obj_cache here made it
+					// write them, which cut a cold boot from minutes to seconds -- and started
+					// crashing at roughly twelve seconds into boot, in CellSpursKernel0, always at
+					// the same host address:
+					//
+					//     insn=0xb940012b  ->  ldr w11, [x9]     x9 = 0x78ba91f798
+					//
+					// x9 is built by movz/movk immediates in the cached object itself, and
+					// readelf shows NO relocation covering those instructions. The relocations that
+					// are there -- .rodata.cst16 page-relative, CALL26 to spu_escape/spu_dispatch --
+					// all resolve on load; this one cannot, because nothing marks it as an address.
+					// So the object carries an absolute host pointer captured when it was compiled,
+					// which is why the fault address is byte-identical in every process while the
+					// mappings around it move with ASLR, and why it lands in whatever unrelated
+					// mapping now occupies that spot.
+					//
+					// Fixing the one constant would not make this safe. Any address the recompiler
+					// bakes into IR has the same problem -- g_timebase_offs is baked the same way in
+					// two more places -- so the cache is only sound once every such site goes through
+					// a relocatable symbol instead of IntToPtr(getInt64(...)). Until then, correctness
+					// over the boot time: recompile per session, as ARM64 always did before.
+#if (defined(__APPLE__) || defined(__ANDROID__)) && defined(ARCH_ARM64)
+					// Every host address goes through host_data_ptr here, so the cached object is safe to load
+					added = m_jit.try_add(std::move(_module), obj_cache, llvm_error);
+#else
+					added = m_jit.try_add(std::move(_module), llvm_error);
+#endif
 				}
 				else
 				{
@@ -4161,6 +4717,10 @@ public:
 			{
 				// Testing only
 				m_jit.add(std::move(_module), m_spurt->get_cache_path() + "llvm/");
+			}
+			else if (const std::string& obj_cache = m_spurt->get_obj_cache_path(); !obj_cache.empty())
+			{
+				m_jit.add(std::move(_module), obj_cache);
 			}
 			else
 			{
@@ -4216,7 +4776,7 @@ public:
 			fs::write_file(m_spurt->get_cache_path() + "spu-ir.log", fs::create + fs::write + fs::append, llvm_log);
 		}
 
-#if defined(__APPLE__)
+#if defined(__APPLE__) && !TARGET_OS_IPHONE && !defined(ARCH_ARM64)
 		pthread_jit_write_protect_np(true);
 #endif
 #if defined(ARCH_ARM64)
@@ -4232,7 +4792,7 @@ public:
 				cache.add(func);
 			}
 
-			spu_log.success("New SPU block compiled successfully (size=%u)", func_size);
+			spu_log.trace("New SPU block compiled successfully (size=%u)", func_size);
 		}
 
 		return fn;
@@ -4272,13 +4832,13 @@ public:
 
 	spu_function_t compile_interpreter()
 	{
+		using namespace llvm;
+
 		if (m_jit.is_poisoned())
 		{
 			spu_log.error("Refusing to compile the SPU interpreter on a poisoned LLVM engine");
 			return nullptr;
 		}
-
-		using namespace llvm;
 
 		m_engine->clearAllGlobalMappings();
 
@@ -4696,6 +5256,104 @@ public:
 		return result;
 	}
 
+	// Logs only when the watched register holds something that cannot be a packed pointer, so a
+	// job that runs thousands of times a second costs one compare and prints nothing.
+	static void exec_trap_pc(spu_thread* _spu)
+	{
+		const u32 reg = spu_trap_pc().second;
+		const v128 v = _spu->gpr[reg];
+		const u32 value = v._u32[3];
+		const u32 shifted = value << 4;
+
+		if (spu_trap_raw())
+		{
+			// Every hit, no filter, one line. Bounded so a pc in a hot loop cannot flood.
+			static atomic_t<u32> s_raw_reports{0};
+
+			if (s_raw_reports++ < 256)
+			{
+				spu_log.error("TRAP_PC 0x%05x RAW: r%u = %08x %08x %08x %08x, thread '%s'",
+					spu_trap_pc().first, reg, v._u32[3], v._u32[2], v._u32[1], v._u32[0],
+					*_spu->spu_tname.load());
+			}
+
+			return;
+		}
+
+		// The signature is narrow on purpose: a value that IS a valid pointer on its own but is
+		// mapped nowhere once the job multiplies it by sixteen. Filtering only on the shifted
+		// address caught ordinary float data (0x80000010 and friends) 24 times in a session.
+		if (!vm::check_addr(value, vm::page_readable, 128) || vm::check_addr(shifted, vm::page_readable, 128))
+		{
+			return;
+		}
+
+		static atomic_t<u32> s_reports{0};
+
+		if (s_reports++ >= 24)
+		{
+			return;
+		}
+
+		// Every register, not a window: the base this job adds to the shifted value lives in
+		// r108, outside the r60-r79 window the first version printed, and the whole point is to
+		// see whether that base is zero. It fires once in a session, so the size is irrelevant.
+		std::string regs;
+
+		for (u32 i = 0; i < 128; i++)
+		{
+			fmt::append(regs, "%s r%-3u = %08x %08x %08x %08x", (i % 4 == 0 ? "\n    " : "   "),
+				i, _spu->gpr[i]._u32[3], _spu->gpr[i]._u32[2], _spu->gpr[i]._u32[1], _spu->gpr[i]._u32[0]);
+		}
+
+		spu_log.error("TRAP_PC 0x%05x: r%u = %08x %08x %08x %08x -- valid pointer, but x16 = 0x%08x is unmapped, thread '%s'%s",
+			spu_trap_pc().first, reg, v._u32[3], v._u32[2], v._u32[1], v._u32[0], shifted,
+			*_spu->spu_tname.load(), regs);
+	}
+
+	// ARMSX3_SHUFB_CHECK=1: recompute the shuffle the plain way and compare it with what the
+	// insert fold produced. Killzone 3 stops corrupting pointers when that fold is switched off
+	// (ARMSX3_SHUFB_SKIP=0x80), yet the fold reads correct on paper for the cdd-generated mask it
+	// fires on -- so record the operands of a disagreement rather than argue from the source.
+	static void exec_shufb_check(spu_thread* _spu)
+	{
+		const v128 a = _spu->shufb_dbg_a;
+		const v128 b = _spu->shufb_dbg_b;
+		const v128 c = _spu->shufb_dbg_c;
+
+		// Reference semantics, straight from the interpreter: ab[0] is rb, ab[1] is ra, and the
+		// index is inverted because the bytes are held in reverse order.
+		const v128 ab[2]{b, a};
+		v128 ref{};
+
+		for (u32 i = 0; i < 16; i++)
+		{
+			const u8 cb = c._u8[i];
+
+			if ((cb & 0xc0) == 0x80)
+				ref._u8[i] = 0x00;
+			else if ((cb & 0xe0) == 0xc0)
+				ref._u8[i] = 0xff;
+			else if ((cb & 0xe0) == 0xe0)
+				ref._u8[i] = 0x80;
+			else
+				ref._u8[i] = reinterpret_cast<const u8*>(ab)[(~cb) & 0x1f];
+		}
+
+		if (ref == _spu->shufb_dbg_res)
+		{
+			return;
+		}
+
+		static atomic_t<u32> s_reports{0};
+
+		if (s_reports++ < 32)
+		{
+			spu_log.error("SHUFB fold mismatch at pc 0x%05x:\n  a   = %s\n  b   = %s\n  c   = %s\n  fold= %s\n  real= %s",
+				_spu->pc, a, b, c, _spu->shufb_dbg_res, ref);
+		}
+	}
+
 	template <spu_intrp_func_t F>
 	static void exec_fall(spu_thread* _spu, spu_opcode_t op)
 	{
@@ -4804,6 +5462,40 @@ public:
 		return exec_rdch(_spu, SPU_RdInMbox);
 	}
 
+#ifdef __APPLE__
+	// Sleeps a guest poll that keeps failing, since nothing wakes a guest polling with a plain GET
+	static void exec_poll_park(spu_thread* _spu)
+	{
+		thread_local u64 streak_start = 0;
+		thread_local u64 last_exit = 0;
+		thread_local bool told = false;
+
+		const u64 now = get_system_time();
+
+		// A gap of more than 10 us since the previous call returned means the guest did other work: restart the count
+		if (now - last_exit > 10)
+		{
+			streak_start = now;
+		}
+
+		if (now - streak_start >= 100)
+		{
+			if (!told)
+			{
+				told = true;
+				spu_log.notice("SPU poll park: thread '%s' (id 0x%x) parks: its failed poll has repeated for 100 us", *_spu->spu_tname.load(), _spu->id);
+			}
+
+			_spu->state += cpu_flag::wait;
+			std::this_thread::sleep_for(std::chrono::microseconds(50));
+			static_cast<void>(_spu->test_stopped());
+		}
+
+		// Taken after any sleep, so the sleep never reads as a gap
+		last_exit = get_system_time();
+	}
+
+#endif
 	static u32 exec_read_dec(spu_thread* _spu)
 	{
 		const u32 res = _spu->read_dec().first;
@@ -4898,26 +5590,28 @@ public:
 		{
 			if (g_cfg.core.mfc_transfers_shuffling)
 			{
+				// Execute shuffled MFC commands before reading (see spu_thread::get_ch_value)
 				const auto next = llvm::BasicBlock::Create(m_context, "", m_function);
-				const auto fallback = llvm::BasicBlock::Create(m_context, "", m_function);
-				const auto fast = llvm::BasicBlock::Create(m_context, "", m_function);
-				m_ir->CreateCondBr(m_ir->CreateIsNotNull(m_ir->CreateLoad(get_type<u32>(), spu_ptr(&spu_thread::mfc_size))), fallback, fast, m_md_unlikely);
-				m_ir->SetInsertPoint(fast);
-				const auto fast_value = get_rdch(op, ::offset32(&spu_thread::ch_tag_stat), false);
-				const auto after_fast = m_ir->GetInsertBlock();
+				const auto fall_rdch = llvm::BasicBlock::Create(m_context, "", m_function);;
+				const auto llvm_rdch = llvm::BasicBlock::Create(m_context, "", m_function);;
+				m_ir->CreateCondBr(m_ir->CreateIsNotNull(m_ir->CreateLoad(get_type<u32>(), spu_ptr(&spu_thread::mfc_size))), fall_rdch, llvm_rdch, m_md_unlikely);
+				m_ir->SetInsertPoint(llvm_rdch);
+				const auto get_rdch_val = get_rdch(op, ::offset32(&spu_thread::ch_tag_stat), false);
+				const auto after_block = m_ir->GetInsertBlock();
 				m_ir->CreateBr(next);
-				m_ir->SetInsertPoint(fallback);
+				m_ir->SetInsertPoint(fall_rdch);
 				ensure_gpr_stores();
 				update_pc();
-				const auto fallback_value = call("spu_read_channel", &exec_rdch, m_thread, m_ir->getInt32(MFC_RdTagStat));
+				const auto fall_val = call("spu_read_channel", &exec_rdch, m_thread, m_ir->getInt32(MFC_RdTagStat));
 				m_ir->CreateBr(next);
 				m_ir->SetInsertPoint(next);
-				const auto phi = m_ir->CreatePHI(get_type<u32>(), 2);
-				phi->addIncoming(fast_value, after_fast);
-				phi->addIncoming(fallback_value, fallback);
-				res.value = phi;
+				const auto phi_ch_val = m_ir->CreatePHI(get_type<u32>(), 2);
+				phi_ch_val->addIncoming(get_rdch_val, after_block);
+				phi_ch_val->addIncoming(fall_val, fall_rdch);
+				res.value = phi_ch_val;
 				break;
 			}
+
 			res.value = get_rdch(op, ::offset32(&spu_thread::ch_tag_stat), false);
 			break;
 		}
@@ -4955,10 +5649,30 @@ public:
 #if defined(ARCH_X64) || defined(ARCH_ARM64)
 			if (utils::get_tsc_freq() && !(g_cfg.core.spu_loop_detection) && (g_cfg.core.clocks_scale == 100))
 			{
+#if defined(__APPLE__) || defined(__ANDROID__)
+				const auto timebase_offs = m_ir->CreateLoad(get_type<u64>(), host_data_ptr("spu_host_g_timebase_offs", &g_timebase_offs));
+#else
 				const auto timebase_offs = m_ir->CreateLoad(get_type<u64>(), m_ir->CreateIntToPtr(m_ir->getInt64(reinterpret_cast<u64>(&g_timebase_offs)), get_type<u64*>()));
+#endif
 				const auto timestamp = m_ir->CreateLoad(get_type<u64>(), spu_ptr(&spu_thread::ch_dec_start_timestamp));
 				const auto dec_value = m_ir->CreateLoad(get_type<u32>(), spu_ptr(&spu_thread::ch_dec_value));
-				const auto tsc = m_ir->CreateCall(get_intrinsic(llvm::Intrinsic::readcyclecounter));
+				// Upstream 61a260482 widened this path to ARM64 using llvm.readcyclecounter, but on
+				// AArch64 that lowers to MRS PMCCNTR_EL0 -- the performance counter, which userspace
+				// cannot read on Android and which runs at the DVFS-varying core clock. The maths
+				// below divides by utils::get_tsc_freq(), which on ARM64 is cntfrq_el0, the frequency
+				// of CNTVCT, and the C++ side of the decrementer reads cntvct_el0 too. Reading a
+				// different counter than the divisor describes gives a meaningless delta, so emit the
+				// same register the rest of the emulator uses. No isb: utils::get_tsc() does not use
+				// one either, and matching it keeps the JIT and C++ paths consistent.
+				// Ported from another Android fork (daf4a080a).
+				const auto tsc = m_ir->CreateCall(
+#if defined(ARCH_ARM64)
+					llvm::InlineAsm::get(llvm::FunctionType::get(get_type<u64>(), false),
+						"mrs $0, cntvct_el0", "=r", /*hasSideEffects=*/true)
+#else
+					get_intrinsic(llvm::Intrinsic::readcyclecounter)
+#endif
+				);
 				const auto tscx = m_ir->CreateMul(m_ir->CreateUDiv(tsc, m_ir->getInt64(utils::get_tsc_freq())), m_ir->getInt64(80000000));
 				const auto tscm = m_ir->CreateUDiv(m_ir->CreateMul(m_ir->CreateURem(tsc, m_ir->getInt64(utils::get_tsc_freq())), m_ir->getInt64(80000000)), m_ir->getInt64(utils::get_tsc_freq()));
 				const auto tsctb = m_ir->CreateSub(m_ir->CreateAdd(tscx, tscm), timebase_offs);
@@ -5392,7 +6106,7 @@ public:
 				}
 			}
 
-			spu_log.warning("[0x%x] MFC_EAH: $%u is not a zero constant", m_pos, +op.rt);
+			spu_log.trace("[0x%x] MFC_EAH: $%u is not a zero constant", m_pos, +op.rt);
 			//m_ir->CreateStore(val.value, spu_ptr(&spu_thread::ch_mfc_cmd, &spu_mfc_cmd::eah));
 			return;
 		}
@@ -5426,7 +6140,10 @@ public:
 					break;
 				}
 
-				bool must_use_cpp_functions = !!g_cfg.core.spu_accurate_dma || !!g_cfg.core.mfc_transfers_shuffling;
+				// The local-store watch and the KZ3 sync probe both live in do_dma_transfer, and the
+				// inlined copy below would step around them, so an instrumented run gives up inlining.
+				// So does MFC shuffling, which has to queue the command instead of running it here.
+				bool must_use_cpp_functions = !!g_cfg.core.spu_accurate_dma || !!g_cfg.core.mfc_transfers_shuffling || spu_ls_watch_enabled() || kz3_sync_probe_enabled();
 
 				if (u64 cmdh = ci->getZExtValue() & ~(MFC_BARRIER_MASK | MFC_FENCE_MASK | MFC_RESULT_MASK); g_cfg.core.rsx_fifo_accuracy || g_cfg.video.strict_rendering_mode || /*!g_use_rtm*/ true)
 				{
@@ -5523,7 +6240,14 @@ public:
 						csize = -1;
 					}
 
-					llvm::Value* src = _ptr(m_lsptr, zext<u64>(lsa).eval(m_ir));
+					// do_dma_transfer addresses the local store as ls + (lsa & 0x3ffff). MFC_LSA is kept
+					// raw (the C++ path reads the same field and masks it there), so mask it here too:
+					// in LittleBigPlanet 2 an SPU with damaged code put 0x10111213 in MFC_LSA, and this
+					// copy wrote that far past the local-store base and killed the app with SIGSEGV.
+					// A transfer that starts near the end runs on into the mirror map_ls puts after the
+					// local store and wraps to LS 0, exactly as the copy in do_dma_transfer does. With the
+					// 16 KB cap below, the copy never reaches past ls + 0x43fff. Contributed by k1r4ct (PR #225).
+					llvm::Value* src = _ptr(m_lsptr, zext<u64>(lsa & 0x3ffff).eval(m_ir));
 					llvm::Value* dst = _ptr(m_memptr, zext<u64>(eal).eval(m_ir));
 
 					if (cmd & MFC_GET_CMD)
@@ -5548,7 +6272,62 @@ public:
 					if (!must_use_cpp_functions)
 					{
 						const auto mmio = llvm::BasicBlock::Create(m_context, "", m_function);
-						m_ir->CreateCondBr(m_ir->CreateICmpUGE(eal.value, m_ir->getInt32(0xe0000000)), mmio, copy, m_md_unlikely);
+
+						// The inlined copy below has no guard of its own, so an effective address
+						// that is not backed faults in the host and the access-violation handler
+						// kills the SPU thread mid-transfer. do_dma_transfer models what hardware
+						// actually does -- a class-2 DMA interrupt the running code can survive --
+						// but only for commands that reach it, and a plain GET below 0xe0000000 is
+						// inlined right past it. Killzone 3's fatal transfer is exactly that, which
+						// is why a guard placed only in do_dma_transfer logged nothing.
+						//
+						// Send unbacked addresses down the same path as MMIO. vm::g_pages is one
+						// byte of flags per 4 KB page, so the test is an indexed load and a mask.
+						// Checking the first and last page covers the range: guest pages are
+						// allocated whole and are at least 4 KB, so a transfer that starts and ends
+						// in backed pages cannot straddle an unbacked one (MFC transfers cap at
+						// 16 KB, well under any mapping's granularity here).
+						const u8 need = (cmd & MFC_GET_CMD)
+							? (vm::page_readable | vm::page_allocated)
+							: (vm::page_writable | vm::page_allocated);
+
+#if defined(__APPLE__) || defined(__ANDROID__)
+						const auto pages = host_data_ptr("spu_host_vm_g_pages", vm::g_pages.data());
+#else
+						const auto pages = m_ir->CreateIntToPtr(
+							m_ir->getInt64(reinterpret_cast<u64>(vm::g_pages.data())), get_type<u8*>());
+#endif
+
+						const auto flags_at = [&](llvm::Value* addr) -> llvm::Value*
+						{
+							const auto idx = m_ir->CreateLShr(m_ir->CreateZExt(addr, get_type<u64>()), 12);
+							return m_ir->CreateLoad(get_type<u8>(), m_ir->CreateGEP(get_type<u8>(), pages, idx));
+						};
+
+						const auto size32 = m_ir->CreateZExt(size.value, get_type<u32>());
+
+						const auto last = m_ir->CreateAdd(eal.value,
+							m_ir->CreateSub(size32, m_ir->getInt32(1)));
+
+						const auto both = m_ir->CreateAnd(flags_at(eal.value), flags_at(last));
+
+						const auto unbacked = m_ir->CreateICmpNE(
+							m_ir->CreateAnd(both, m_ir->getInt8(need)), m_ir->getInt8(need));
+
+						// A size above 0x4000 goes to process_mfc_cmd too: it refuses the command ("Unknown
+						// command") where the copy below would go ahead, and the 16 KB cap is what the page
+						// test above assumes. With a constant size, the usual case, the test folds away.
+						// The LSA needs no test here: masked as above, any LSA and any size up to 16 KB stay
+						// inside the local store and its mirror. Do not send odd LSAs to the C++ path for the
+						// wrap either: its copy moves 16 bytes per step (always, on ARM64) and never stops
+						// for a size that is not 1, 2, 4, 8 or a multiple of 16, a size the copy below
+						// handles without leaving the mirror, so it would make a damaged command less safe.
+						const auto bad_size = m_ir->CreateICmpUGT(size32, m_ir->getInt32(0x4000));
+
+						const auto to_cpp = m_ir->CreateOr(m_ir->CreateOr(
+							m_ir->CreateICmpUGE(eal.value, m_ir->getInt32(0xe0000000)), unbacked), bad_size);
+
+						m_ir->CreateCondBr(to_cpp, mmio, copy, m_md_unlikely);
 						m_ir->SetInsertPoint(mmio);
 					}
 
@@ -5645,6 +6424,14 @@ public:
 						call("spu_memcpy", +spu_memcpy, dst, src, zext<u32>(size).eval(m_ir));
 					}
 
+#if defined(__APPLE__) && defined(ARCH_ARM64)
+					// ARM can satisfy a later load before this GET's loads, which x86 never allows
+					if (cmd & MFC_GET_CMD)
+					{
+						m_ir->CreateFence(llvm::AtomicOrdering::Acquire);
+					}
+
+#endif
 					// Disable certain thing
 					m_ir->CreateStore(m_ir->getInt32(0), spu_ptr(&spu_thread::last_faddr));
 					m_ir->CreateBr(next);
@@ -5681,11 +6468,17 @@ public:
 				auto ptr0 = _ptr(m_thread, m_ir->CreateZExt(off0, get_type<u64>()));
 				const auto ptr1 = _ptr(m_memptr, 0xffdeadf0);
 				auto mfc_not_full = m_ir->CreateICmpULT(slot, m_ir->getInt32(g_cfg.core.mfc_transfers_shuffling != 0 ? std::min<u32>(+g_cfg.core.mfc_transfers_shuffling + 1, 16) : 16));
+
 				if (g_cfg.core.mfc_transfers_shuffling)
 				{
-					const auto exec_mfc = [](spu_thread* thread) { thread->do_mfc(false); };
+					auto exec_mfc = [](spu_thread* _this)
+					{
+						_this->do_mfc(false);
+					};
+
 					const auto mfc_next = llvm::BasicBlock::Create(m_context, "MfcQueueNext", m_function);
 					const auto mfc_work = llvm::BasicBlock::Create(m_context, "MfcQueueWork", m_function);
+
 					m_ir->CreateCondBr(mfc_not_full, mfc_next, mfc_work);
 					m_ir->SetInsertPoint(mfc_work);
 					call("spu_mfc", +exec_mfc, m_thread);
@@ -5698,9 +6491,11 @@ public:
 					slot_phi->addIncoming(old_slot, fail);
 					slot = slot_phi;
 					mfc_not_full = m_ir->CreateICmpULT(slot, m_ir->getInt32(16));
+
 					const auto off2 = m_ir->CreateAdd(m_ir->CreateMul(slot, m_ir->getInt32(sizeof(spu_mfc_cmd))), m_ir->getInt32(::offset32(&spu_thread::mfc_queue)));
 					ptr0 = _ptr(m_thread, m_ir->CreateZExt(off2, get_type<u64>()));
 				}
+
 				const auto pmfc = m_ir->CreateSelect(mfc_not_full, ptr0, ptr1);
 				m_ir->CreateStore(ci, _ptr(pmfc, &spu_mfc_cmd::cmd));
 
@@ -5773,7 +6568,7 @@ public:
 			}
 
 			// Fallback to unoptimized WRCH implementation (TODO)
-			spu_log.warning("[0x%x] MFC_Cmd: $%u is not a constant", m_pos, +op.rt);
+			spu_log.trace("[0x%x] MFC_Cmd: $%u is not a constant", m_pos, +op.rt);
 			break;
 		}
 		case MFC_WrListStallAck:
@@ -5801,8 +6596,28 @@ public:
 #if defined(ARCH_X64) || defined(ARCH_ARM64)
 			if (utils::get_tsc_freq() && !(g_cfg.core.spu_loop_detection) && (g_cfg.core.clocks_scale == 100))
 			{
+#if defined(__APPLE__) || defined(__ANDROID__)
+				const auto timebase_offs = m_ir->CreateLoad(get_type<u64>(), host_data_ptr("spu_host_g_timebase_offs", &g_timebase_offs));
+#else
 				const auto timebase_offs = m_ir->CreateLoad(get_type<u64>(), m_ir->CreateIntToPtr(m_ir->getInt64(reinterpret_cast<u64>(&g_timebase_offs)), get_type<u64*>()));
-				const auto tsc = m_ir->CreateCall(get_intrinsic(llvm::Intrinsic::readcyclecounter));
+#endif
+				// Upstream 61a260482 widened this path to ARM64 using llvm.readcyclecounter, but on
+				// AArch64 that lowers to MRS PMCCNTR_EL0 -- the performance counter, which userspace
+				// cannot read on Android and which runs at the DVFS-varying core clock. The maths
+				// below divides by utils::get_tsc_freq(), which on ARM64 is cntfrq_el0, the frequency
+				// of CNTVCT, and the C++ side of the decrementer reads cntvct_el0 too. Reading a
+				// different counter than the divisor describes gives a meaningless delta, so emit the
+				// same register the rest of the emulator uses. No isb: utils::get_tsc() does not use
+				// one either, and matching it keeps the JIT and C++ paths consistent.
+				// Ported from another Android fork (daf4a080a).
+				const auto tsc = m_ir->CreateCall(
+#if defined(ARCH_ARM64)
+					llvm::InlineAsm::get(llvm::FunctionType::get(get_type<u64>(), false),
+						"mrs $0, cntvct_el0", "=r", /*hasSideEffects=*/true)
+#else
+					get_intrinsic(llvm::Intrinsic::readcyclecounter)
+#endif
+				);
 				const auto tscx = m_ir->CreateMul(m_ir->CreateUDiv(tsc, m_ir->getInt64(utils::get_tsc_freq())), m_ir->getInt64(80000000));
 				const auto tscm = m_ir->CreateUDiv(m_ir->CreateMul(m_ir->CreateURem(tsc, m_ir->getInt64(utils::get_tsc_freq())), m_ir->getInt64(80000000)), m_ir->getInt64(utils::get_tsc_freq()));
 				const auto tsctb = m_ir->CreateSub(m_ir->CreateAdd(tscx, tscm), timebase_offs);
@@ -6119,6 +6934,37 @@ public:
 		}
 
 		set_vr(op.rt, get_vr(op.ra) + get_vr(op.rb));
+
+		// Killzone 3 physics KD-tree traversal guard, LS 0x21238: this instruction is
+		// `a r80,r108,r26`, forming EA = base(r108) + node.word0*16, which the game then uses as a
+		// tree-node address with no range check of its own. The PPU frees the tree out from under a
+		// live SPU traversal (a rare timing race: confirmed 27us GET->clear against x86's 7.6ms
+		// floor), so the node this walks is occasionally garbage and the EA lands unbacked. The
+		// SPU then derails and the thread dies, wedging the job scheduler. Route an unbacked EA to
+		// the tree's own no-work terminator at 0x21458: the traversal pops that node and completes
+		// honestly instead of faulting. The race is rare, so this almost never fires; a valid tree
+		// address is always backed, so a legitimate traversal is unaffected. op_branch_targets adds
+		// the 0x21238->0x21458 edge so this is an ordinary two-way branch to the analyser.
+		if (m_pos == 0x21238 && op.opcode == 0x1806b650 && spu_is_killzone3()) [[unlikely]]
+		{
+			// Says the guard is in, so a log shows whether a given copy of the game got it.
+			spu_log.notice("Killzone 3: KD-tree traversal guard compiled in at LS 0x21238 (%s)", Emu.GetTitleID());
+
+			const auto ea = eval(extract(get_vr(op.rt), 3)).value;
+#if defined(__APPLE__) || defined(__ANDROID__)
+			const auto pages = host_data_ptr("spu_host_vm_g_pages", vm::g_pages.data());
+#else
+			const auto pages = m_ir->CreateIntToPtr(
+				m_ir->getInt64(reinterpret_cast<u64>(vm::g_pages.data())), get_type<u8*>());
+#endif
+			const auto idx = m_ir->CreateLShr(m_ir->CreateZExt(ea, get_type<u64>()), 12);
+			const auto flags = m_ir->CreateLoad(get_type<u8>(), m_ir->CreateGEP(get_type<u8>(), pages, idx));
+			const auto backed = m_ir->CreateICmpNE(
+				m_ir->CreateAnd(flags, m_ir->getInt8(vm::page_readable)), m_ir->getInt8(0));
+
+			m_block->block_end = m_ir->GetInsertBlock();
+			m_ir->CreateCondBr(backed, add_block(m_pos + 4), add_block(0x21458), m_md_likely);
+		}
 	}
 
 	void AND(spu_opcode_t op)
@@ -6240,8 +7086,7 @@ public:
 
 		const auto a = get_vr<s16[8]>(op.ra);
 
-#ifdef ARCH_ARM64
-#if SPU_ARM64_BYTE_GATHER
+#if ARMSX3_SPU_ARM64_BYTE_GATHER
 		if (m_use_i8mm)
 		{
 			if (match_vr<s16[8], s32[4], s64[2]>(op.ra, [&](auto c, auto MP)
@@ -6279,7 +7124,6 @@ public:
 			)));
 			return;
 		}
-#endif
 
 		// Use dot product instructions with special values to shift then sum results into the preferred slot
 		if (m_use_dotprod)
@@ -6335,8 +7179,7 @@ public:
 	{
 		const auto a = get_vr<u8[16]>(op.ra);
 
-#ifdef ARCH_ARM64
-#if SPU_ARM64_BYTE_GATHER
+#if ARMSX3_SPU_ARM64_BYTE_GATHER
 		if (m_use_i8mm)
 		{
 			if (match_vr<s8[16], s16[8], s32[4], s64[2]>(op.ra, [&](auto c, auto MP)
@@ -6378,7 +7221,6 @@ public:
 			set_vr(op.rt, bitcast<u32[4]>(es));
 			return;
 		}
-#endif
 
 		// Use dot product instructions with special values to shift then sum results into the preferred slot
 		if (m_use_dotprod)
@@ -6660,7 +7502,7 @@ public:
 
 	void CBX(spu_opcode_t op)
 	{
-		if (m_finfo && m_finfo->fn && op.ra == s_reg_sp)
+		if (m_finfo && m_finfo->fn && op.ra == s_reg_sp && !(spu_shufb_skip_mask() & 0x100))
 		{
 			// Optimization with aligned stack assumption. Strange because SPU code could use CBD instead, but encountered in wild.
 			set_vr(op.rt, spu_get_insertion_shuffle_mask<u8[16]>(~get_scalar(get_vr(op.rb)) & 0xf));
@@ -6673,7 +7515,7 @@ public:
 
 	void CHX(spu_opcode_t op)
 	{
-		if (m_finfo && m_finfo->fn && op.ra == s_reg_sp)
+		if (m_finfo && m_finfo->fn && op.ra == s_reg_sp && !(spu_shufb_skip_mask() & 0x100))
 		{
 			// See CBX.
 			set_vr(op.rt, spu_get_insertion_shuffle_mask<u16[8]>(~get_scalar(get_vr(op.rb)) >> 1 & 0x7));
@@ -6686,7 +7528,7 @@ public:
 
 	void CWX(spu_opcode_t op)
 	{
-		if (m_finfo && m_finfo->fn && op.ra == s_reg_sp)
+		if (m_finfo && m_finfo->fn && op.ra == s_reg_sp && !(spu_shufb_skip_mask() & 0x100))
 		{
 			// See CBX.
 			set_vr(op.rt, spu_get_insertion_shuffle_mask<u32[4]>(~get_scalar(get_vr(op.rb)) >> 2 & 0x3));
@@ -6699,7 +7541,7 @@ public:
 
 	void CDX(spu_opcode_t op)
 	{
-		if (m_finfo && m_finfo->fn && op.ra == s_reg_sp)
+		if (m_finfo && m_finfo->fn && op.ra == s_reg_sp && !(spu_shufb_skip_mask() & 0x100))
 		{
 			// See CBX.
 			set_vr(op.rt, spu_get_insertion_shuffle_mask<u64[2]>(~get_scalar(get_vr(op.rb)) >> 3 & 0x1));
@@ -6896,7 +7738,7 @@ public:
 
 	void CBD(spu_opcode_t op)
 	{
-		if (m_finfo && m_finfo->fn && op.ra == s_reg_sp)
+		if (m_finfo && m_finfo->fn && op.ra == s_reg_sp && !(spu_shufb_skip_mask() & 0x100))
 		{
 			// Known constant with aligned stack assumption (optimization).
 			set_vr(op.rt, spu_get_insertion_shuffle_mask<u8[16]>(~get_imm<u32>(op.i7) & 0xf));
@@ -6909,7 +7751,7 @@ public:
 
 	void CHD(spu_opcode_t op)
 	{
-		if (m_finfo && m_finfo->fn && op.ra == s_reg_sp)
+		if (m_finfo && m_finfo->fn && op.ra == s_reg_sp && !(spu_shufb_skip_mask() & 0x100))
 		{
 			// See CBD.
 			set_vr(op.rt, spu_get_insertion_shuffle_mask<u16[8]>(~get_imm<u32>(op.i7) >> 1 & 0x7));
@@ -6922,7 +7764,7 @@ public:
 
 	void CWD(spu_opcode_t op)
 	{
-		if (m_finfo && m_finfo->fn && op.ra == s_reg_sp)
+		if (m_finfo && m_finfo->fn && op.ra == s_reg_sp && !(spu_shufb_skip_mask() & 0x100))
 		{
 			// See CBD.
 			set_vr(op.rt, spu_get_insertion_shuffle_mask<u32[4]>(~get_imm<u32>(op.i7) >> 2 & 0x3));
@@ -6935,7 +7777,7 @@ public:
 
 	void CDD(spu_opcode_t op)
 	{
-		if (m_finfo && m_finfo->fn && op.ra == s_reg_sp)
+		if (m_finfo && m_finfo->fn && op.ra == s_reg_sp && !(spu_shufb_skip_mask() & 0x100))
 		{
 			// See CBD.
 			set_vr(op.rt, spu_get_insertion_shuffle_mask<u64[2]>(~get_imm<u32>(op.i7) >> 3 & 0x1));
@@ -7731,9 +8573,24 @@ public:
 			using VT = typename decltype(MP)::type;
 
 			// If the mask comes from a constant generation instruction, replace SHUFB with insert
-			if (auto [ok, i] = match_expr(c, spu_get_insertion_shuffle_mask<VT>(match<u32>())); ok)
+			// (0x80 takes this fold out: Killzone 3's bad value is built by exactly this pattern,
+			// a cdd-generated mask feeding a shufb, and a wrong lane here puts a whole pointer
+			// where the half-sized field belongs.)
+			if (auto [ok, i] = match_expr(c, spu_get_insertion_shuffle_mask<VT>(match<u32>())); ok && !(spu_shufb_skip_mask() & 0x80))
 			{
-				set_vr(op.rt4, insert(get_vr<VT>(op.rb), i, get_scalar(get_vr<VT>(op.ra))));
+				const auto folded = eval(insert(get_vr<VT>(op.rb), i, get_scalar(get_vr<VT>(op.ra))));
+
+				if (spu_shufb_check_enabled())
+				{
+					m_ir->CreateStore(get_vr<u8[16]>(op.ra).value, spu_ptr(&spu_thread::shufb_dbg_a));
+					m_ir->CreateStore(get_vr<u8[16]>(op.rb).value, spu_ptr(&spu_thread::shufb_dbg_b));
+					m_ir->CreateStore(get_vr<u8[16]>(op.rc).value, spu_ptr(&spu_thread::shufb_dbg_c));
+					m_ir->CreateStore(eval(bitcast<u8[16]>(folded)).value, spu_ptr(&spu_thread::shufb_dbg_res));
+					update_pc();
+					call("spu_shufb_check", &exec_shufb_check, m_thread);
+				}
+
+				set_vr(op.rt4, folded);
 				return true;
 			}
 
@@ -7866,7 +8723,7 @@ public:
 		const bool perm_or_zero_only = known_idx.Zero[6];
 		const bool consts_only = known_idx.One[7];
 		const bool consts_never_msb = known_idx.Zero[5];
-		[[maybe_unused]] const bool consts_never_allones = known_idx.One[5];
+		const bool consts_never_allones = known_idx.One[5];
 		const bool idx_selects_single = known_idx.extractBits(1, 4).isConstant();
 
 		const auto a = get_vr<u8[16]>(op.ra);
@@ -7883,7 +8740,7 @@ public:
 		const bool b_is_splat = b_is_const && b_data == v128::from8p(b_data._u8[0]);
 
 
-		auto get_swap_from_const = [this](v128 data, bool is_splat) {
+		[[maybe_unused]] auto get_swap_from_const = [this](v128 data, bool is_splat) {
 			// Splats are their own byteswap
 			if (!is_splat)
 				std::reverse(std::begin(data._bytes), std::end(data._bytes));
@@ -7891,15 +8748,27 @@ public:
 			return make_const_vector(data, get_type<u8[16]>());
 		};
 
-		if (a_is_const)
-			a_swap.value = get_swap_from_const(a_data, a_is_splat);
+		// ARM64: fold the byteswap only for SPLAT constants, as before upstream a7fc31f32
+		// ("[SPU LLVM] Additional SHUFB splat/special-index fast paths").
+		//
+		// That commit widened this to ANY constant and byte-reverses non-splat ones in
+		// get_swap_from_const. Borderlands 2's SPURS function at LS 0x25da8 is 1446 shufb whose
+		// data operand is usually a non-splat constant -- 0xbf800000 built by ilhu/iohl, or a mask
+		// straight out of cbd/cwd -- i.e. exactly the case the widening newly captured, and that
+		// function hangs the game when compiled and boots it when interpreted.
+		//
+		// Confirmed two independent ways: reverting this one condition, and separately disabling
+		// the whole ARM64 shufb block so it uses the generic path. Both give zero SPU stalls with
+		// the function compiled. Kept narrow so ARM64 keeps its tbl/tbx fast paths.
+		if (a_is_splat)
+			a_swap.value = a.value;
 
-		if (b_is_const)
-			b_swap.value = get_swap_from_const(b_data, b_is_splat);
+		if (b_is_splat)
+			b_swap.value = b.value;
 
 		// Shuffle index reversal is equivalent to a byteswap
 		value_t<u8[16]> av, bv, cv;
-		if ((a_was_swapped || a_is_const) && (b_was_swapped || b_is_const))
+		if ((a_was_swapped || a_is_splat) && (b_was_swapped || b_is_splat))
 		{
 			av = eval(a_swap);
 			bv = eval(b_swap);
@@ -7913,7 +8782,14 @@ public:
 		}
 
 		// When single source, either indicated by KnownBits or both are the same
-		const std::optional<value_t<u8[16]>> single_src = (idx_selects_single || (op.ra == op.rb && !m_interp_magn))
+		// Also pre-a7fc31f32: drop the KnownBits idx_selects_single trigger.
+		//
+		// Reverting the byteswap-const widening ALONE is not enough -- tested, and Borderlands 2
+		// hangs again at LS 0x25da8 with seven stall dumps. Both of that commit's semantic changes
+		// have to go. idx_selects_single treats a mask whose bit 4 is known-constant across all
+		// lanes as single-source; combined with the ARM64 tbl/tbx paths below that is where the
+		// remaining miscompile lives.
+		const std::optional<value_t<u8[16]>> single_src = ((op.ra == op.rb && !m_interp_magn))
 			? std::make_optional(known_idx.One[4] ? bv : av)
 			: std::nullopt;
 
@@ -7929,40 +8805,36 @@ public:
 		// NOTE: LLVM doesn't emit BCAX	(llvm-project/issues/200699)
 		//		 Verify if `(x ^ 0x0F) & 0x?F` is reassociated when upstreamed
 
-		if (single_src)
+		if (consts_only && !(spu_shufb_skip_mask() & 1))
+		{
+			// NOP to avoid doing any shuffles
+		}
+		else if (single_src && !(spu_shufb_skip_mask() & 0xe))
 		{
 			const auto only_src = single_src.value();
 
-			if (only_src_is_splat && perm_or_zero_only)
+			if (only_src_is_splat && perm_or_zero_only && !(spu_shufb_skip_mask() & 2))
 			{
 				set_vr(op.rt4, select(noncast<s8[16]>(c) >= 0, only_src, splat<u8[16]>(0)));
 				return;
 			}
 
-			if (only_src_is_splat)
+			if (only_src_is_splat && !(spu_shufb_skip_mask() & 4))
 			{
-				const auto lut = build<u8[16]>(0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x80, 0x80, 0x80, 0x80);
-				set_vr(op.rt4, tbx(only_src, lut, (c >> 3) ^ 0x10));
+				set_vr(op.rt4, tbl(splat_lut, (c >> 4)));
 				return;
 			}
 
-			if (perm_only)
+			if (perm_only && !(spu_shufb_skip_mask() & 8))
 			{
 				const auto cm = eval(cv & 0x0f);
 				set_vr(op.rt4, tbl(only_src, cm));
 				return;
 			}
-
-			const auto x = tbl(build<u8[16]>(0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0x80, 0x80), (c >> 4));
-			const auto xv = perm_or_zero_only ? eval(splat<u8[16]>(0)) : x;
-			const auto cm = eval(cv & 0x8f);
-			set_vr(op.rt4, tbx(xv, only_src, cm));
-			return;
 		}
-
-		if (a_is_splat && b_is_splat)
+		else if (a_is_splat && b_is_splat && !(spu_shufb_skip_mask() & 0x30))
 		{
-			if (perm_only)
+			if (perm_only && !(spu_shufb_skip_mask() & 0x10))
 			{
 				set_vr(op.rt4, select_by_bit4(c, av, bv));
 				return;
@@ -7972,17 +8844,46 @@ public:
 			return;
 		}
 
-		if (perm_only)
+		if (perm_only && !(spu_shufb_skip_mask() & 0x40))
 		{
 			const auto cm = eval(cv & 0x1f);
 			set_vr(op.rt4, tbl2(av, bv, cm));
 			return;
 		}
 
-		const auto x = tbl(build<u8[16]>(0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0x80, 0x80), (c >> 4));
-		const auto xv = perm_or_zero_only ? eval(splat<u8[16]>(0)) : x;
+		// Calculate special index constants
+
+		value_t<u8[16]> idx_consts;
+		if (perm_or_zero_only)
+		{
+			idx_consts = eval(splat<u8[16]>(0));
+		}
+		else if (consts_never_msb)
+		{
+			idx_consts = eval(noncast<u8[16]>(sext<s8[16]>(c >= 0xc0)));
+		}
+		else
+		{
+			idx_consts = tbl(build<u8[16]>(0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0x80, 0x80), (c >> 4));
+		}
+
+		if (consts_only)
+		{
+			set_vr(op.rt4, idx_consts);
+			return;
+		}
+
+		// Combine shuffle and special index constants
+
+		if (single_src)
+		{
+			const auto cm = eval(cv & 0x8f);
+			set_vr(op.rt4, tbx(idx_consts, single_src.value(), cm));
+			return;
+		}
+
 		const auto cm = eval(cv & 0x9f);
-		set_vr(op.rt4, tbx2(xv, av, bv, cm));
+		set_vr(op.rt4, tbx2(idx_consts, av, bv, cm));
 		return;
 #else
 
@@ -7991,7 +8892,12 @@ public:
 		bool or_combine_safe = false;
 
 		value_t<u8[16]> ab_shuf;
-		if (single_src)
+		if (consts_only)
+		{
+			// NOP to avoid doing any shuffles
+			ab_shuf = value_t<u8[16]>();
+		}
+		else if (single_src)
 		{
 			if (only_src_is_splat)
 			{
@@ -8046,9 +8952,21 @@ public:
 		{
 			idx_consts = eval(splat<u8[16]>(0));
 		}
+		else if (consts_never_msb)
+		{
+			// Saves on a constant + prevents pessimation where kmask implementation has worse latency than GFNI
+			if (or_combine_safe)
+				idx_consts = eval(bitcast<u8[16]>(sext<s8[16]>(c >= 0xc0)));
+			else
+				idx_consts = eval(bitcast<u8[16]>(noncast<s8[16]>(c + c) >> 7));
+		}
+		else if (consts_never_allones)
+		{
+			idx_consts = eval(sub_sat(c, splat<u8[16]>(0x60)) & 0x80);
+		}
 		else if (m_use_gfni)
 		{
-			// Keep OR combine due to slow blend on later Intel (AVX512 uses faster kmask method)
+			// TODO: Due to vpblendvb, the pshufb OR combine path is one fewer micro-ops post Rocket Lake. Check if it is faster.
 			const auto gfni = gf2p8affineqb(c, build<u8[16]>(0x40, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x40, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20), 0x7f);
 			idx_consts = eval(select(noncast<s8[16]>(gfni) >= 0, splat<u8[16]>(0), gfni));
 			
@@ -8059,6 +8977,12 @@ public:
 		{
 			const auto pshufb_lut = build<u8[16]>(0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0x80, 0x80);
 			idx_consts = eval(pshufb(pshufb_lut, (c >> 4)));
+		}
+
+		if (consts_only)
+		{
+			set_vr(op.rt4, idx_consts);
+			return;
 		}
 
 		// Combine shuffle and special index constants
@@ -8820,6 +9744,34 @@ public:
 		return eval(fpcast<f32[4]>(xr));
 	}
 
+	// -c for the addend of an FMS, with the sign of a NaN pattern left alone on ARM64.
+	//
+	// FMS is a * b - c, and both hosts express it as fma(a, b, -c). x86 folds that into vfmsub,
+	// which never materialises -c, so when c is a NaN it is c's own bits that propagate. AArch64
+	// cannot fold it -- FMLS computes Zd - Zn*Zm, the wrong shape -- so it emits the FNEG and
+	// propagates the negated NaN instead. Both are legal IEEE NaN propagation, and the value only
+	// differs in the sign bit, but the SPU has no NaN in extended range: 0x7fffffff is an ordinary
+	// large number there, so the two hosts disagree about the sign of a huge result rather than
+	// about which NaN to return. ps3autotests cpu/spu_fpu measured 484 such lines, all with
+	// c = 0x7fffffff, ARM returning 0xffffffff against x86's 0x7fffffff.
+	//
+	// That is the same shape of defect as the FCTIW saturation inversion, which flipped a
+	// saturated-high coordinate to saturated-low and spawned Armored Core's mech under the floor,
+	// so it is worth two instructions to not have it. Not guarded by ARCH_ARM64: x86 folds the
+	// select away with the negate, and keeping one definition means the two cannot drift.
+	value_t<f32[4]> negate_addend(value_t<f32[4]> c)
+	{
+		const auto c_known = get_known_fp_class<4>(c, llvm::FPClassTest::fcNan);
+
+		// Nothing to preserve if it can never be a NaN, which is the common case.
+		if (c_known.isKnownNeverNaN())
+		{
+			return eval(-c);
+		}
+
+		return eval(select(fcmp_uno(c != c), c, -c));
+	}
+
 	template <typename T, typename U, typename V>
 	static llvm_calli<f32[4], T, U, V> fnms(T&& a, U&& b, V&& c)
 	{
@@ -9204,6 +10156,16 @@ public:
 			if (g_cfg.core.spu_xfloat_accuracy == xfloat_accuracy::approximate)
 			{
 #ifdef ARCH_ARM64
+				// NOTE: this branch is dead on every Snapdragon tested -- an 8 Gen 2 is ARMv9 but
+				// exposes no sve at all in HWCAP, so m_use_sve2_128 is false. It was tried as the
+				// explanation for the 484 fms lines where ARM disagrees with x86 (c = [18] =
+				// 0x7fffffff, ARM 0xffffffff vs x86 0x7fffffff): rewriting it as fmla against a
+				// materialised -c changed the output by exactly nothing, cache confirmed rebuilt.
+				// Check HWCAP before attributing anything here. The real split is that x86 folds
+				// fma(a, b, fneg(c)) into vfmsub and propagates c's own NaN, while AArch64's FMLS
+				// computes Zd - Zn*Zm and cannot take that shape, so it materialises the FNEG and
+				// propagates the negated NaN. Both are legal, and both differ from hardware
+				// (0x7ff80000) because 0x7fffffff is only a NaN in f32, not on a real SPU.
 				if (m_use_sve2_128)
 				{
 					const auto ca = eval(clamp_smax(a));
@@ -9219,7 +10181,7 @@ public:
 				const auto a_clamp = clamp_smax(a, a_known);
 				const auto b_clamp = clamp_smax(b, b_known);
 
-				return fma32x4(a_clamp, b_clamp, eval(-c), a_known, b_known);
+				return fma32x4(a_clamp, b_clamp, negate_addend(c), a_known, b_known);
 			}
 			else
 			{
@@ -9230,7 +10192,7 @@ public:
 				}
 #endif
 
-				return fma32x4(a, b, eval(-c));
+				return fma32x4(a, b, negate_addend(c));
 			}
 		});
 
@@ -9456,6 +10418,16 @@ public:
 
 			r.value = m_ir->CreateFPToSI(a.value, get_type<s32[4]>());
 #if defined(ARCH_ARM64)
+			// Saturate instead of correcting afterwards; see the approximate path below for why the
+			// x86 XOR is wrong here.
+			//
+			// Unlike the f32 path, BOTH ends need patching. That path is a single saturating
+			// fcvtzs.4s, but there is no v4f64->v4i32 instruction, so this one lowers to
+			//   fcvtzs.2d v1, v1 / fcvtzs.2d v0, v0 / uzp1.4s v0, v0, v1
+			// -- saturation happens at INT64 range and uzp1 then keeps the low 32 bits. Negative
+			// overflow therefore does not produce 0x80000000, it produces the low word of the i64:
+			// -3e9 came back as +1295786496, a saturated-low value reappearing as a large positive
+			// integer, which is the same failure shape as the FCTIW inversion.
 			set_vr(op.rt, select(fcmp_ord(a >= fsplat<f64[4]>(std::exp2(31.f))), splat<s32[4]>(0x7fffffff),
 				select(fcmp_ord(a < fsplat<f64[4]>(-std::exp2(31.f))), splat<s32[4]>(0x80000000), r)));
 #else
@@ -9475,6 +10447,20 @@ public:
 
 			value_t<s32[4]> r;
 			r.value = m_ir->CreateFPToSI(a.value, get_type<s32[4]>());
+
+			// The XOR below is an x86 correction, not a portable one. cvttps2dq returns the
+			// "integer indefinite" value 0x80000000 for every input it cannot represent, positive
+			// overflow included, so flipping all the bits when the input is >= 2^31 turns that into
+			// the 0x7fffffff CFLTS wants. AArch64's FCVTZS already saturates the right way, so the
+			// same XOR turns a correct saturated-high result back into saturated-low. Measured with
+			// ps3autotests cpu/spu_fpu against real hardware output: 48 words came back 0x80000000
+			// where x86 and the console both give 0x7fffffff.
+			//
+			// NaN is the second half of it. FCVTZS converts NaN to 0, which the XOR then turns into
+			// 0xffffffff (16 more words), while cvttps2dq's 0x80000000 lands on 0x7fffffff. An SPU
+			// has no NaN in extended range -- the pattern is just a large number -- so saturating by
+			// sign is also the behaviour the hardware shows. Select up front rather than correct
+			// after, which covers both cases and leaves FCVTZS's own low-side saturation alone.
 #if defined(ARCH_ARM64)
 			const auto sat_hi = bitcast<s32[4]>(a) > splat<s32[4]>(((31 + 127) << 23) - 1);
 			set_vr(op.rt, select(sat_hi, splat<s32[4]>(0x7fffffff), select(fcmp_uno(a != a), splat<s32[4]>(0x80000000), r)));
@@ -10722,6 +11708,19 @@ public:
 		return func;
 	}
 
+#if defined(__APPLE__) || defined(__ANDROID__)
+	// A host data address the cached object can carry: a relocatable global on ARM64 (Apple and Android)
+	llvm::Value* host_data_ptr(const char* name, const void* addr)
+	{
+#if (defined(__APPLE__) || defined(__ANDROID__)) && defined(ARCH_ARM64)
+		m_engine->updateGlobalMapping(name, reinterpret_cast<u64>(addr));
+		return m_module->getOrInsertGlobal(name, get_type<u8>());
+#else
+		return m_ir->CreateIntToPtr(m_ir->getInt64(reinterpret_cast<u64>(addr)), get_type<u8*>());
+#endif
+	}
+
+#endif
 	static decltype(&spu_llvm_recompiler::UNK) decode(u32 op);
 };
 
@@ -10737,6 +11736,19 @@ decltype(&spu_llvm_recompiler::UNK) spu_llvm_recompiler::decode(u32 op)
 	return s_spu_llvm_decoder.decode(op);
 }
 
+#ifndef __APPLE__
+// Build stamp for the SPU object cache key, defined HERE because this is the file that generates
+// the code. The key already folded a stamp, but that one lived in SPUCommonRecompiler.cpp and so
+// only moved when THAT translation unit recompiled -- which an edit to the code generator does
+// not do. A change to fma32x4 was therefore cached straight over: the objects on disk stayed as
+// the previous build emitted them, a verification run reported byte-identical results, and the
+// fix looked disproven when it had simply never executed.
+const char* spu_llvm_codegen_build_stamp()
+{
+	return __DATE__ " " __TIME__;
+}
+
+#endif
 #else
 
 std::unique_ptr<spu_recompiler_base> spu_recompiler_base::make_llvm_recompiler(u8 magn)

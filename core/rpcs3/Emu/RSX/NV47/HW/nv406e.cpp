@@ -3,8 +3,12 @@
 #include "nv47_sync.hpp"
 
 #include "Emu/RSX/RSXThread.h"
-#include "Emu/system_config.h"
+#include "Emu/RSX/rsx_profiler.h"
 #include "util/sysinfo.hpp"
+
+#include "Emu/system_config.h"
+#include <chrono>
+#include <thread>
 
 #include "context_accessors.define.h"
 
@@ -19,6 +23,9 @@ namespace rsx
 		// no timeout length would ever have helped.
 		static atomic_t<u32> g_stuck_sema_addr{0};
 		static atomic_t<u32> g_stuck_sema_count{0};
+#if defined(__APPLE__) || defined(__ANDROID__)
+		static atomic_t<u32> g_stuck_sema_logged{0};
+#endif
 
 		void set_reference(context* ctx, u32 /*reg*/, u32 arg)
 		{
@@ -33,10 +40,10 @@ namespace rsx
 		void semaphore_acquire(context* ctx, u32 /*reg*/, u32 arg)
 		{
 			RSX(ctx)->sync_point_request.release(true);
-			const u32 addr = get_address(REGS(ctx)->semaphore_offset_406e(), REGS(ctx)->semaphore_context_dma_406e());
+			const u32 addr = get_address(ctx, REGS(ctx)->semaphore_offset_406e(), REGS(ctx)->semaphore_context_dma_406e());
 
 			// Syncronization point, may be associated with memory changes without actually changing addresses
-			RSX(ctx)->m_graphics_state |= rsx::pipeline_state::fragment_program_needs_rehash;
+			ctx->graphics_state |= rsx::pipeline_state::fragment_program_needs_rehash;
 
 			// Ensure atomic seq-cst memory ordering for FIFO GET update
 			atomic_fence_seq_cst();
@@ -50,7 +57,7 @@ namespace rsx
 			if (sema == arg)
 			{
 				// Flip semaphore doesnt need wake-up delay
-				if (addr != RSX(ctx)->label_addr + 0x10)
+				if (addr != ctx->fw.label_addr + 0x10)
 				{
 					//RSX(ctx)->flush_fifo();
 					RSX(ctx)->fifo_wake_delay(2);
@@ -84,6 +91,8 @@ namespace rsx
 #if defined(ARCH_ARM64)
 			u64 spin_budget = 0;
 			// Whether wait_for_event() below has a bounded wake on this kernel.
+			// Without it the tiered wait degrades to a timed sleep rather than
+			// re-exposing the unpaced spin (or an unbounded park).
 			const bool has_event_stream = utils::has_wfe_event_stream();
 #endif
 
@@ -102,13 +111,19 @@ namespace rsx
 					return;
 				}
 
+				if (ctx->fw.free_requested)
+				{
+					// lv2 waits for the context to be freed, which only happens once this method returns
+					break;
+				}
+
 				if (const auto tdr = static_cast<u64>(g_cfg.video.driver_recovery_timeout))
 				{
 					const u64 current = get_system_time();
 
 					if (current - last_check_val > 20'000)
 					{
-						// Suspicious amount of time has passed
+						// Suspicious amnount of time has passed
 						// External pause such as debuggers' pause or operating system sleep may have taken place
 						// Ignore it
 						start += current - last_check_val;
@@ -154,7 +169,18 @@ namespace rsx
 						g_stuck_sema_addr = addr;
 						g_stuck_sema_count++;
 
-						rsx_log.error("nv406e::semaphore_acquire has timed out. semaphore_address=0x%X, awaited=0x%X, first_observed=0x%X, last_observed=0x%X", addr, arg, first_observed, static_cast<u32>(observed));
+						// How long we actually waited, and the FIFO state at the moment we gave up.
+						//
+						// first/last observed distinguish a value that moved during the wait from one
+						// that never moved. get vs internal says whether the RSX is parked holding
+						// progress it never announced -- if they differ, a guest agent gating on "GET
+						// has passed X" is waiting on something we consumed and did not publish. Both
+						// pairs were what finally separated a slow producer from a deadlocked one.
+						const auto* fc = RSX(ctx)->fifo_ctrl.get();
+
+						rsx_log.error("nv406e::semaphore_acquire has timed out. semaphore_address=0x%X, awaited=0x%X, first_observed=0x%X, last_observed=0x%X, waited=%uus, %s",
+							addr, arg, first_observed, static_cast<u32>(observed), static_cast<u32>(current - start),
+							fc ? fc->debug_snapshot() : std::string("fifo: <none>"));
 						break;
 					}
 				}
@@ -166,9 +192,29 @@ namespace rsx
 					continue;
 				}
 
-				RSX(ctx)->on_semaphore_acquire_wait();
+				RSX(ctx)->renderer()->on_semaphore_acquire_wait();
 
+				RSX_PROF_SCOPE(idle_sema);
+
+#ifdef __APPLE__
+				// A WFE park counts as running, so sleep and let the loop top re-read the semaphore
+				std::this_thread::sleep_for(std::chrono::microseconds(50));
+				continue;
+#endif
 #if defined(ARCH_ARM64)
+				// The armed one-shot wait below does not park on every core: on Oryon
+				// (Snapdragon 8 Elite class) WFE returns immediately while the exclusive
+				// monitor is armed, so this loop ran at tens of millions of iterations per
+				// second instead of waiting. Give the armed form a short window first - on
+				// cores where it parks it keeps its instant wake-on-write, and where it
+				// does not it acts as a brief spin that still catches short waits - then
+				// interleave a paced wait: the event-stream park when the kernel provides
+				// the stream, a timed sleep when it does not. The armed one-shot still
+				// runs each iteration afterwards, so on cores where it parks, a store
+				// wakes the second half of every post-budget iteration promptly; during
+				// the paced half a store is only seen at the next tick, so post-budget
+				// wake latency on such cores is bounded by (not free of) the pacing
+				// period.
 				if (++spin_budget > 500)
 				{
 					if (has_event_stream)
@@ -177,17 +223,29 @@ namespace rsx
 					}
 					else
 					{
+						// No event stream: neither WFE form has a wake this code can
+						// bound, so pace with the scheduler instead of spinning or
+						// parking blind. Also keeps the timeout and service polls
+						// above running at a bounded cadence.
 						std::this_thread::sleep_for(std::chrono::microseconds(100));
 					}
 				}
 
 				if (!aligned)
 				{
+					// Exclusive loads fault on unaligned addresses; rely on the
+					// pacing above plus the plain re-read at the loop top.
 					utils::pause();
 					continue;
 				}
 #endif
-				// Wait until the value changes or until 100us pass.
+				// On x86 with waitpkg/mwaitx this waits on the address, bounded by
+				// the timeout; without those extensions it degrades to a yield. On
+				// ARM the timeout is ignored: the wait ends on a write to the armed
+				// cache line or an event-stream tick on cores where the armed WFE
+				// parks, and returns immediately on cores where it does not
+				// (measured on Oryon), where the paced wait above sets the loop's
+				// cadence instead.
 				utils::spin_on_cacheline_once(atomic_sema, observed, 100);
 			}
 
@@ -215,10 +273,10 @@ namespace rsx
 				RSX(ctx)->sync_point_request.release(true);
 			}
 
-			const u32 addr = get_address(offset, ctxt);
+			const u32 addr = get_address(ctx, offset, ctxt);
 
 			// TODO: Check if possible to write on reservations
-			if (RSX(ctx)->label_addr >> 28 != addr >> 28)
+			if (ctx->fw.label_addr >> 28 != addr >> 28)
 			{
 				rsx_log.error("NV406E semaphore unexpected address. Please report to the developers. (offset=0x%x, addr=0x%x)", offset, addr);
 				RSX(ctx)->recover_fifo();
@@ -232,6 +290,10 @@ namespace rsx
 			}
 
 			if (const u32 stuck = g_stuck_sema_addr; stuck && addr == stuck)
+#if defined(__APPLE__) || defined(__ANDROID__)
+			// Once per timeout: the guest writes this label every frame, about 10 lines a second.
+			if (const u32 n = g_stuck_sema_count; g_stuck_sema_logged.exchange(n) != n)
+#endif
 			{
 				// The RSX is writing, from its own FIFO, the very label an acquire gave up waiting for.
 				// That makes the handshake self-referential: the command that would satisfy the wait

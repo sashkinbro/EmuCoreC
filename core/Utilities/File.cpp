@@ -1,3 +1,4 @@
+#include <cerrno>
 #include "File.h"
 #include "mutex.h"
 #include "StrFmt.h"
@@ -14,10 +15,17 @@
 
 using namespace std::literals::string_literals;
 
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#endif
+
 #ifdef ANDROID
 std::string g_android_executable_dir;
 std::string g_android_config_dir;
 std::string g_android_cache_dir;
+// The app's private cache folder on internal storage (Context.getCacheDir()), set by
+// _armsx3_setPrivateCacheDir. Empty with older glue.
+std::string g_android_private_cache_dir;
 #endif
 
 #ifdef _WIN32
@@ -160,7 +168,10 @@ static fs::error to_error(DWORD e)
 #include <copyfile.h>
 #include <mach-o/dyld.h>
 #include <limits.h>
+// The iOS SDK ships no <sys/disk.h>.
+#if !TARGET_OS_IPHONE
 #include <sys/disk.h>
+#endif
 #include <sys/param.h>
 #include <sys/mount.h>
 #elif defined(__linux__) || defined(__sun)
@@ -251,7 +262,8 @@ static u64 get_raw_device_size(int fd)
 	{
 		return size;
 	}
-#elif defined(__APPLE__)
+// iOS has no DKIOC ioctls, so it takes the lseek fallback below.
+#elif defined(__APPLE__) && !TARGET_OS_IPHONE
 	u64 block_count = 0;
 	u32 block_size = 0;
 
@@ -780,8 +792,20 @@ namespace fs
 			u64 result = 0;
 
 			// Loop because (huge?) read can be processed partially
-			while (auto r = ::read(m_fd, buffer, count))
+			for (;;)
 			{
+				const auto r = ::read(m_fd, buffer, count);
+
+				// EINTR is benign -- a signal landed mid-syscall -- and must be retried, not treated
+				// as failure. Android app storage is FUSE-backed, where this genuinely happens, and
+				// the ensure() below turns it into a process abort. Ported in spirit from
+				// an earlier Android fork (92144f094).
+				if (r < 0 && errno == EINTR)
+				{
+					continue;
+				}
+
+				if (!r) break; // EOF
 				ensure(r > 0); // "file::read"
 				count -= r;
 				result += r;
@@ -798,8 +822,17 @@ namespace fs
 			u64 result = 0;
 
 			// For safety; see read()
-			while (auto r = ::pread(m_fd, buffer, count, offset))
+			for (;;)
 			{
+				const auto r = ::pread(m_fd, buffer, count, offset);
+
+				// See read(): retry EINTR rather than aborting.
+				if (r < 0 && errno == EINTR)
+				{
+					continue;
+				}
+
+				if (!r) break; // EOF
 				ensure(r > 0); // "file::read_at"
 				count -= r;
 				offset += r;
@@ -817,8 +850,17 @@ namespace fs
 			u64 result = 0;
 
 			// For safety; see read()
-			while (auto r = ::write(m_fd, buffer, count))
+			for (;;)
 			{
+				const auto r = ::write(m_fd, buffer, count);
+
+				// See read(): retry EINTR rather than aborting.
+				if (r < 0 && errno == EINTR)
+				{
+					continue;
+				}
+
+				if (!r) break;
 				ensure(r > 0); // "file::write"
 				count -= r;
 				result += r;
@@ -2105,6 +2147,13 @@ fs::file::file(const std::string& path, bs_t<open_mode> mode)
 	}
 
 	if (mode & fs::write && mode & fs::lock && ::flock(fd, LOCK_EX | LOCK_NB) != 0)
+#ifdef __ANDROID__
+		// Android's shared storage (the FUSE mount over /storage, internal and SD card alike) has no
+		// file locks: flock fails with ENOSYS for every file there. The lock only keeps a second opener
+		// out, so there the file opens without one rather than not at all. Failing here made every toy
+		// portal figure "not a figure", and fails the lv2 files opened with a lock (sys_fs, sys_game).
+		if (errno != ENOSYS && errno != EOPNOTSUPP)
+#endif
 	{
 		g_tls_error = errno == EWOULDBLOCK ? fs::error::acces : to_error(errno);
 		::close(fd);
@@ -2555,7 +2604,6 @@ const std::string& fs::get_config_dir([[maybe_unused]] bool get_config_subdirect
 				// Clear buffer on failure and notify user
 				MessageBoxA(nullptr, fmt::format("GetEnvironmentVariable(RPCS3_CONFIG_DIR) failed: error: %s", fmt::win_error{GetLastError(), nullptr}).c_str(), "fs::get_config_dir()", MB_ICONERROR);
 				buf.clear();
-				size = 0;
 			}
 		}
 
@@ -2636,7 +2684,12 @@ const std::string& fs::get_cache_dir()
 
 #ifdef __APPLE__
 		if (const char* home = ::getenv("HOME"))
+#if TARGET_OS_IPHONE
+			// iOS purges Library/Caches under disk pressure, and the shm backing file lives in this directory.
+			dir = home + "/Library/Application Support"s;
+#else
 			dir = home + "/Library/Caches"s;
+#endif
 #else
 		if (const char* cache = ::getenv("XDG_CACHE_HOME"))
 			dir = cache;

@@ -5,6 +5,8 @@ import java.nio.file.Path
 import kotlin.io.path.readText
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertNull
+import com.sbro.emucorec.data.readInstalledFolder
 import org.junit.Test
 
 class SystemMenuLaunchContractTest {
@@ -24,10 +26,12 @@ class SystemMenuLaunchContractTest {
 
     @Test
     fun libraryRejectsServiceFoldersWithoutParamSfo() {
-        val repository = source("data/InstalledGameRepository.kt")
-        assertTrue("Library must require PARAM.SFO", "if (!sfo.isFile) return@mapNotNull null" in repository)
-        assertTrue("Library must require a parsed title", "parsedTitle" in repository)
-        assertFalse("Every directory must no longer become a game", ".map { directory ->" in repository)
+        val folder = Files.createTempDirectory("emucorec-service-folder").toFile()
+        try {
+            assertNull("Service folders without PARAM.SFO are not library games", readInstalledFolder(folder))
+        } finally {
+            folder.delete()
+        }
     }
 
     private fun source(relative: String): String = appModule()

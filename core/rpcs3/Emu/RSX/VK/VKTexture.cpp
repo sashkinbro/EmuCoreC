@@ -1,10 +1,14 @@
 #include "stdafx.h"
+#include "Emu/RSX/rsx_profiler.h"
 #include "VKAsyncScheduler.h"
 #include "VKCompute.h"
 #include "VKDMA.h"
 #include "VKHelpers.h"
 #include "VKFormats.h"
 #include "VKRenderPass.h"
+#include "VKResolveHelper.h"
+
+#include <cstdlib>
 
 #include "vkutils/data_heap.h"
 #include "vkutils/image_helpers.h"
@@ -12,9 +16,7 @@
 
 #include "../GCM.h"
 #include "../Utils/rsx_utils.h"
-#ifdef __ANDROID__
-#include "../RSXOffload.h"
-#endif
+#include "Emu/RSX/RSXOffload.h"
 #include "Utilities/deferred_op.hpp"
 
 #include "util/asm.hpp"
@@ -25,6 +27,13 @@ namespace vk
 	{
 		if (element_size == 4)
 		{
+			// Graphics-pipe twin first. gfx_shuffle_32 publishes its result to both transfer and
+			// compute readers itself, so nothing around this call has to change when it takes.
+			if (vk::gfx_shuffle_32(cmd, buf, data_offset, data_length))
+			{
+				return;
+			}
+
 			vk::get_compute_task<vk::cs_shuffle_32>()->run(cmd, buf, data_length, data_offset);
 		}
 		else if (element_size == 2)
@@ -130,7 +139,7 @@ namespace vk
 
 		if (vk::is_renderpass_open(cmd))
 		{
-			vk::end_renderpass(cmd);
+			if (rsx::prof::enabled()) [[unlikely]] rsx::prof::g_rp_sites[4]++; vk::end_renderpass(cmd);
 		}
 
 		ensure((region.imageExtent.width + region.imageOffset.x) <= src->width());
@@ -232,7 +241,20 @@ namespace vk
 			sub_regions[1].imageSubresource.aspectMask = VK_IMAGE_ASPECT_STENCIL_BIT;
 			vkCmdCopyImageToBuffer(cmd, src->value, src->current_layout, dst->value, 2, sub_regions);
 
-			// 2. Interleave the separated data blocks with a compute job
+			// 2. Interleave the separated data blocks.
+			//
+			// D24S8 takes the graphics pipe. This kernel was the last one dispatching at volume
+			// on Adreno 830 -- over ten thousand times during an Arkham City cutscene, against
+			// about a thousand during open-world play that ran clean for over an hour. Same
+			// kernel, ten times the rate, and the GPU wedges at the graphics<->compute switch.
+			// A draw does not switch engines. D32S8 keeps the compute path; it is rare and this
+			// is not the place to change two things at once.
+			const bool gathered_on_gfx =
+				src->format() == VK_FORMAT_D24_UNORM_S8_UINT &&
+				vk::gfx_gather_d24x8(cmd, dst, data_offset, z_offset, s_offset, out_w, out_h, options.swap_bytes);
+
+			if (!gathered_on_gfx)
+			{
 			vk::cs_interleave_task *job;
 			if (!options.swap_bytes) [[likely]]
 			{
@@ -275,6 +297,7 @@ namespace vk
 				VK_ACCESS_SHADER_READ_BIT);
 
 			job->run(cmd, dst, data_offset, packed_length, z_offset, s_offset);
+			}
 
 			if (options.sync_region)
 			{
@@ -283,9 +306,13 @@ namespace vk
 				const u64 sync_offset = std::min<u64>(region.bufferOffset, options.sync_region.offset);
 				const u64 sync_length = std::max<u64>(sync_end, write_end) - sync_offset;
 
+				// The graphics path finishes with a buffer copy, not a shader write, so the
+				// source stage and access have to follow whichever path actually ran.
 				vk::insert_buffer_memory_barrier(cmd, dst->value, sync_offset, sync_length,
-					VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-					VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT);
+					gathered_on_gfx ? VK_PIPELINE_STAGE_TRANSFER_BIT : VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+					VK_PIPELINE_STAGE_TRANSFER_BIT,
+					gathered_on_gfx ? VK_ACCESS_TRANSFER_WRITE_BIT : VK_ACCESS_SHADER_WRITE_BIT,
+					VK_ACCESS_TRANSFER_READ_BIT);
 			}
 			break;
 		}
@@ -299,7 +326,7 @@ namespace vk
 
 		if (vk::is_renderpass_open(cmd))
 		{
-			vk::end_renderpass(cmd);
+			if (rsx::prof::enabled()) [[unlikely]] rsx::prof::g_rp_sites[5]++; vk::end_renderpass(cmd);
 		}
 
 		switch (dst->format())
@@ -447,7 +474,7 @@ namespace vk
 
 		if (vk::is_renderpass_open(cmd))
 		{
-			vk::end_renderpass(cmd);
+			if (rsx::prof::enabled()) [[unlikely]] rsx::prof::g_rp_sites[6]++; vk::end_renderpass(cmd);
 		}
 
 		if (src != dst) [[likely]]
@@ -497,7 +524,35 @@ namespace vk
 			const bool needs_shuffle = (src_convert.first || dst_convert.first) &&
 				(src_convert.first != dst_convert.first || src_convert.second != dst_convert.second);
 
+			// Both byteswaps that land here are graphics->compute engine switches, and that
+			// transition is where the Adreno 830 hang was traced to. The 32<->16 case is the one
+			// Batman: Arkham City drives hardest -- over 10000 dispatches in four minutes -- and
+			// the plain 32-bit case is the one Watch Dogs drives while a level loads. Run whichever
+			// applies on the graphics pipe; each falls through to its compute kernel if the
+			// graphics path is unavailable.
+			bool shuffled_on_gfx = false;
+
 			if (needs_shuffle)
+			{
+				if (src_convert.first && dst_convert.first)
+				{
+					shuffled_on_gfx = vk::gfx_shuffle_32_16(cmd, scratch_buf, src_length);
+				}
+				else if ((src_convert.first ? src_convert.second : dst_convert.second) == 4)
+				{
+					shuffled_on_gfx = vk::gfx_shuffle_32(cmd, scratch_buf, 0, src_length);
+				}
+			}
+
+			if (shuffled_on_gfx)
+			{
+				vk::insert_buffer_memory_barrier(cmd, scratch_buf->value, 0, src_length,
+					VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+					VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT);
+
+				require_rw_barrier = false;
+			}
+			else if (needs_shuffle)
 			{
 				insert_buffer_memory_barrier(cmd, scratch_buf->value, 0, src_length,
 					VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -600,7 +655,7 @@ namespace vk
 
 		if (vk::is_renderpass_open(cmd))
 		{
-			vk::end_renderpass(cmd);
+			if (rsx::prof::enabled()) [[unlikely]] rsx::prof::g_rp_sites[7]++; vk::end_renderpass(cmd);
 		}
 
 		if (src != dst)
@@ -666,7 +721,7 @@ namespace vk
 
 		if (vk::is_renderpass_open(cmd))
 		{
-			vk::end_renderpass(cmd);
+			if (rsx::prof::enabled()) [[unlikely]] rsx::prof::g_rp_sites[8]++; vk::end_renderpass(cmd);
 		}
 
 		if (src != dst)
@@ -1076,7 +1131,7 @@ namespace vk
 		{
 			if (vk::is_renderpass_open(primary_cb))
 			{
-				vk::end_renderpass(primary_cb);
+				if (rsx::prof::enabled()) [[unlikely]] rsx::prof::g_rp_sites[9]++; vk::end_renderpass(primary_cb);
 			}
 
 			pcmd = &primary_cb;
@@ -1173,9 +1228,45 @@ namespace vk
 			// Calculate estimated memory utilization for this subresource
 			image_linear_size = row_pitch * layout.depth * (rsx::is_compressed_host_format(caps, format) ? layout.height_in_block : layout.height_in_texel);
 
-			// Only do GPU-side conversion if occupancy is good
+			// How much of the texture conversion runs on the GPU.
+			//
+			// Upstream uses `image_linear_size >= 1024`, which every texture and nearly every mip
+			// level clears, so in practice every upload ran a compute dispatch. On Adreno 830 each
+			// dispatch is a graphics->compute engine switch, and those wedge the GPU: the decoded
+			// hang snapshot put the stall at exactly that transition. Raising the bar to 1 MB
+			// stopped Minecraft hanging; dropping GPU conversion entirely for CPU-reachable data
+			// removed the rest.
+			//
+			// NOTE this decision is made ONCE, on mip level 0, and then applies to the whole mip
+			// chain -- `check_hw_caps` is cleared at the end of this block but the block sits
+			// inside the per-subresource loop. So a texture whose level 0 clears the bar sends
+			// every level down the same path.
+			//
+			// ARMSX3_GPU_CONVERT_THRESHOLD sets the bar in bytes without a rebuild, so a rendering
+			// question can be answered against the original behaviour on the device:
+			//   1024    -> exactly upstream
+			//   1048576 -> the 1 MB step that first stopped the Minecraft hang
+			//   unset   -> GPU conversion only for source_is_gpu_resident, the current default
+			// Function-local static: at namespace scope this would initialise before
+			// driver_env.txt is read and getenv would return null.
+			static const u32 s_gpu_convert_threshold = []() -> u32
+			{
+				if (const char* v = std::getenv("ARMSX3_GPU_CONVERT_THRESHOLD"))
+				{
+					const u32 parsed = static_cast<u32>(std::strtoul(v, nullptr, 10));
+					rsx_log.warning("ARMSX3_GPU_CONVERT_THRESHOLD=%u: GPU texture conversion for"
+						" subresources of at least this many bytes.", parsed);
+					return parsed;
+				}
+
+				return umax;
+			}();
+
 			if (check_hw_caps)
 			{
+				// source_is_gpu_resident has no alternative: that data has no CPU pointer at all,
+				// which the buf_allocator below asserts. Everything else can take the CPU byteswap
+				// path in TextureUtils.cpp, which costs CPU time instead of a pipeline drain.
 				#ifdef __ANDROID__
 				const bool source_is_gpu_only = image_setup_flags & source_is_gpu_resident;
 				// Android Vulkan drivers can reject or crash while linking the
@@ -1188,7 +1279,7 @@ namespace vk
 				// pipeline. Preserve it for formats which need no conversion.
 				caps.supports_zero_copy = true;
 				#else
-				caps.supports_byteswap = (image_linear_size >= 1024) || (image_setup_flags & source_is_gpu_resident);
+				caps.supports_byteswap = (image_linear_size >= s_gpu_convert_threshold) || (image_setup_flags & source_is_gpu_resident);
 				caps.supports_hw_deswizzle = caps.supports_byteswap;
 				caps.supports_zero_copy = caps.supports_byteswap;
 				#endif
@@ -1442,7 +1533,7 @@ namespace vk
 			dst_image->queue_release(cmd2, cmd.get_queue_family(), dst_image->current_layout);
 		}
 
-		if (auto rsxthr = static_cast<VKGSRender*>(rsx::get_current_renderer()))
+		if (auto rsxthr = static_cast<VKGSRender*>(rsx::get_current_render_backend()))
 		{
 			rsxthr->on_guest_texture_read(cmd2);
 		}

@@ -69,6 +69,8 @@ namespace utils
 
 	bool has_sha3();
 
+	bool has_sha512();
+
 	bool has_dotprod();
 
 	bool has_i8mm();
@@ -112,6 +114,7 @@ namespace utils
 	u64 get_total_memory();
 
 	u64 get_avail_memory();
+	u64 get_process_memory_usage();
 
 	u32 get_thread_count();
 

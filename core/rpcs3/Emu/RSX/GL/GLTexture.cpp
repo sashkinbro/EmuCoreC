@@ -11,6 +11,9 @@
 
 #include "util/asm.hpp"
 
+#include <deque>
+#include <optional>
+
 namespace gl
 {
 	namespace debug
@@ -18,8 +21,94 @@ namespace gl
 		extern void set_vis_texture(texture*);
 	}
 
+	// Texture uploads are written here by the CPU, and the GPU reads each range back out with a buffer copy
+	// issued right after. legacy_ring_buffer maps a range for every upload, and Adreno's own GLES driver turns
+	// each of those maps into a new allocation plus a copy of the buffer's contents (gsl_memory_alloc and a
+	// large memcpy inside glMapBufferRange, UNSYNCHRONIZED or not). That was 84% of the RSX thread in the XMB.
+	// This ring stays persistently mapped instead. Each range is fenced once the copy reading it is issued,
+	// and an allocation waits only for the fences of the ranges it overwrites.
+	class fenced_upload_ring final : public ring_buffer
+	{
+		struct in_flight
+		{
+			utils::address_range32 range;
+			fence signal;
+		};
+
+		std::optional<utils::address_range32> m_unfenced;
+		std::deque<in_flight> m_in_flight;
+
+	public:
+		std::pair<void*, u32> alloc_from_heap(u32 alloc_size, u16 alignment) override
+		{
+			ensure(alloc_size <= m_size);
+
+			// The copy reading the previous allocation has been issued by now
+			notify();
+
+			u32 offset = utils::align(m_data_loc, alignment);
+			if ((offset + alloc_size) > m_size)
+			{
+				offset = 0;
+			}
+
+			const auto range = utils::address_range32::start_length(offset, alloc_size);
+			for (auto it = m_in_flight.begin(); it != m_in_flight.end();)
+			{
+				if (!it->range.overlaps(range))
+				{
+					++it;
+					continue;
+				}
+
+				it->signal.wait_for_signal();
+				it = m_in_flight.erase(it);
+			}
+
+			m_unfenced = range;
+			m_data_loc = offset + alloc_size;
+			return { static_cast<char*>(m_memory_mapping) + offset, offset };
+		}
+
+		void notify() override
+		{
+			// Fences signal in order, so the finished ones are at the front. Only look once enough have piled
+			// up: by then the front one is old, and checking it rarely needs a flush.
+			while (m_in_flight.size() > 64 && m_in_flight.front().signal.check_signaled())
+			{
+				m_in_flight.front().signal.destroy();
+				m_in_flight.pop_front();
+			}
+
+			if (!m_unfenced)
+			{
+				return;
+			}
+
+			in_flight& entry = m_in_flight.emplace_back();
+			entry.range = *m_unfenced;
+			entry.signal.create();
+			m_unfenced.reset();
+		}
+
+		void remove() override
+		{
+			for (in_flight& entry : m_in_flight)
+			{
+				if (!entry.signal.is_empty())
+				{
+					entry.signal.destroy();
+				}
+			}
+
+			m_in_flight.clear();
+			m_unfenced.reset();
+			ring_buffer::remove();
+		}
+	};
+
 	scratch_ring_buffer g_typeless_transfer_buffer;
-	legacy_ring_buffer g_upload_transfer_buffer;
+	std::unique_ptr<ring_buffer> g_upload_transfer_buffer;
 	scratch_ring_buffer g_compute_decode_buffer;
 	scratch_ring_buffer g_deswizzle_scratch_buffer;
 	blitter g_blitter;
@@ -33,7 +122,13 @@ namespace gl
 	void destroy_global_texture_resources()
 	{
 		g_typeless_transfer_buffer.remove();
-		g_upload_transfer_buffer.remove();
+
+		if (g_upload_transfer_buffer)
+		{
+			g_upload_transfer_buffer->remove();
+			g_upload_transfer_buffer.reset();
+		}
+
 		g_compute_decode_buffer.remove();
 		g_deswizzle_scratch_buffer.remove();
 		g_blitter.destroy();
@@ -442,44 +537,6 @@ namespace gl
 		u32 out_offset = in_offset;
 		const auto& caps = gl::get_driver_caps();
 
-	#ifdef RSX_GLES
-		if (dst->aspect() == image_aspect::color)
-		{
-			// Prefer GLES' native pixel-unpack path for ordinary color images.
-			// The desktop implementation routes all formats through one large
-			// untyped imageStore/SSBO shader; Qualcomm accepts the individual
-			// stages but rejects both compute and fragment variants at link time.
-			// Byte shuffling stays on the GPU, then the typed transfer is handled
-			// by the driver using formats that are valid in the GLES contract.
-			glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT);
-
-			if (auto job = get_trivial_transform_job(unpack_info))
-			{
-				job->run(cmd, src, static_cast<u32>(mem_info->image_size_in_bytes), in_offset);
-				glMemoryBarrier(GL_PIXEL_BUFFER_BARRIER_BIT);
-			}
-
-			GLenum upload_format = unpack_info.format;
-			GLenum upload_type = unpack_info.type;
-			if (dst->get_internal_format() == texture::internal_format::rgba8 ||
-				dst->get_internal_format() == texture::internal_format::bgra8)
-			{
-				// Packed 8_8_8_8 transfer types are desktop-only. After the
-				// 32-bit byte shuffle the same four bytes can be uploaded directly.
-				upload_format = GL_RGBA;
-				upload_type = GL_UNSIGNED_BYTE;
-			}
-
-			glBindBuffer(GL_SHADER_STORAGE_BUFFER, GL_NONE);
-			pixel_unpack_settings unpack_settings{};
-			if (unpack_info.alignment) unpack_settings.alignment(unpack_info.alignment);
-			if (unpack_info.row_length) unpack_settings.row_length(unpack_info.row_length);
-			dst->copy_from(*src, in_offset, static_cast<texture::format>(upload_format),
-				static_cast<texture::type>(upload_type), dst_level, dst_region, unpack_settings);
-			return;
-		}
-	#endif
-
 		auto initialize_scratch_mem = [&]()
 		{
 			if (in_offset >= mem_info->memory_required)
@@ -530,6 +587,20 @@ namespace gl
 			}
 			case texture::target::textureCUBE:
 			{
+#ifdef RSX_GLES
+				if (!gl::es::has_texture_views())
+				{
+					// ARMSX3: no texture view to draw into one face with. Draw into a copy and put it
+					// in place afterwards, as for 3D images.
+					scratch = std::make_unique<gl::texture>(
+						GL_TEXTURE_2D,
+						image_region.x + image_region.width, image_region.y + image_region.height, 1, 1, 1,
+						static_cast<GLenum>(dst->get_internal_format()), dst->format_class());
+
+					scratch_view = std::make_unique<gl::nil_texture_view>(scratch.get());
+					break;
+				}
+#endif
 				const subresource_range range = { image_aspect::depth | image_aspect::color, static_cast<GLuint>(dst_level), 1, dst_region.z , 1 };
 				scratch_view = std::make_unique<gl::texture_view>(dst, GL_TEXTURE_2D, range);
 				break;
@@ -550,6 +621,19 @@ namespace gl
 
 				if (dst->levels() > 1) [[ likely ]]
 				{
+#ifdef RSX_GLES
+					if (!gl::es::has_texture_views())
+					{
+						// ARMSX3: likewise for one mip level
+						scratch = std::make_unique<gl::texture>(
+							GL_TEXTURE_2D,
+							image_region.x + image_region.width, image_region.y + image_region.height, 1, 1, 1,
+							static_cast<GLenum>(dst->get_internal_format()), dst->format_class());
+
+						scratch_view = std::make_unique<gl::nil_texture_view>(scratch.get());
+						break;
+					}
+#endif
 					const subresource_range range = { image_aspect::depth | image_aspect::color, static_cast<GLuint>(dst_level), 1, 0 , 1 };
 					scratch_view = std::make_unique<gl::texture_view>(dst, GL_TEXTURE_2D, range);
 				}
@@ -567,14 +651,12 @@ namespace gl
 				dst->aspect() == gl::image_aspect::color &&  // Cannot use image_load_store with depth images
 				caps.subvendor_ATI == false);                // The old AMD/ATI driver does not support image writeonly without format specifier
 
-		#ifdef RSX_GLES
-			// GLES requires a concrete image format qualifier and validates it
-			// against the bound image. The desktop compute decoder intentionally
-			// serves many destination formats from one unqualified image2D shader,
-			// which Adreno cannot link reliably. Use the render-target decoder below;
-			// it has identical conversion semantics and works with typed GLES FBOs.
+#ifdef RSX_GLES
+			// ARMSX3: neither does OpenGL ES. Every image there declares a format, which has to match
+			// what is bound, and the compute pass writes eleven formats through one image2D. Its
+			// program does not compile, so it is left to the raster pass, as on that AMD driver.
 			use_compute_transform = false;
-		#endif
+#endif
 
 			if (use_compute_transform)
 			{
@@ -624,7 +706,21 @@ namespace gl
 				}
 				break;
 			}
-			default: break;
+			default:
+			{
+#ifdef RSX_GLES
+				if (scratch)
+				{
+					// ARMSX3: a cube face or mip level drawn without a texture view, see above
+					const u32 face = (dst->get_target() == texture::target::textureCUBE) ? dst_region.z : 0;
+					const position3u src_offset = { dst_region.position.x, dst_region.position.y, 0 };
+					const position3u dst_offset = { dst_region.position.x, dst_region.position.y, face };
+					g_hw_blitter->copy_image(cmd, scratch.get(), dst, src_offset, dst_offset, { dst_region.width, dst_region.height, 1 },
+						{ .dst_mip_level = static_cast<u8>(dst_level) });
+				}
+#endif
+				break;
+			}
 			}
 		}
 		else
@@ -783,10 +879,22 @@ namespace gl
 
 		if (driver_caps.ARB_compute_shader_supported)
 		{
-			if (g_upload_transfer_buffer.size() < static_cast<GLsizeiptr>(min_required_buffer_size))
+			if (!g_upload_transfer_buffer)
 			{
-				g_upload_transfer_buffer.remove();
-				g_upload_transfer_buffer.create(gl::buffer::target::pixel_unpack, min_required_buffer_size);
+				if (driver_caps.vendor_QUALCOMM_GLES && driver_caps.ARB_buffer_storage_supported)
+				{
+					g_upload_transfer_buffer = std::make_unique<fenced_upload_ring>();
+				}
+				else
+				{
+					g_upload_transfer_buffer = std::make_unique<legacy_ring_buffer>();
+				}
+			}
+
+			if (g_upload_transfer_buffer->size() < static_cast<GLsizeiptr>(min_required_buffer_size))
+			{
+				g_upload_transfer_buffer->remove();
+				g_upload_transfer_buffer->create(gl::buffer::target::pixel_unpack, min_required_buffer_size);
 			}
 
 			if (g_compute_decode_buffer.size() < min_required_buffer_size)
@@ -818,8 +926,8 @@ namespace gl
 				compute_scratch_mem = { nullptr, g_compute_decode_buffer.alloc(static_cast<u32>(image_linear_size), 256) };
 				compute_scratch_mem.first = reinterpret_cast<void*>(static_cast<uintptr_t>(compute_scratch_mem.second));
 
-				g_upload_transfer_buffer.reserve_storage_on_heap(static_cast<u32>(image_linear_size));
-				upload_scratch_mem = g_upload_transfer_buffer.alloc_from_heap(static_cast<u32>(image_linear_size), 256);
+				g_upload_transfer_buffer->reserve_storage_on_heap(static_cast<u32>(image_linear_size));
+				upload_scratch_mem = g_upload_transfer_buffer->alloc_from_heap(static_cast<u32>(image_linear_size), 256);
 				dst_buffer = { reinterpret_cast<std::byte*>(upload_scratch_mem.first), image_linear_size };
 			}
 
@@ -853,8 +961,8 @@ namespace gl
 			// 2. Upload memory to GPU
 			if (!op.require_deswizzle)
 			{
-				g_upload_transfer_buffer.unmap();
-				g_upload_transfer_buffer.copy_to(&g_compute_decode_buffer.get(), upload_scratch_mem.second, compute_scratch_mem.second, image_linear_size);
+				g_upload_transfer_buffer->unmap();
+				g_upload_transfer_buffer->copy_to(&g_compute_decode_buffer.get(), upload_scratch_mem.second, compute_scratch_mem.second, image_linear_size);
 			}
 			else
 			{
@@ -866,8 +974,8 @@ namespace gl
 				}
 
 				u32 deswizzle_data_offset = g_deswizzle_scratch_buffer.alloc(static_cast<u32>(image_linear_size), 256);
-				g_upload_transfer_buffer.unmap();
-				g_upload_transfer_buffer.copy_to(&g_deswizzle_scratch_buffer.get(), upload_scratch_mem.second, deswizzle_data_offset, static_cast<u32>(image_linear_size));
+				g_upload_transfer_buffer->unmap();
+				g_upload_transfer_buffer->copy_to(&g_deswizzle_scratch_buffer.get(), upload_scratch_mem.second, deswizzle_data_offset, static_cast<u32>(image_linear_size));
 
 				// 2.2 Apply compute transform to deswizzle input and dump it in compute_scratch_mem
 				const auto block_size = op.element_size * op.block_length;
@@ -925,6 +1033,9 @@ namespace gl
 				g_deswizzle_scratch_buffer.push_barrier(deswizzle_data_offset, static_cast<u32>(image_linear_size));
 			}
 
+			// The copy out of the upload buffer is issued, so fence its range
+			g_upload_transfer_buffer->notify();
+
 			// 3. Update configuration
 			mem_info.image_size_in_texels = image_linear_size / block_size_in_bytes;
 			mem_info.image_size_in_bytes = image_linear_size;
@@ -969,7 +1080,7 @@ namespace gl
 		fill_texture(cmd, dst, gcm_format, subresources_layout, is_swizzled, gl_format, gl_type, data_upload_buf);
 
 		// Notify the renderer of the upload
-		auto renderer = static_cast<GLGSRender*>(rsx::get_current_renderer());
+		auto renderer = static_cast<GLGSRender*>(rsx::get_current_render_backend());
 		renderer->on_guest_texture_read();
 	}
 

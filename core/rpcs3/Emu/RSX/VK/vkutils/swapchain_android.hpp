@@ -13,8 +13,12 @@ namespace vk
 	{
 		VkSurfaceKHR result = VK_NULL_HANDLE;
 
-		// EmuCoreC: upstream had VkWin32SurfaceCreateInfoKHR (a copy-paste slip
-		// that never compiled on Android -- desktop CI cannot see this file).
+		// ARMSX3: this block was copied from swapchain_win32 and never finished.
+		// It declared a VkWin32SurfaceCreateInfoKHR (wrong struct -- has no
+		// `window` member, and the sType below already said ANDROID), and passed
+		// `this->m_instance` from inside a free static function, where `this`
+		// does not exist. Neither could ever have compiled, i.e. upstream has
+		// never built this file. Matches the swapchain_macos.hpp idiom now.
 		VkAndroidSurfaceCreateInfoKHR createInfo = {};
 		createInfo.sType = VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;
 		createInfo.window = std::get<ANativeWindow *>(window_handle);

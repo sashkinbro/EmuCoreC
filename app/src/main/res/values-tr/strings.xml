@@ -2022,4 +2022,51 @@ Bu ayar yalnızca SPU Kod Çözücü Dinamik veya LLVM olarak ayarlandığında 
     <string name="settings_gamepad_action_right_stick_down">Sağ çubuk aşağı</string>
     <string name="settings_gamepad_action_right_stick_left">Sağ çubuk sol</string>
     <string name="settings_gamepad_action_right_stick_right">Sağ çubuk sağ</string>
+
+    <string name="ps3_core_pending_restart">Kaydedilen değişiklikler oyun yeniden başlatıldığında uygulanacak.</string>
+    <string name="ps3_core_apply_restart">Uygula ve yeniden başlat</string>
+
+    <string name="core_label_snapdragon_game_super_resolution">Snapdragon Game Super Resolution</string>
+    <string name="core_label_snapdragon_game_super_resolution_edge_direction">Snapdragon Game Super Resolution (Kenar yönü)</string>
+
+    <string name="core_label_oboe">Oboe</string>
+    <string name="core_label_x2">x2</string>
+    <string name="core_label_x3">x3</string>
+    <string name="core_label_x4">x4</string>
+
+    <!-- Current Android renderer, audio and presentation settings. -->
+    <string name="core_label_frame_generation" formatted="false">Kare üretimi</string>
+    <string name="core_help_video_frame_generation" formatted="false">Oyun kareleri arasına üretilmiş kareler ekler. Kendi Lossless Scaling dosyanızın gölgelendiricilerini kullanır; GPU yükünü ve gecikmeyi artırır.</string>
+    <string name="core_label_frame_generation_performance_mode" formatted="false">Performans modu</string>
+    <string name="core_help_video_frame_generation_performance_mode" formatted="false">Daha hafif gölgelendiriciler kullanır. Değişiklikten sonra kare üretimini yeniden başlatın.</string>
+    <string name="core_label_frame_generation_flow_scale" formatted="false">Hareket ayrıntısı (%)</string>
+    <string name="core_help_video_frame_generation_flow_scale" formatted="false">Hareket analizi çözünürlüğü, yüzde olarak. Düşük değerler daha hızlı ve yumuşaktır. Uygulamak için kare üretimini yeniden başlatın.</string>
+    <string name="core_label_frame_generation_target_rate" formatted="false">Hedef yenileme hızı (Hz)</string>
+    <string name="core_help_video_frame_generation_target_rate" formatted="false">Hz cinsinden hedef çıkış hızı. 0 seçilen sabit çarpanı kullanır.</string>
+    <string name="core_label_frame_generation_lossless_path" formatted="false">Lossless Scaling dosyası</string>
+    <string name="core_help_video_frame_generation_lossless_path" formatted="false">Kendi Lossless Scaling DLL dosyanızın tam yolu. Gölgelendirici önbelleği gerektiğinde bu dosyadan oluşturulur.</string>
+    <string name="core_label_cubeb_backend" formatted="false">Cubeb ses arka ucu</string>
+    <string name="core_help_audio_cubeb_backend" formatted="false">Cubeb ses yolu: Android için OpenSL ES kullanmak üzere boş bırakın veya aaudio ya da opensl yazın. Yeniden başlatma gerekir.</string>
+    <string name="core_label_recording_compatible" formatted="false">Kayıt uyumlu ses</string>
+    <string name="core_help_audio_recording_compatible" formatted="false">Ekran kaydının Oboe sesini sistem karıştırıcısından yakalamasını sağlar. Gecikmeyi artırabilir.</string>
+    <string name="core_label_sgsr_edge_sharpness" formatted="false">SGSR kenar keskinliği</string>
+    <string name="core_help_video_sgsr_edge_sharpness" formatted="false">SGSR ölçekleme için kenar keskinliği. Yüksek değerler kenarları belirginleştirir.</string>
+    <string name="core_label_early_submit_draw_threshold" formatted="false">Erken gönderim çizim eşiği</string>
+    <string name="core_help_video_vulkan_early_submit_draw_threshold" formatted="false">Bu sayıda çizimden sonra GPU komutlarını gönderir. 0 erken gönderimi kapatır. Yeniden başlatma gerekir.</string>
+    <string name="core_label_vertex_fetch_specialization" formatted="false">Köşe verisi alma özelleştirmesi</string>
+    <string name="core_help_video_vulkan_vertex_fetch_specialization" formatted="false">Bu oyunun köşe okumalarını özelleştirir. GPU performansını artırabilir. Yeniden başlatma gerekir.</string>
+    <string name="core_label_disable_swap_chain_pre_rotation" formatted="false">Swap Chain Ön Döndürmeyi Devre Dışı Bırak</string>
+    <string name="core_help_video_disable_swap_chain_pre_rotation" formatted="false">Vulkan: Yan monte edilmiş ekranlarda görüntünün döndürülmesini önceki sürümlerdeki gibi sisteme bırakır. Yalnızca sorun giderme içindir; bu ekranlarda GPU zamanı harcar.</string>
+    <string name="core_label_shader_preset_resolution" formatted="false">Gölgelendirici Çözünürlüğü</string>
+    <string name="core_help_video_shader_preset_resolution" formatted="false">Gölgelendiriciyi daha düşük çözünürlükte çalıştırır, ardından görüntüsünü ekrana büyütür. Düşük değer ağır ön ayarlarda çok daha hızlıdır ve biraz daha yumuşak görünür.</string>
+    <string name="core_label_cardboard_vr" formatted="false">Cardboard VR</string>
+    <string name="core_help_video_cardboard_vr" formatted="false">Oyunu yan yana iki kez, her göz için bir görüntü olarak gösterir; Cardboard tarzı bir VR gözlüğüne takılan telefon içindir. Telefonu yatay tutun. Stereo 3D destekli oyunlar, Tüm Çekirdek Ayarları\'nda 3D Display Enabled açık ve PS3 çözünürlüğü 1280x720 olduğunda her göze kendi görüntüsünü verir. Bu mod açıkken RetroArch gölgelendiricileri ve SGSR atlanır; FSR çalışmaya devam eder.</string>
+    <string name="core_label_vr_picture_size" formatted="false">VR Görüntü Boyutu</string>
+    <string name="core_help_video_vr_picture_size" formatted="false">Her görüntünün kendi ekran yarısını ne kadar doldurduğu.</string>
+    <string name="core_label_vr_eye_spacing" formatted="false">VR Göz Aralığı</string>
+    <string name="core_help_video_vr_eye_spacing" formatted="false">Yüksek değerler iki görüntüyü birbirinden uzaklaştırır, düşük değerler yakınlaştırır; böylece gözlüğün lensleriyle hizalanırlar.</string>
+    <string name="core_label_vr_height" formatted="false">VR Yüksekliği</string>
+    <string name="core_help_video_vr_height" formatted="false">Yüksek değerler iki görüntüyü yukarı, düşük değerler aşağı taşır; böylece gözlüğün lensleriyle hizalanırlar.</string>
+    <string name="core_label_show_spu_compilation_hint" formatted="false">SPU derleme ipucunu göster</string>
+    <string name="core_help_miscellaneous_show_spu_compilation_hint" formatted="false">Yerel kaplamayı kullanarak \'SPU modüllerinin derlenmesi\' ipucunu gösterir.</string>
 </resources>

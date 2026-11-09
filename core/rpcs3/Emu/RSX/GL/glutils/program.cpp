@@ -9,120 +9,6 @@ namespace gl
 {
 	namespace glsl
 	{
-#ifdef RSX_GLES
-		static void convert_to_gles(std::string& source)
-		{
-			auto replace_all = [&source](std::string_view needle, std::string_view replacement)
-			{
-				for (std::size_t pos = 0; (pos = source.find(needle, pos)) != std::string::npos; pos += replacement.size())
-				{
-					source.replace(pos, needle.size(), replacement);
-				}
-			};
-
-			const auto version_start = source.find("#version ");
-			if (version_start == std::string::npos)
-			{
-				rsx_log.error("GLES shader is missing a #version header");
-				return;
-			}
-			if (version_start)
-			{
-				// Embedded raw GLSL snippets intentionally start on the line after R"(.
-				source.erase(0, version_start);
-			}
-
-			const auto version_end = source.find('\n');
-			source.replace(0, version_end, "#version 320 es");
-
-			auto erase_line = [&source](std::string_view needle)
-			{
-				for (;;)
-				{
-					const auto pos = source.find(needle);
-					if (pos == std::string::npos)
-					{
-						break;
-					}
-					const auto end = source.find('\n', pos);
-					source.erase(pos, end == std::string::npos ? source.size() - pos : end - pos + 1);
-				}
-			};
-			erase_line("#extension GL_ARB_shader_texture_image_samples");
-			erase_line("#extension GL_ARB_separate_shader_objects");
-			erase_line("#extension GL_ARB_shader_stencil_export");
-
-			// Extension directives must precede precision declarations in ESSL.
-			const auto header_end = source.find('\n');
-			// Compute/helper shaders do not need clip distances. Keep the
-			// extension optional so their compilation does not require it.
-			source.insert(header_end + 1, "#extension GL_EXT_clip_cull_distance : enable\n");
-			std::size_t declarations_at = header_end + 1;
-			while (source.compare(declarations_at, 11, "#extension ") == 0)
-			{
-				const auto line_end = source.find('\n', declarations_at);
-				declarations_at = line_end == std::string::npos ? source.size() : line_end + 1;
-			}
-			source.insert(declarations_at,
-				"#define RSX_GLES 1\n"
-				"#ifndef USE_UBO\n"
-				"#define USE_UBO 0\n"
-				"#endif\n"
-				"precision highp float;\n"
-				"precision highp int;\n"
-				"precision highp sampler2D;\n"
-				"precision highp sampler2DArray;\n"
-				"precision highp sampler3D;\n"
-				"precision highp samplerCube;\n"
-				"precision highp sampler2DMS;\n"
-				"precision highp isampler2D;\n"
-				"precision highp isampler2DArray;\n"
-				"precision highp usampler2D;\n"
-				"precision highp usampler2DArray;\n"
-				"precision highp usamplerBuffer;\n"
-				"precision highp image2D;\n"
-				"precision highp iimage2D;\n"
-				"precision highp uimage2D;\n");
-
-			// RSX 1D resources are backed by one-row 2D GLES textures. Texture
-			// operation macros supply the synthetic Y coordinate.
-			for (std::size_t pos = 0; (pos = source.find("sampler1D", pos)) != std::string::npos; pos += 9)
-			{
-				source.replace(pos, 9, "sampler2D");
-			}
-
-			// Adreno's ESSL compiler rejects arithmetic expressions in sampler
-			// binding layout qualifiers even though they are compile-time constants.
-			// RPCS3's temporary image slots are defined as 31 - index.
-			for (u32 index = 0; index < 32; ++index)
-			{
-				const auto sampler_binding = fmt::format("%u", 31 - index);
-				replace_all(fmt::format("SAMPLER_BINDING(%u)", index), sampler_binding);
-
-				// The generated helper programs use arithmetic macros in layout
-				// qualifiers. Resolve the currently configured slot bases before
-				// compiling; Qualcomm ESSL requires a literal binding value.
-				replace_all(fmt::format("IMAGE_LOCATION(%u)", index), fmt::format("%u", index));
-				replace_all(fmt::format("SSBO_LOCATION(%u)", index), fmt::format("%u", index + 2));
-				replace_all(fmt::format("UBO_LOCATION(%u)", index), fmt::format("%u", index + 8));
-
-				// Some mobile preprocessors do not expand token-pasting through a
-				// second function-like macro (TEX_NAME(n) -> tex##n).
-				replace_all(fmt::format("TEX_NAME_STENCIL(%u)", index), fmt::format("tex%u_stencil", index));
-				replace_all(fmt::format("TEX_NAME(%u)", index), fmt::format("tex%u", index));
-				replace_all(fmt::format("TEX1D(%u,", index), fmt::format("TEX1D_%u(", index));
-				replace_all(fmt::format("TEX2D(%u,", index), fmt::format("TEX2D_%u(", index));
-			}
-
-			// ESSL only permits const locals with compile-time initializers, while
-			// upstream desktop GLSL also uses const for values derived at runtime.
-			for (std::size_t pos = 0; (pos = source.find("const ", pos)) != std::string::npos;)
-			{
-				source.erase(pos, 6);
-			}
-		}
-#endif
-
 		void patch_macros_INTEL(std::string& source)
 		{
 			auto read_token = [&source](size_t start) -> std::tuple<size_t, size_t>
@@ -221,7 +107,10 @@ namespace gl
 		void shader::precompile()
 		{
 #ifdef RSX_GLES
-			convert_to_gles(source);
+			// ARMSX3: retarget the generated source at OpenGL ES. This is the one
+			// point every shader passes through, whether it came from an emitter or
+			// from a fixed GLSLSnippets file. See GLSLES.cpp.
+			gl::es::patch_glsl_for_es(source, type);
 #endif
 
 			if (gl::get_driver_caps().vendor_INTEL)
@@ -380,13 +269,7 @@ namespace gl
 
 		void program::link(std::function<void(program*)> init_func)
 		{
-			// Keep the link diagnostic attributable to this call. Optional desktop
-			// compatibility entry points may leave a benign error on GLES.
-			while (glGetError() != GL_NO_ERROR)
-			{
-			}
 			glLinkProgram(m_id);
-			const GLenum link_error = glGetError();
 
 			GLint status = GL_FALSE;
 			glGetProgramiv(m_id, GL_LINK_STATUS, &status);
@@ -404,9 +287,13 @@ namespace gl
 					error_msg = buf.get();
 				}
 
-				GLint attached_shaders = 0;
-				glGetProgramiv(m_id, GL_ATTACHED_SHADERS, &attached_shaders);
-				rsx_log.fatal("Linkage failed (program=%u, attached=%d, gl_error=0x%x): %s", m_id, attached_shaders, link_error, error_msg);
+				rsx_log.fatal("Linkage failed: %s", error_msg);
+
+				// ARMSX3: fenced all the same. sync() waits on this fence for every program, linked
+				// or not, and an empty one fails its check and takes the RSX thread down with it. A
+				// program that failed to link then draws nothing, which is all it could do anyway.
+				m_fence.create();
+				flush_command_queue(m_fence);
 			}
 			else
 			{

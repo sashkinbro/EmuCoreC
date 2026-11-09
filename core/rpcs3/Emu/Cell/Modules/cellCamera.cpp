@@ -3,6 +3,7 @@
 
 #include "Emu/emu_callbacks.h"
 #include "Emu/System.h"
+#include "Emu/android_app_state.h"
 #include "Emu/system_config.h"
 #include "Emu/Cell/PPUModule.h"
 #include "Emu/Cell/lv2/sys_event.h"
@@ -1665,7 +1666,8 @@ void camera_context::operator()()
 
 		if (!init || !fps || Emu.IsPausedOrReady() || g_cfg.io.camera == camera_handler::null)
 		{
-			thread_ctrl::wait_for(1000); // hack
+			const bool long_idle = g_cfg.io.camera == camera_handler::null || (g_android_app_backgrounded && Emu.IsPaused());
+			thread_ctrl::wait_for(long_idle ? (g_android_app_backgrounded ? 250'000 : 100'000) : 1000); // hack
 			continue;
 		}
 

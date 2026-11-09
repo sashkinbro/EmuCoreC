@@ -1,4 +1,6 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="ps3_core_pending_restart">Збережені зміни застосуються після перезапуску гри.</string>
+    <string name="ps3_core_apply_restart">Застосувати й перезапустити</string>
     <string name="emulation_tab_portals">Портали фігурок</string>
     <string name="emulation_portal_create">Створити фігурку</string>
     <string name="emulation_portal_search">Пошук фігурок</string>
@@ -2028,4 +2030,48 @@ Over-Under ближче до рідного стереовиходу, але п�
     <string name="settings_gamepad_action_right_stick_down">Правий стік вниз</string>
     <string name="settings_gamepad_action_right_stick_left">Правий стік вліво</string>
     <string name="settings_gamepad_action_right_stick_right">Правий стік вправо</string>
+
+    <string name="core_label_snapdragon_game_super_resolution">Snapdragon Game Super Resolution</string>
+    <string name="core_label_snapdragon_game_super_resolution_edge_direction">Snapdragon Game Super Resolution (Напрямок країв)</string>
+
+    <string name="core_label_oboe">Oboe</string>
+    <string name="core_label_x2">x2</string>
+    <string name="core_label_x3">x3</string>
+    <string name="core_label_x4">x4</string>
+
+    <!-- Current Android renderer, audio and presentation settings. -->
+    <string name="core_label_frame_generation" formatted="false">Генерація кадрів</string>
+    <string name="core_help_video_frame_generation" formatted="false">Вставляє згенеровані кадри між кадрами гри. Використовує шейдери з вашої копії Lossless Scaling; підвищує навантаження на GPU і затримку.</string>
+    <string name="core_label_frame_generation_performance_mode" formatted="false">Режим продуктивності</string>
+    <string name="core_help_video_frame_generation_performance_mode" formatted="false">Використовує полегшені шейдери. Після зміни перезапустіть генерацію кадрів.</string>
+    <string name="core_label_frame_generation_flow_scale" formatted="false">Деталізація руху (%)</string>
+    <string name="core_help_video_frame_generation_flow_scale" formatted="false">Роздільність аналізу руху у відсотках. Менше — швидше й м’якше. Для застосування перезапустіть генерацію кадрів.</string>
+    <string name="core_label_frame_generation_target_rate" formatted="false">Цільова частота оновлення (Гц)</string>
+    <string name="core_help_video_frame_generation_target_rate" formatted="false">Цільова частота виведення в Гц. 0 використовує вибраний сталий множник.</string>
+    <string name="core_label_frame_generation_lossless_path" formatted="false">Файл Lossless Scaling</string>
+    <string name="core_help_video_frame_generation_lossless_path" formatted="false">Повний шлях до вашої DLL Lossless Scaling. Кеш шейдерів створюється з цього файлу за потреби.</string>
+    <string name="core_label_cubeb_backend" formatted="false">Аудіосистема Cubeb</string>
+    <string name="core_help_audio_cubeb_backend" formatted="false">Аудіошлях Cubeb: порожнє значення вибирає OpenSL ES на Android; можна вказати aaudio або opensl. Потрібен перезапуск.</string>
+    <string name="core_label_recording_compatible" formatted="false">Звук для запису екрана</string>
+    <string name="core_help_audio_recording_compatible" formatted="false">Дозволяє запису екрана захоплювати звук Oboe через системний мікшер. Може збільшити затримку.</string>
+    <string name="core_label_sgsr_edge_sharpness" formatted="false">Різкість меж SGSR</string>
+    <string name="core_help_video_sgsr_edge_sharpness" formatted="false">Різкість меж під час масштабування SGSR. Більші значення підсилюють контури.</string>
+    <string name="core_label_early_submit_draw_threshold" formatted="false">Поріг малювань для раннього надсилання</string>
+    <string name="core_help_video_vulkan_early_submit_draw_threshold" formatted="false">Надсилає команди GPU після цієї кількості малювань. 0 вимикає раннє надсилання. Потрібен перезапуск.</string>
+    <string name="core_label_vertex_fetch_specialization" formatted="false">Спеціалізація читання вершин</string>
+    <string name="core_help_video_vulkan_vertex_fetch_specialization" formatted="false">Спеціалізує читання вершин для цієї гри. Може підвищити продуктивність GPU. Потрібен перезапуск.</string>
+    <string name="core_label_disable_swap_chain_pre_rotation" formatted="false">Вимкнути попередній поворот Swap Chain</string>
+    <string name="core_help_video_disable_swap_chain_pre_rotation" formatted="false">Vulkan: поворот зображення на екранах, встановлених боком, залишається за системою, як у попередніх версіях. Лише для усунення несправностей; на таких екранах витрачає час GPU.</string>
+    <string name="core_label_shader_preset_resolution" formatted="false">Роздільність шейдера</string>
+    <string name="core_help_video_shader_preset_resolution" formatted="false">Запускає шейдер у меншій роздільності, а потім масштабує його зображення на екран. Нижче працює набагато швидше з важкими пресетами й виглядає трохи м\'якше.</string>
+    <string name="core_label_cardboard_vr" formatted="false">Cardboard VR</string>
+    <string name="core_help_video_cardboard_vr" formatted="false">Показує гру двічі, поруч, по одному зображенню для кожного ока, для телефона у VR-окулярах типу Cardboard. Тримайте телефон в альбомній орієнтації. Ігри зі стереоскопічним 3D дають кожному оку власний вигляд, якщо в розділі «Усі налаштування ядра» увімкнено 3D Display Enabled і роздільна здатність PS3 становить 1280x720. Шейдери RetroArch і SGSR у цьому режимі пропускаються; FSR і далі працює.</string>
+    <string name="core_label_vr_picture_size" formatted="false">Розмір зображення VR</string>
+    <string name="core_help_video_vr_picture_size" formatted="false">Яку частину своєї половини екрана займає кожне зображення.</string>
+    <string name="core_label_vr_eye_spacing" formatted="false">Відстань між очима VR</string>
+    <string name="core_help_video_vr_eye_spacing" formatted="false">Більші значення розсувають зображення, менші зсувають їх ближче, щоб вирівняти з лінзами окулярів.</string>
+    <string name="core_label_vr_height" formatted="false">Висота VR</string>
+    <string name="core_help_video_vr_height" formatted="false">Більші значення піднімають обидва зображення, менші опускають їх, щоб вирівняти з лінзами окулярів.</string>
+    <string name="core_label_show_spu_compilation_hint" formatted="false">Показати підказку щодо компіляції SPU</string>
+    <string name="core_help_miscellaneous_show_spu_compilation_hint" formatted="false">Показує підказку «Компіляція модулів SPU» за допомогою власного накладання.</string>
 </resources>

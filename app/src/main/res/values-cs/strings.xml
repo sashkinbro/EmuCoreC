@@ -1885,4 +1885,51 @@ Toto nikdy nepoužívejte.</string>
     <string name="settings_gamepad_action_right_stick_down">Pravá páčka dolů</string>
     <string name="settings_gamepad_action_right_stick_left">Pravá páčka vlevo</string>
     <string name="settings_gamepad_action_right_stick_right">Pravá páčka vpravo</string>
+
+    <string name="ps3_core_pending_restart">Uložené změny se projeví po restartování hry.</string>
+    <string name="ps3_core_apply_restart">Použít a restartovat</string>
+
+    <string name="core_label_snapdragon_game_super_resolution">Snapdragon Game Super Resolution</string>
+    <string name="core_label_snapdragon_game_super_resolution_edge_direction">Snapdragon Game Super Resolution (Směr hran)</string>
+
+    <string name="core_label_oboe">Oboe</string>
+    <string name="core_label_x2">x2</string>
+    <string name="core_label_x3">x3</string>
+    <string name="core_label_x4">x4</string>
+
+    <!-- Current Android renderer, audio and presentation settings. -->
+    <string name="core_label_frame_generation" formatted="false">Generování snímků</string>
+    <string name="core_help_video_frame_generation" formatted="false">Vkládá generované snímky mezi snímky hry. Používá shadery z vašeho souboru Lossless Scaling; zvyšuje zátěž GPU a latenci.</string>
+    <string name="core_label_frame_generation_performance_mode" formatted="false">Režim výkonu</string>
+    <string name="core_help_video_frame_generation_performance_mode" formatted="false">Používá lehčí shadery. Po změně vypněte a zapněte generování snímků.</string>
+    <string name="core_label_frame_generation_flow_scale" formatted="false">Podrobnost pohybu (%)</string>
+    <string name="core_help_video_frame_generation_flow_scale" formatted="false">Rozlišení analýzy pohybu v procentech. Nižší hodnoty jsou rychlejší a méně ostré. Restartujte generování snímků.</string>
+    <string name="core_label_frame_generation_target_rate" formatted="false">Cílová obnovovací frekvence (Hz)</string>
+    <string name="core_help_video_frame_generation_target_rate" formatted="false">Cílová výstupní frekvence v Hz. 0 používá zvolený pevný násobek.</string>
+    <string name="core_label_frame_generation_lossless_path" formatted="false">Soubor Lossless Scaling</string>
+    <string name="core_help_video_frame_generation_lossless_path" formatted="false">Absolutní cesta k vašemu souboru DLL programu Lossless Scaling. Mezipaměť shaderů se z něj podle potřeby vytvoří.</string>
+    <string name="core_label_cubeb_backend" formatted="false">Zvukový backend Cubeb</string>
+    <string name="core_help_audio_cubeb_backend" formatted="false">Zvuková cesta Cubeb: prázdná hodnota vybere na Androidu OpenSL ES; lze zadat aaudio nebo opensl. Vyžaduje restart.</string>
+    <string name="core_label_recording_compatible" formatted="false">Zvuk kompatibilní s nahráváním</string>
+    <string name="core_help_audio_recording_compatible" formatted="false">Umožní záznamu obrazovky zachytit zvuk Oboe přes systémový směšovač. Může zvýšit latenci.</string>
+    <string name="core_label_sgsr_edge_sharpness" formatted="false">Ostrost hran SGSR</string>
+    <string name="core_help_video_sgsr_edge_sharpness" formatted="false">Ostrost hran při škálování SGSR. Vyšší hodnoty zvýrazní hrany.</string>
+    <string name="core_label_early_submit_draw_threshold" formatted="false">Práh kreslení pro včasné odeslání</string>
+    <string name="core_help_video_vulkan_early_submit_draw_threshold" formatted="false">Odešle příkazy GPU po tomto počtu kreslení. 0 vypne včasné odesílání. Vyžaduje restart.</string>
+    <string name="core_label_vertex_fetch_specialization" formatted="false">Specializace načítání vrcholů</string>
+    <string name="core_help_video_vulkan_vertex_fetch_specialization" formatted="false">Specializuje čtení vrcholů pro tuto hru. Může zvýšit výkon GPU. Vyžaduje restart.</string>
+    <string name="core_label_disable_swap_chain_pre_rotation" formatted="false">Zakázat předběžné otočení obrazu</string>
+    <string name="core_help_video_disable_swap_chain_pre_rotation" formatted="false">Ponechá otočení obrazu na systému. Vypínejte pouze při potížích s orientací; může zvýšit zátěž GPU.</string>
+    <string name="core_label_shader_preset_resolution" formatted="false">Rozlišení shaderu</string>
+    <string name="core_help_video_shader_preset_resolution" formatted="false">Podíl rozlišení pro shaderový řetězec v procentech. Nižší hodnoty jsou rychlejší, ale obraz je měkčí.</string>
+    <string name="core_label_cardboard_vr" formatted="false">Cardboard VR</string>
+    <string name="core_help_video_cardboard_vr" formatted="false">Zobrazí hru vedle sebe pro obě oči v brýlích Cardboard. Držte telefon na šířku. SGSR a shaderové řetězce se vypnou; FSR zůstane dostupné.</string>
+    <string name="core_label_vr_picture_size" formatted="false">Velikost obrazu VR</string>
+    <string name="core_help_video_vr_picture_size" formatted="false">Velikost obrazu jako procento poloviny obrazovky pro každé oko.</string>
+    <string name="core_label_vr_eye_spacing" formatted="false">Rozestup očí VR</string>
+    <string name="core_help_video_vr_eye_spacing" formatted="false">Kladné hodnoty obrazy oddálí, záporné je přiblíží k sobě.</string>
+    <string name="core_label_vr_height" formatted="false">Výška obrazu VR</string>
+    <string name="core_help_video_vr_height" formatted="false">Kladné hodnoty posunou obrazy nahoru, záporné dolů.</string>
+    <string name="core_label_show_spu_compilation_hint" formatted="false">Zobrazit oznámení kompilace SPU</string>
+    <string name="core_help_miscellaneous_show_spu_compilation_hint" formatted="false">Zobrazuje nápovědu ke kompilaci modulů SPU pomocí nativního překrytí.</string>
 </resources>

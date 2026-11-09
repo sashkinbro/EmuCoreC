@@ -77,7 +77,8 @@ static bool is_iso_file(iso_file& file, u64* size = nullptr)
 		return false;
 	}
 
-	char magic[5];
+	// A failed or truncated descriptor cannot identify an ISO.
+	char magic[5]{};
 
 	if (file.read_at(ISO_DESCRIPTORS_OFFSET + 1, magic, 5) != 5)
 	{
@@ -1307,6 +1308,82 @@ u64 iso_fs_metadata::size() const
 	return total_size;
 }
 
+#ifdef __APPLE__
+namespace
+{
+	// Several guest files read the one handle from different threads, so this only does positional reads and never moves the handle's own position.
+	class iso_image_view final : public fs::file_base
+	{
+		const std::shared_ptr<fs::file> m_image;
+		u64 m_pos = 0;
+
+	public:
+		explicit iso_image_view(std::shared_ptr<fs::file> image)
+			: m_image(std::move(image))
+		{
+		}
+
+		fs::stat_t get_stat() override
+		{
+			return fs::stat_t
+			{
+				.is_directory = false,
+				.is_symlink = false,
+				.is_writable = false,
+				.size = m_image->size(),
+			};
+		}
+
+		bool trunc(u64 /*length*/) override
+		{
+			fs::g_tls_error = fs::error::readonly;
+			return false;
+		}
+
+		u64 read(void* buffer, u64 size) override
+		{
+			const u64 result = m_image->read_at(m_pos, buffer, size);
+
+			m_pos += result;
+			return result;
+		}
+
+		u64 read_at(u64 offset, void* buffer, u64 size) override
+		{
+			return m_image->read_at(offset, buffer, size);
+		}
+
+		u64 write(const void* /*buffer*/, u64 /*size*/) override
+		{
+			fs::g_tls_error = fs::error::readonly;
+			return 0;
+		}
+
+		u64 seek(s64 offset, fs::seek_mode whence) override
+		{
+			const s64 new_pos =
+				whence == fs::seek_set ? offset :
+				whence == fs::seek_cur ? offset + static_cast<s64>(m_pos) :
+				whence == fs::seek_end ? offset + static_cast<s64>(m_image->size()) : -1;
+
+			if (new_pos < 0)
+			{
+				fs::g_tls_error = fs::error::inval;
+				return umax;
+			}
+
+			m_pos = static_cast<u64>(new_pos);
+			return m_pos;
+		}
+
+		u64 size() override
+		{
+			return m_image->size();
+		}
+	};
+}
+
+#endif
 bool iso_archive::iso_parse_file_system(fs::file& file, iso_fs_node& root, const std::string& path)
 {
 	u8 descriptor_type = -2;
@@ -1388,11 +1465,37 @@ iso_archive::iso_archive(const std::string& path)
 		}
 	}
 
+#ifdef __APPLE__
+	if (!raw_device && !m_chd)
+	{
+		m_image = std::make_shared<fs::file>(m_path);
+		if (!*m_image)
+		{
+			iso_log.error("iso_archive: Failed to keep the disc image open: '%s' (%s)", path, fs::g_tls_error);
+			invalidate();
+			return;
+		}
+	}
+#endif
+
 	// NOTE: the file is opened once here and then handed over to the parsing below. Recognizing the ISO through its
 	//       path (i.e. "is_iso_file(m_path)") would open it and read its volume descriptor a second time, which is a
 	//       physical read when the path points to an optical drive
-	auto file = m_chd ? std::make_unique<iso_file>(chd::make_file(m_chd), m_path)
-	                  : std::make_unique<iso_file>(m_path);
+	std::unique_ptr<iso_file> file;
+	if (m_chd)
+	{
+		file = std::make_unique<iso_file>(chd::make_file(m_chd), m_path);
+	}
+#ifdef __APPLE__
+	else if (m_image)
+	{
+		file = std::make_unique<iso_file>(fs::file(std::make_unique<iso_image_view>(m_image)), m_path);
+	}
+#endif
+	else
+	{
+		file = std::make_unique<iso_file>(m_path);
+	}
 
 	if (!is_iso_file(*file))
 	{
@@ -1429,6 +1532,12 @@ bool iso_archive::set_disc_key(const std::array<u8, 16>& disc_key)
 
 iso_file iso_archive::open_raw_file() const
 {
+#ifdef __APPLE__
+	if (m_image)
+	{
+		return iso_file(fs::file(std::make_unique<iso_image_view>(m_image)), m_path);
+	}
+#endif
 	return m_chd ? iso_file(chd::make_file(m_chd), m_path) : iso_file(m_path);
 }
 
@@ -1513,6 +1622,9 @@ void iso_archive::invalidate()
 	m_root = {};
 	m_dec.reset();
 	m_chd.reset();
+#ifdef __APPLE__
+	m_image.reset();
+#endif
 }
 
 bool iso_archive::is_valid() const
@@ -1537,6 +1649,44 @@ bool iso_archive::is_file(const std::string& path)
 	return !file_node->metadata.is_directory;
 }
 
+#ifdef __APPLE__
+std::unique_ptr<fs::file_base> iso_archive::get_iso_file(const std::string& path, bs_t<fs::open_mode> mode, const iso_fs_node& node)
+{
+	if (m_chd || m_image)
+	{
+		// Every file on a CHD or a plain image reads through the image the archive opened, which is read-only.
+		if (mode & (fs::write + fs::append + fs::create + fs::trunc))
+		{
+			fs::g_tls_error = fs::error::readonly;
+			return nullptr;
+		}
+
+		fs::file image = m_chd ? chd::make_file(m_chd) : fs::file(std::make_unique<iso_image_view>(m_image));
+
+		if (m_dec->get_enc_type() == iso_encryption_type::NONE)
+		{
+			return std::make_unique<iso_file>(std::move(image), node);
+		}
+
+		return std::make_unique<iso_file_encrypted>(std::move(image), node, m_dec);
+	}
+
+	// Only a raw optical device still opens by path, because its reads need the aligned path that m_raw_device selects in iso_file.
+	if (!fs::is_optical_raw_device(m_path))
+	{
+		iso_log.error("iso_archive: No open disc image to read '%s' from: '%s'", node.metadata.name, m_path);
+		fs::g_tls_error = fs::error::noent;
+		return nullptr;
+	}
+
+	if (m_dec->get_enc_type() == iso_encryption_type::NONE)
+	{
+		return std::make_unique<iso_file>(path, mode, node);
+	}
+
+	return std::make_unique<iso_file_encrypted>(path, mode, node, m_dec);
+}
+#else
 std::unique_ptr<fs::file_base> iso_archive::get_iso_file(const std::string& path, bs_t<fs::open_mode> mode, const iso_fs_node& node)
 {
 	if (m_chd)
@@ -1564,6 +1714,7 @@ std::unique_ptr<fs::file_base> iso_archive::get_iso_file(const std::string& path
 
 	return std::make_unique<iso_file_encrypted>(path, mode, node, m_dec);
 }
+#endif
 
 std::unique_ptr<fs::file_base> iso_archive::open(const std::string& path)
 {

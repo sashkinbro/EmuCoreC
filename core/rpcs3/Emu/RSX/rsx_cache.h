@@ -10,6 +10,9 @@
 #include "Emu/Memory/vm.h"
 #include "Emu/RSX/Program/RSXVertexProgram.h"
 #include "Emu/RSX/Program/RSXFragmentProgram.h"
+#if defined(__APPLE__) || defined(__ANDROID__)
+#include "Emu/RSX/Program/ProgramStateCache.h"
+#endif
 #include "Overlays/Shaders/shader_loading_dialog.h"
 
 #include <chrono>
@@ -74,6 +77,40 @@ namespace rsx
 
 		backend_storage& m_storage;
 
+#if defined(__APPLE__) || defined(__ANDROID__)
+		// A killed process must leave the old file or the new one, never a cut one
+		static bool write_cache_file(const std::string& path, const void* data, usz size)
+		{
+			fs::pending_file file(path);
+			return file.file && file.file.write(data, size) == size && file.commit();
+		}
+
+		// The decompiler walks a saved .fp to its end bit with no bound, so a cut file must not reach it
+		static bool holds_complete_fragment_program(const u8* data, u32 size)
+		{
+			for (u32 index = 0; (index + 1) * 16 <= size;)
+			{
+				const v128 inst = v128::loadu(data, index);
+				const bool end = (inst._u32[0] >> 8) & 0x1;
+
+				if (end && index == 0 && size == 16 && ((inst._u32[0] >> 16) & 0x3F) == 0)
+				{
+					// analyse_fragment_program saves a lone end NOP as 16 bytes even when it carries a literal flag
+					return true;
+				}
+
+				index += program_hash_util::fragment_program_utils::is_any_src_constant(inst) ? 2 : 1;
+
+				if (end)
+				{
+					return index * 16 == size;
+				}
+			}
+
+			return false;
+		}
+
+#endif
 		static std::string get_message(u32 index, u32 processed, u32 entry_count)
 		{
 			return fmt::format("%s pipeline object %u of %u", index == 0 ? "Loading" : "Compiling", processed, entry_count);
@@ -130,7 +167,7 @@ namespace rsx
 		}
 
 		template <typename... Args>
-		void compile_shaders(uint nb_workers, unpacked_type& unpacked, u32 entry_count, shader_loading_dialog* dlg, Args&&... args)
+		void compile_shaders(uint nb_workers, unpacked_type& unpacked, u32 entry_count, shader_loading_dialog* dlg, steady_clock::time_point skip_after, Args&&... args)
 		{
 			atomic_t<u32> processed(0);
 
@@ -138,7 +175,7 @@ namespace rsx
 			{
 				u32 pos;
 				// Processed is incremented before work starts in order to avoid two workers working on the same shader
-				while (((pos = processed++) < stop_at) && !Emu.IsStopped())
+				while (((pos = processed++) < stop_at) && !Emu.IsStopped() && !dlg->skip_requested())
 				{
 					auto& entry = unpacked[pos];
 					m_storage.add_pipeline_entry(std::get<1>(entry), std::get<2>(entry), std::get<0>(entry), std::forward<Args>(args)...);
@@ -147,11 +184,22 @@ namespace rsx
 				processed--;
 			};
 
-			await_workers(nb_workers, 1, shader_comp_worker, processed, entry_count, dlg);
+			await_workers(nb_workers, 1, shader_comp_worker, processed, entry_count, dlg, skip_after);
 		}
 
-		void await_workers(uint nb_workers, u8 step, std::function<void(u32)>& worker, atomic_t<u32>& processed, u32 entry_count, shader_loading_dialog* dlg)
+		void await_workers(uint nb_workers, u8 step, std::function<void(u32)>& worker, atomic_t<u32>& processed, u32 entry_count, shader_loading_dialog* dlg,
+			steady_clock::time_point skip_after = steady_clock::time_point::max())
 		{
+			bool skip_enabled = false;
+			const auto update_skip = [&](steady_clock::time_point now)
+			{
+				if (!skip_enabled && now >= skip_after)
+				{
+					dlg->enable_hold_to_skip();
+					skip_enabled = true;
+				}
+			};
+
 			if (nb_workers == 1)
 			{
 				steady_clock::time_point last_update;
@@ -172,7 +220,9 @@ namespace rsx
 						dlg->set_value(step, stop_at);
 						last_update = now;
 					}
-				} while (stop_at < entry_count && !Emu.IsStopped());
+
+					update_skip(now);
+				} while (stop_at < entry_count && !Emu.IsStopped() && !dlg->skip_requested());
 			}
 			else
 			{
@@ -183,11 +233,13 @@ namespace rsx
 
 				u32 current_progress = 0;
 				u32 last_update_progress = 0;
-				while ((current_progress < entry_count) && !Emu.IsStopped())
+				while ((current_progress < entry_count) && !Emu.IsStopped() && !dlg->skip_requested())
 				{
 					thread_ctrl::wait_for(16'000); // Around 60fps should be good enough
 
 					if (Emu.IsStopped()) break;
+
+					update_skip(steady_clock::now());
 
 					current_progress = std::min(processed.load(), entry_count);
 
@@ -200,7 +252,7 @@ namespace rsx
 				}
 			}
 
-			if (!Emu.IsStopped())
+			if (!Emu.IsStopped() && !dlg->skip_requested())
 			{
 				ensure(processed == entry_count);
 			}
@@ -272,16 +324,26 @@ namespace rsx
 			dlg->update_msg(0, get_message(0, 0, entry_count));
 			dlg->update_msg(1, get_message(1, 0, entry_count));
 
+			// The interpreter covers any pipelines we did not link, so the user may skip the linking step after a while
+			const auto skip_after = g_cfg.video.shadermode == shader_mode::async_with_interpreter
+				? steady_clock::now() + 60s
+				: steady_clock::time_point::max();
+
 			// Preload everything needed to compile the shaders
 			unpacked_type unpacked;
+#if defined(__APPLE__) && defined(ARCH_ARM64)
+			// iOS kills Apple's shader compiler service under memory pressure when every core links at once
+			uint nb_workers = g_cfg.video.renderer == video_renderer::vulkan ? std::max(1u, utils::get_thread_count() / 2) : 1;
+#else
 			uint nb_workers = g_cfg.video.renderer == video_renderer::vulkan ? utils::get_thread_count() : 1;
+#endif
 
 			load_shaders(nb_workers, unpacked, directory_path, entries, entry_count, dlg);
 
 			// Account for any invalid entries
 			entry_count = unpacked.size();
 
-			compile_shaders(nb_workers, unpacked, entry_count, dlg, std::forward<Args>(args)...);
+			compile_shaders(nb_workers, unpacked, entry_count, dlg, skip_after, std::forward<Args>(args)...);
 
 			dlg->refresh();
 			dlg->close();
@@ -306,6 +368,25 @@ namespace rsx
 			std::string vp_name = root_path + "/raw/" + fmt::format("%llX.vp", data.vertex_program_hash);
 
 			// Writeback to cache either if file does not exist or it is invalid (unexpected size)
+#if defined(__APPLE__) || defined(__ANDROID__)
+			if (fs::stat_t s{}; !fs::get_stat(fp_name, s) || s.size != fp.ucode_length)
+			{
+				if (!write_cache_file(fp_name, fp.get_data(), fp.ucode_length))
+				{
+					rsx_log.error("shaders_cache: failed to write %s (%s)", fp_name, fs::g_tls_error);
+					return;
+				}
+			}
+
+			if (fs::stat_t s{}; !fs::get_stat(vp_name, s) || s.size != vp.data.size() * sizeof(u32))
+			{
+				if (!write_cache_file(vp_name, vp.data.data(), vp.data.size() * sizeof(u32)))
+				{
+					rsx_log.error("shaders_cache: failed to write %s (%s)", vp_name, fs::g_tls_error);
+					return;
+				}
+			}
+#else
 			// Note: fs::write_file is not atomic, if the process is terminated in the middle an empty file is created
 			if (fs::stat_t s{}; !fs::get_stat(fp_name, s) || s.size != fp.ucode_length)
 			{
@@ -316,6 +397,7 @@ namespace rsx
 			{
 				fs::write_file(vp_name, fs::rewrite, vp.data);
 			}
+#endif
 
 			const u32 state_params[] =
 			{
@@ -338,7 +420,14 @@ namespace rsx
 
 			const std::string pipeline_file_name = fmt::format("%llX+%llX+%llX+%llX.bin", data.vertex_program_hash, data.fragment_program_hash, data.pipeline_storage_hash, state_hash);
 			const std::string pipeline_path = root_path + "/pipelines/" + pipeline_class_name + "/" + version_prefix + "/" + pipeline_file_name;
+#if defined(__APPLE__) || defined(__ANDROID__)
+			if (!write_cache_file(pipeline_path, &data, sizeof(data)))
+			{
+				rsx_log.error("shaders_cache: failed to write %s (%s)", pipeline_path, fs::g_tls_error);
+			}
+#else
 			fs::write_file(pipeline_path, fs::rewrite, &data, sizeof(data));
+#endif
 		}
 
 		RSXVertexProgram load_vp_raw(u64 program_hash) const
@@ -365,8 +454,21 @@ namespace rsx
 			}
 
 			auto buf = std::make_unique<u8[]>(size);
+#if defined(__APPLE__) || defined(__ANDROID__)
+			if (f.read(buf.get(), size) != size || !holds_complete_fragment_program(buf.get(), size))
+			{
+				rsx_log.error("Removing cached fragment program %llX.fp since it does not hold a complete program (%u bytes)", program_hash, size);
+				f.close();
+				fs::remove_file(fmt::format("%s/raw/%llX.fp", root_path, program_hash));
+				fp.ucode_length = 0;
+				return fp;
+			}
+
+			fp.data = buf.get();
+#else
 			fp.data = buf.get();
 			f.read(buf.get(), size);
+#endif
 			fragment_program_data[fragment_program_data.push_begin()] = std::move(buf);
 			return fp;
 		}

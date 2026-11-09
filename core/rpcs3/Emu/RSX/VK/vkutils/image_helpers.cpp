@@ -1,9 +1,9 @@
+#include "Emu/RSX/rsx_profiler.h"
 #include "stdafx.h"
 #include "image_helpers.h"
 #include "image.h"
 #include "../VKRenderPass.h"
 #include "../../Utils/color_utils.hpp"
-#include "Utilities/Thread.h"
 
 namespace vk
 {
@@ -39,21 +39,14 @@ namespace vk
 	void change_image_layout(const vk::command_buffer& cmd, VkImage image, VkImageLayout current_layout, VkImageLayout new_layout, const VkImageSubresourceRange& range,
 		u32 src_queue_family, u32 dst_queue_family, u32 src_access_mask_bits, u32 dst_access_mask_bits)
 	{
-#ifdef __ANDROID__
-		// The Adreno driver dereferences a null resource when handed a barrier whose image handle
-		// is null or whose subresource range is degenerate, and crashes inside vkCmdPipelineBarrier.
-		// Refuse to make that call and record what came in instead.
-		if (!image || !range.aspectMask || !range.levelCount || !range.layerCount)
-		{
-			rsx_log.error("change_image_layout: refusing invalid barrier (image=%p, aspect=0x%x, levelCount=%u, layerCount=%u, layouts %d -> %d)",
-				reinterpret_cast<void*>(image), range.aspectMask, range.levelCount, range.layerCount,
-				static_cast<int>(current_layout), static_cast<int>(new_layout));
-			return;
-		}
-#endif
-
 		if (vk::is_renderpass_open(cmd))
 		{
+			if (rsx::prof::enabled()) [[unlikely]]
+			{
+				rsx::prof::g_rp_sites[16]++;
+				rsx::prof::note_rp_teardown(__builtin_return_address(0), 0);
+			}
+
 			vk::end_renderpass(cmd);
 		}
 
@@ -226,15 +219,6 @@ namespace vk
 
 		if (!barrier.srcAccessMask) src_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 		if (!barrier.dstAccessMask) dst_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-
-#ifdef __ANDROID__
-		std::snprintf(g_tls_last_rsx_op, sizeof(g_tls_last_rsx_op),
-			"change_image_layout old=%d new=%d aspect=0x%x levels=%u+%u layers=%u+%u qf=%u/%u stages=0x%x/0x%x access=0x%x/0x%x image=%p",
-			static_cast<int>(current_layout), static_cast<int>(new_layout), range.aspectMask,
-			range.baseMipLevel, range.levelCount, range.baseArrayLayer, range.layerCount,
-			src_queue_family, dst_queue_family, src_stage, dst_stage,
-			barrier.srcAccessMask, barrier.dstAccessMask, reinterpret_cast<void*>(image));
-#endif
 
 		vkCmdPipelineBarrier(cmd, src_stage, dst_stage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
 	}

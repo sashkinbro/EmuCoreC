@@ -25,7 +25,7 @@ object ConfigDatabaseSeeder {
     private const val TAG = "EmuCoreC-ConfigDb"
     private const val ASSET_NAME = "rpcs3_config_db.json"
     private const val VERSION_NAME = ".version"
-    private const val LOCAL_REVISION = 1
+    private const val LOCAL_REVISION = 2
 
     private val coreOverrides = buildMap {
         listOf("BLUS31202", "BLES01885", "BLES01886", "BLUS30778", "BLES01329", "BLES01330")
@@ -42,15 +42,47 @@ object ConfigDatabaseSeeder {
         listOf("BCUS98234", "BCES01007").forEach { put(it, mapOf("Preferred SPU Threads" to "0")) }
         listOf("BLUS30833", "BLES01395").forEach { put(it, mapOf("SPU Cache" to "false")) }
         listOf("BLUS30682", "BLUS30127", "NPUB30702").forEach { put(it, mapOf("SPU XFloat Accuracy" to "Approximate")) }
+        // ARMSX3 757ba16744 / 4f088e3ad9: these games dispatch many small SPU routines.
+        listOf("NPUB30828", "NPEB01054").forEach { put(it, mapOf("SPU Block Size" to "Mega")) }
+        listOf("MRTC00003", "BLUS30416", "BLES00783", "BLJM67005", "BCAS25005").forEach {
+            put(it, mapOf("SPU Block Size" to "Mega", "Stub PPU Traps" to "20"))
+        }
+        // ARMSX3 3f1212fdc3: Relaxed fixes God of War III's cutscene rendering.
+        listOf("BCUS98111", "BCES00510", "BCES00799", "BCAS25003", "BCKS15003", "BCJS37001", "NPUA70080")
+            .forEach { put(it, mapOf("SPU XFloat Accuracy" to "Relaxed")) }
+        // ARMSX3 de6a59feab, contributed by k1r4ct: free CPU time for the PPU in combat.
+        listOf(
+            "BCES00052", "BCUS98127", "BCJS30014", "NPEA00452", "NPUA80965",
+            "BCES00301", "BCAS20052", "NPEA00088", "NPUA80145", "NPEA00106", "NPJA00033",
+            "BCES01908", "BCES01949", "BCUS99245", "NPEA00457", "NPUA80908",
+        ).forEach {
+            put(it, mapOf("Thread Scheduler Mode" to "RPCS3 Scheduler", "SPU GETLLAR Busy Waiting Percentage" to "0"))
+        }
+        // ARMSX3 GameDefaults, expanded in 4f088e3ad9. Keep these in the per-title database
+        // rather than writing a workaround into global config.yml where the next game inherits it.
+        listOf(
+            "BCUS98233", "BCES01175", "BCES01176", "BCJS37004", "BCAS25009", "BCUS99086",
+            "BCES01670", "BCES01692", "BCAS25014", "NPUA80858", "NPEA00422",
+            "BCUS98232", "BCES01741", "BCES01742", "BCAS25016", "BCJS37008", "NPUA80918", "NPEA00445", "NPHA80258",
+        ).forEach { put(it, mapOf("Stub PPU Traps" to "1")) }
+        listOf("BLUS30826", "NPUB31509").forEach { put(it, mapOf("RSX FIFO Fetch Accuracy" to "Ordered & Atomic")) }
     }
     private val videoOverrides = buildMap {
         listOf("BLUS31213", "BLES01935").forEach { put(it, mapOf("Frame limit" to "PS3 Native")) }
         put("BLUS30903", mapOf("Frame limit" to "60"))
         listOf("BLUS31519", "BLES02136", "BLJS10257").forEach { put(it, mapOf("Shader Precision" to "High")) }
         listOf("BCUS98234", "BCES01007").forEach { put(it, mapOf("Write Color Buffers" to "false")) }
+        // ARMSX3 65454fef8e / 5a34aeb06f: Yakuza: Dead Souls FIFO stalls/desync.
+        listOf("BLUS30826", "NPUB31509").forEach {
+            put(it, mapOf("Disable FIFO Reordering" to "true", "Driver Wake-Up Delay" to "20"))
+        }
     }
-    private val vulkanOverrides = listOf("BLUS30203", "BLES00397").associateWith {
-        mapOf("VRAM allocation limit (MB)" to "3072")
+    private val vulkanOverrides = buildMap {
+        listOf("BLUS30203", "BLES00397").forEach { put(it, mapOf("VRAM allocation limit (MB)" to "3072")) }
+        // ARMSX3 b7bc42b674 / 8aac056e15 (k1r4ct): Tools of Destruction only.
+        listOf("BCES00052", "BCUS98127", "BCJS30014", "NPEA00452", "NPUA80965").forEach {
+            put(it, mapOf("Vertex Fetch Specialization" to "true", "Early Submit Draw Threshold" to "1024"))
+        }
     }
 
     /** Guards against pathological entries; real configs are a few hundred bytes. */
@@ -93,9 +125,7 @@ object ConfigDatabaseSeeder {
         titleIds.forEach { titleId ->
             if (!TITLE_ID_PATTERN.matches(titleId)) return@forEach
             val original = games.optJSONObject(titleId)?.optString("config").orEmpty()
-            val core = applyCoreOverrides(original, coreOverrides[titleId].orEmpty())
-            val video = applySectionOverrides(core, "Video", videoOverrides[titleId].orEmpty())
-            val config = applyVulkanOverrides(video, vulkanOverrides[titleId].orEmpty())
+            val config = prepareConfig(titleId, original)
             if (config.isBlank() || config.toByteArray().size > MAX_CONFIG_BYTES) return@forEach
             runCatching {
                 File(targetDir, "$titleId.yml").writeText(config)
@@ -111,6 +141,20 @@ object ConfigDatabaseSeeder {
 
     private fun readSeededVersion(dir: File): String? =
         runCatching { File(dir, VERSION_NAME).readText().trim() }.getOrNull()
+
+    internal fun prepareConfig(titleId: String, original: String): String {
+        // Match ARMSX3's evidenced Android exceptions: desktop SPURS caps starve the
+        // job chain, and Off/Infinite frame limits waste power or run games too fast.
+        // PS3 Native has its own pacing and must remain; Multithreaded RSX is supported.
+        val mobile = original.lineSequence().filterNot { line ->
+            val name = line.substringBefore(':').trim().removePrefix("- ")
+            name == "Max SPURS Threads" ||
+                (name == "Frame limit" && line.substringAfter(':').trim() in setOf("Off", "Infinite"))
+        }.joinToString("\n")
+        val core = applyCoreOverrides(mobile, coreOverrides[titleId].orEmpty())
+        val video = applySectionOverrides(core, "Video", videoOverrides[titleId].orEmpty())
+        return applyVulkanOverrides(video, vulkanOverrides[titleId].orEmpty())
+    }
 }
 
 internal fun applyCoreOverrides(config: String, overrides: Map<String, String>): String =

@@ -1,12 +1,42 @@
 package com.sbro.emucorec.core
 
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import com.sbro.emucorec.core.ps3.Emulator
 import com.sbro.emucorec.data.InstalledGameRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 object Ps3LaunchBridge {
     enum class LaunchResult { Success, MissingFirmware, Failure }
+
+    /** Recreate the game surface/menu, then use the normal boot path with the same title profile. */
+    suspend fun restartRunningGame(context: Context): Boolean {
+        val activity = generateSequence(context) { (it as? ContextWrapper)?.baseContext }
+            .filterIsInstance<Emulator>().firstOrNull() ?: return false
+        if (Ps3Core.instance.saveStateBusy()) return false
+        val launch = Ps3Runtime.currentLaunch ?: return false
+        val titleId = activity.currentGameIdOrIntent().ifBlank { launch.second.orEmpty() }
+        val path = withContext(Dispatchers.IO) {
+            // Restart a state-restored game from its executable, not from the old boot snapshot.
+            if (launch.first.contains(".SAVESTAT", ignoreCase = true)) {
+                InstalledGameRepository().findByTitleId(context, titleId)?.installPath
+            } else launch.first
+        }?.takeIf(String::isNotBlank) ?: return false
+        return withContext(Dispatchers.Main) {
+            if (activity.isFinishing || activity.isDestroyed || Ps3Core.instance.saveStateBusy()) false
+            else {
+                activity.intent = Intent(activity.intent).apply {
+                    putExtra(Emulator.EXTRA_TITLE_ID, titleId)
+                    putExtra(Emulator.EXTRA_GAME_PATH, path)
+                }
+                CoreSettingsTreeCache.invalidateTree()
+                activity.recreate()
+                true
+            }
+        }
+    }
 
     fun launchSaveState(context: Context, titleId: String, slot: Int): LaunchResult {
         if (!EmulatorStorage.hasInstalledFirmware(context)) return LaunchResult.MissingFirmware

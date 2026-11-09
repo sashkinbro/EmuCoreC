@@ -1,5 +1,8 @@
 #include "stdafx.h"
 #include "BufferUtils.h"
+
+#include <vector>
+#include <cstring>
 #include "util/to_endian.hpp"
 #include "util/sysinfo.hpp"
 #include "Utilities/JIT.h"
@@ -23,9 +26,6 @@
 #endif
 #undef FORCE_INLINE
 #include "Emu/CPU/sse2neon.h"
-#if defined(__GNUC__) || defined(__clang__)
-#include "BufferUtils_sve.h"
-#endif
 #endif
 
 #if defined(_MSC_VER) || !defined(__SSE2__)
@@ -341,8 +341,6 @@ namespace
 			return (u64{max_index} << 32) | u64{min_index};
 		}
 
-
-
 #ifdef ARCH_X64
 		template <typename T>
 		static void build_upload_untouched(asmjit::simd_builder& c, native_args& args)
@@ -504,20 +502,6 @@ namespace
 				upload_swapped_avx2_skip_restart<u32>,
 			};
 			return s_avx2;
-		}
-#elif defined(ARCH_ARM64) && (defined(__GNUC__) || defined(__clang__))
-		if (utils::has_sve())
-		{
-			static const upload_untouched_skip_restart_dispatch s_sve =
-			{
-#ifdef BUFFERUTILS_HAS_SVE2P2
-				utils::has_sve2p2() ? upload_swapped_sve2p2_skip_restart : upload_swapped_neon_skip_restart<u16>,
-#else
-				upload_swapped_neon_skip_restart<u16>,
-#endif
-				upload_swapped_sve_skip_restart,
-			};
-			return s_sve;
 		}
 #endif
 #if defined(ARCH_ARM64)
@@ -882,6 +866,67 @@ u32 get_index_type_size(rsx::index_array_type type)
 	fmt::throw_exception("Wrong index type");
 }
 
+namespace
+{
+	// Index patterns for the primitives the host cannot draw natively depend only on the
+	// index, never on the draw's data, so the buffer for N primitives is exactly a prefix of
+	// the buffer for any larger N. They were being regenerated per draw call regardless, one
+	// u16 at a time, straight into mapped GPU memory.
+	//
+	// Building them once and copying the prefix turns tens of thousands of dependent scalar
+	// stores into a single bulk copy, which also suits write-combined memory far better than
+	// a scatter of small writes. Minecraft is quads throughout, so this path runs on
+	// essentially every draw.
+	//
+	// The tables stop at 65536 vertices to bound their size; anything beyond that falls back
+	// to the original loop.
+	//
+	// They hold u32 because the index buffers they are copied into are 32-bit since RPCS3
+	// #19686, which lets one draw expand past 65536 vertices. A u16 table copied into those
+	// buffers fills them with pairs of indices read as one, so every quad and fan draws from
+	// vertices that do not exist: full-screen passes vanish and games show a black screen.
+	constexpr u32 max_expanded_vertices = 65536;
+
+	const std::vector<u32>& quad_index_table()
+	{
+		// Function-local static: initialised once, thread-safe, and the offload thread
+		// reaches this too.
+		static const std::vector<u32> table = []
+		{
+			std::vector<u32> v(max_expanded_vertices / 4 * 6);
+			for (u32 i = 0; i < max_expanded_vertices / 4; i++)
+			{
+				v[6 * i + 0] = 4 * i + 0;
+				v[6 * i + 1] = 4 * i + 1;
+				v[6 * i + 2] = 4 * i + 2;
+				v[6 * i + 3] = 4 * i + 2;
+				v[6 * i + 4] = 4 * i + 3;
+				v[6 * i + 5] = 4 * i + 0;
+			}
+			return v;
+		}();
+
+		return table;
+	}
+
+	const std::vector<u32>& fan_index_table()
+	{
+		static const std::vector<u32> table = []
+		{
+			std::vector<u32> v((max_expanded_vertices - 2) * 3);
+			for (u32 i = 0; i < max_expanded_vertices - 2; i++)
+			{
+				v[3 * i + 0] = 0;
+				v[3 * i + 1] = i + 1;
+				v[3 * i + 2] = i + 2;
+			}
+			return v;
+		}();
+
+		return table;
+	}
+}
+
 void write_index_array_for_non_indexed_non_native_primitive_to_buffer(char* dst, rsx::primitive_type draw_mode, unsigned count)
 {
 	auto typedDst = reinterpret_cast<u32*>(dst);
@@ -893,6 +938,13 @@ void write_index_array_for_non_indexed_non_native_primitive_to_buffer(char* dst,
 		return;
 	case rsx::primitive_type::triangle_fan:
 	case rsx::primitive_type::polygon:
+	{
+		if (count >= 2 && count <= max_expanded_vertices) [[likely]]
+		{
+			std::memcpy(typedDst, fan_index_table().data(), (count - 2) * 3 * sizeof(u32));
+			return;
+		}
+
 		for (unsigned i = 0; i < (count - 2); i++)
 		{
 			typedDst[3 * i] = 0;
@@ -900,8 +952,18 @@ void write_index_array_for_non_indexed_non_native_primitive_to_buffer(char* dst,
 			typedDst[3 * i + 2] = i + 2;
 		}
 		return;
+	}
 	case rsx::primitive_type::quads:
-		for (unsigned i = 0; i < count / 4; i++)
+	{
+		const unsigned quads = count / 4;
+
+		if (count <= max_expanded_vertices) [[likely]]
+		{
+			std::memcpy(typedDst, quad_index_table().data(), quads * 6 * sizeof(u32));
+			return;
+		}
+
+		for (unsigned i = 0; i < quads; i++)
 		{
 			// First triangle
 			typedDst[6 * i] = 4 * i;
@@ -913,6 +975,7 @@ void write_index_array_for_non_indexed_non_native_primitive_to_buffer(char* dst,
 			typedDst[6 * i + 5] = 4 * i;
 		}
 		return;
+	}
 	case rsx::primitive_type::quad_strip:
 	case rsx::primitive_type::points:
 	case rsx::primitive_type::lines:

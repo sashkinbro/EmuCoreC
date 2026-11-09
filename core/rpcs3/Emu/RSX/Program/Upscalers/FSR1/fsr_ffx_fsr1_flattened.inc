@@ -283,8 +283,8 @@ sharpness=AExp2F1(-sharpness);
 varAF2(hSharp)=initAF2(sharpness,sharpness);
 con[0]=AU1_AF1(sharpness);
 con[1]=AU1_AH2_AF2(hSharp);
-con[2]=AU1_(0);
-con[3]=AU1_(0);}
+con[2]=0;
+con[3]=0;}
 #if defined(A_GPU)&&defined(FSR_RCAS_F)
 AF4 FsrRcasLoadF(ASU2 p);
 void FsrRcasInputF(inout AF1 r,inout AF1 g,inout AF1 b);

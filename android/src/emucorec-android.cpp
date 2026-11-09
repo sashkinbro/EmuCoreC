@@ -7,11 +7,14 @@
 #include "Crypto/sha1.h"
 #include "Emu/Audio/Cubeb/CubebBackend.h"
 #include "Emu/Audio/Oboe/OboeCapture.h"
+#include "Emu/Audio/Oboe/OboeBackend.h"
+#include "Emu/Cell/Modules/cellAudio.h"
 #include "Emu/Audio/Null/NullAudioBackend.h"
 #include "Emu/Cell/PPUAnalyser.h"
 #include "Emu/Cell/SPURecompiler.h"
 #include "Emu/Cell/SPUThread.h"
 #include "Emu/emu_callbacks.h"
+#include "Emu/android_app_state.h"
 #include "Emu/IdManager.h"
 #include "Emu/Io/KeyboardHandler.h"
 #include "Emu/Io/Skylander.h"
@@ -23,16 +26,16 @@
 #include "Emu/Io/Null/null_camera_handler.h"
 #include "Emu/Io/Null/null_music_handler.h"
 #include "Emu/Io/pad_config_types.h"
-#include "Emu/RSX/Null/NullGSRender.h"
+#include "Emu/RSX/Core/RSXRendererFactory.h"
 #include "Emu/RSX/Overlays/overlay_manager.h"
 #include "Emu/RSX/Overlays/overlay_save_dialog.h"
 #include "Emu/RSX/Overlays/overlay_trophy_notification.h"
 #include "Emu/RSX/Overlays/overlay_utils.h"
 #include "Emu/RSX/RSXThread.h"
+#include "Emu/RSX/VK/vkutils/instance.h"
 #ifdef RSX_GLES
-#include "Emu/RSX/GL/GLGSRender.h"
+#include "Emu/RSX/GL/OpenGL.h"
 #endif
-#include "Emu/RSX/VK/VKGSRender.h"
 #include "Emu/savestate_utils.hpp"
 // patch_engine, needed by the precompile path before ppu_load_exec.
 #include "Utilities/bin_patch.h"
@@ -142,6 +145,7 @@ static std::atomic<u64> g_native_window_epoch;
 extern std::string g_android_executable_dir;
 extern std::string g_android_config_dir;
 extern std::string g_android_cache_dir;
+extern std::string g_android_private_cache_dir;
 // Exact SoC identity as reported by Android (Build.SOC_MANUFACTURER/SOC_MODEL),
 // handed in through emucorec_setSocInfo. MIDRs cannot identify the SoC.
 static std::string g_android_soc_info;
@@ -290,6 +294,20 @@ struct LogListener : logs::listener {
 // Owned by RSXThread.cpp. Setting it makes the next present hand its frame to
 // GSFrameBase::take_screenshot.
 extern atomic_t<bool> g_user_asked_for_screenshot;
+extern atomic_t<bool> g_flush_pipeline_cache_requested;
+extern atomic_t<u64> g_pipeline_cache_flush_generation;
+static std::atomic<bool> g_app_pause_in_flight{false};
+
+// Present owns the Vulkan cache. Let it finish a bounded write before the app
+// stops presenting, so background process reclamation does not lose this session's pipelines.
+static void flush_pipeline_cache_before_pause(int max_wait_ms) {
+  if (!Emu.IsRunning() || g_cfg.video.renderer != video_renderer::vulkan) return;
+  const u64 before = g_pipeline_cache_flush_generation;
+  g_flush_pipeline_cache_requested = true;
+  for (int waited = 0; waited < max_wait_ms && g_pipeline_cache_flush_generation == before; waited += 5) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  }
+}
 
 static constexpr u32 kThumbMaxEdge = 320;
 
@@ -297,6 +315,7 @@ static shared_mutex g_thumb_mutex;
 static std::vector<u8> g_thumb_rgba; // tightly packed RGBA8
 static u32 g_thumb_width = 0;
 static u32 g_thumb_height = 0;
+static atomic_t<u64> g_thumb_generation{0};
 
 static void emucorec_store_thumbnail(const std::vector<u8> &src, u32 width,
                                    u32 height, bool is_bgra) {
@@ -334,6 +353,7 @@ static void emucorec_store_thumbnail(const std::vector<u8> &src, u32 width,
   g_thumb_rgba = std::move(out);
   g_thumb_width = out_w;
   g_thumb_height = out_h;
+  g_thumb_generation++;
 }
 
 // "AX3T", u32 width, u32 height, then width*height RGBA8. A private format on purpose:
@@ -418,6 +438,8 @@ struct GraphicsFrame : GSFrameBase {
 
   void close() override {}
   void reset() override {}
+  // A single Android window serves either backend; reset can reuse it after a renderer change.
+  video_renderer renderer() const override { return g_cfg.video.renderer; }
   bool shown() override { return true; }
   void hide() override {}
   void show() override {}
@@ -451,7 +473,7 @@ struct GraphicsFrame : GSFrameBase {
 
   void delete_context(draw_context_t ctx) override {
 #ifdef RSX_GLES
-    if (!usingGlRenderer()) {
+    if (!ctx) {
       return;
     }
 
@@ -486,13 +508,18 @@ struct GraphicsFrame : GSFrameBase {
       return;
     }
 
-    gl::es::make_current(ctx, getNativeWindow());
+    // Compiler contexts share objects, but cannot bind the primary context's window surface.
+    gl::es::make_current(ctx, ctx == primaryGlContext ? getNativeWindow() : nullptr);
 #endif
   }
 
   void flip(draw_context_t ctx, bool skip_frame = false) override {
 #ifdef RSX_GLES
     if (!usingGlRenderer()) {
+      return;
+    }
+
+    if (ctx && !gl::es::present_window(ctx, getNativeWindow(), display_epoch())) {
       return;
     }
 
@@ -535,7 +562,9 @@ struct GraphicsFrame : GSFrameBase {
   }
 
   display_handle_t handle() const override { return getNativeWindow(); }
+  // Keep the old local name while the new renderer uses upstream's display_epoch.
   u64 surface_generation() const override { return g_native_window_epoch.load(); }
+  u64 display_epoch() const override { return g_native_window_epoch.load(); }
 
 
   bool can_consume_frame() const override { return false; }
@@ -1158,6 +1187,31 @@ static std::pair<std::string, std::u32string> g_strings[] = {
     MAKE_STRING(SAVESTATE_FAILED_DUE_TO_MISSING_SPU_SETTING,
                 "SaveState failed: Failed to lock SPU state, enabling "
                 "SPU-Compatible mode may fix it."),
+    // Newly added upstream shader, save-dialog and system-menu messages.
+    MAKE_STRING(RSX_OVERLAYS_COMPILING_SHADERS_TITLE, "Shader Compilation"),
+    MAKE_STRING(RSX_OVERLAYS_COMPILING_SHADERS_VULKAN, "Building base variant %0..."),
+    MAKE_STRING(RSX_OVERLAYS_COMPILING_SHADERS_OPENGL_BUILD, "Building variant %0..."),
+    MAKE_STRING(RSX_OVERLAYS_COMPILING_SHADERS_OPENGL_LINK, "Linking variant %0..."),
+    MAKE_STRING(RSX_OVERLAYS_COMPILING_SPU_CODE, "Compiling SPU Code"),
+    MAKE_STRING(CELL_SAVEDATA_SAVE, "Do you want to save this data?\n\n%0"),
+    MAKE_STRING(HOME_MENU_SETTINGS_VIDEO_RENDERER, "Graphics Renderer"),
+    MAKE_STRING(HOME_MENU_SETTINGS_ADVANCED_PPU_EVENT_WAKE_UP_DELAY,
+                "PPU Event Wake-Up Delay"),
+    MAKE_STRING(HOME_MENU_SETTINGS_OVERLAYS_SHOW_SPU_COMPILATION_HINT,
+                "Show SPU Compilation Hint"),
+    MAKE_STRING(HOME_MENU_SETTINGS_SYSTEM_START_BIG_PICTURE_MODE, "Open Big Picture Mode On Boot"),
+    MAKE_STRING(HOME_MENU_TROPHY_SYNC_TROPHIES, "Sync trophies"),
+    MAKE_STRING(HOME_MENU_TROPHY_SYNCING_TROPHIES, "Syncing..."),
+    MAKE_STRING(HOME_MENU_TROPHY_SYNC_SUCCESS, "Synced!"),
+    MAKE_STRING(HOME_MENU_TROPHY_SYNC_FAILED, "Sync failed"),
+    MAKE_STRING(BIG_PICTURE_MODE_TITLE, "Big Picture Mode"),
+    MAKE_STRING(BIG_PICTURE_MENU_GAMES, "Games"),
+    MAKE_STRING(BIG_PICTURE_MENU_EXIT, "Exit Big Picture Mode"),
+    MAKE_STRING(BIG_PICTURE_NO_GAMES_FOUND, "No games found.\nAdd games to EmuCoreC's library first."),
+    MAKE_STRING(BIG_PICTURE_LOADING, "Loading games..."),
+    MAKE_STRING(BIG_PICTURE_GAME_DETAILS_START, "Start"),
+    MAKE_STRING(BIG_PICTURE_HINT_BACK, "Back"),
+    MAKE_STRING(BIG_PICTURE_HINT_SELECT, "Select"),
 };
 
 #undef MAKE_STRING
@@ -1168,7 +1222,7 @@ static std::pair<std::string, std::u32string> g_strings[] = {
 static_assert(
     std::size(g_strings) ==
         std::size_t(
-            localized_string_id::SAVESTATE_FAILED_DUE_TO_MISSING_SPU_SETTING) +
+            localized_string_id::BIG_PICTURE_HINT_SELECT) +
             1,
     "localized_string_id grew: add the new string(s) to g_strings and move "
     "this to the new last id");
@@ -2107,24 +2161,7 @@ static void setupCallbacks() {
       // the switch and we do not have to re-list every handler it gains.
       .init_gs_render =
           [](utils::serial *ar) {
-            switch (g_cfg.video.renderer.get()) {
-            case video_renderer::null:
-              g_fxo->init<rsx::thread, named_thread<NullGSRender>>(ar);
-              break;
-            case video_renderer::vulkan:
-              g_fxo->init<rsx::thread, named_thread<VKGSRender>>(ar);
-              break;
-
-            // EmuCoreC: the GL backend only exists when RSX_GLES is compiled in.
-#ifdef RSX_GLES
-            case video_renderer::opengl:
-              g_fxo->init<rsx::thread, named_thread<GLGSRender>>(ar);
-              break;
-#endif
-
-            default:
-              break;
-            }
+            rsx::create_render_thread(ar);
           },
       .get_audio =
           [](auto...) {
@@ -2134,7 +2171,9 @@ static void setupCallbacks() {
             case audio_renderer::null:
               result = std::make_shared<NullAudioBackend>();
               break;
-
+            case audio_renderer::oboe:
+              result = std::make_shared<OboeBackend>();
+              break;
 
             case audio_renderer::cubeb:
             default:
@@ -2372,6 +2411,28 @@ extern "C" void emucorec_setSocInfo(std::string_view socInfo) {
   g_android_soc_info = std::string(socInfo);
 }
 
+extern "C" void emucorec_setPrivateCacheDir(std::string_view dir) {
+  g_android_private_cache_dir = std::string(dir);
+  if (!g_android_private_cache_dir.empty() && g_android_private_cache_dir.back() != '/') {
+    g_android_private_cache_dir += '/';
+  }
+}
+
+// App visibility is independent of menu/game pause. Workers use this flag only
+// to reduce polling while no activity in the main app process is visible.
+extern "C" void emucorec_setAppBackgrounded(bool backgrounded) {
+  g_android_app_backgrounded.store(backgrounded, std::memory_order_relaxed);
+}
+
+// Shared by both presenters. The app can send the same packed Cardboard settings live.
+atomic_t<u32> g_cardboard_vr{0};
+extern "C" void emucorec_setCardboardVr(bool enabled, int size, int spacing, int vertical) {
+  g_cardboard_vr = (enabled ? 0x80000000u : 0u) |
+      (static_cast<u32>(std::clamp(vertical, -100, 100) + 128) << 16) |
+      (static_cast<u32>(std::clamp(spacing, -100, 100) + 128) << 8) |
+      static_cast<u32>(std::clamp(size, 20, 100));
+}
+
 extern "C" bool emucorec_initialize(std::string_view rootDir,
                                   std::string_view user) {
   auto rootDirStr = fix_dir_path(std::string(rootDir));
@@ -2548,6 +2609,7 @@ extern "C" bool emucorec_initialize(std::string_view rootDir,
   Emu.SetDefaultGraphicsAdapter("Default");
 
   Emu.Init();
+  save_states::cleanup_history();
 
 #ifndef RSX_GLES
   // Migrate configurations written by older Android builds which exposed the
@@ -2760,6 +2822,19 @@ extern "C" void emucorec_resume() { Emu.Resume(); }
 // underneath it, and why pause/resume were asymmetric: resume() reached the core, pause() did not.
 extern "C" void emucorec_pause() {
   // Restoration owns the VM until its run callback or deferred stop completes.
+  if (save_states::busy()) return;
+  g_app_pause_in_flight = true;
+  const AtExit clear_in_flight{[] { g_app_pause_in_flight = false; }};
+  if (Emu.IsRunning()) {
+    const u64 before = g_thumb_generation;
+    g_user_asked_for_screenshot = true;
+    for (int waited = 0; waited < 250 && g_thumb_generation == before; waited += 5) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    // Do not leave a late readback request alive across the pause transition.
+    g_user_asked_for_screenshot = false;
+  }
+  flush_pipeline_cache_before_pause(500);
   if (!save_states::busy()) Emu.Pause();
 }
 
@@ -2887,7 +2962,9 @@ static std::string read_sfo_game_info(const std::string &root,
   if (safe_psf_get_string(psf, "TITLE_ID").empty()) return "{}";
   const bool haveIcon = !iconOut.empty() &&
       copy_game_icon(fs::file{root + "/ICON0.PNG"}, iconOut);
-  return sfo_game_info_json(psf, haveIcon);
+  std::string result = sfo_game_info_json(psf, haveIcon);
+  result.pop_back();
+  return result + ",\"metadataRoot\":" + json_quote(root) + "}";
 }
 
 extern "C" std::string emucorec_probeDiscInfo(std::string_view isoPath,
@@ -2897,7 +2974,17 @@ extern "C" std::string emucorec_probeDiscInfo(std::string_view isoPath,
   try {
     if (fs::is_dir(path)) {
       const auto info = read_sfo_game_info(path + "/PS3_GAME", iconOut);
-      return info != "{}" ? info : read_sfo_game_info(path, iconOut);
+      if (info != "{}") return info;
+      const auto psf = psf::load_object(path + "/PARAM.SFO");
+      // get_sfo_dir_from_game_path follows the same verified EDAT rule as boot.
+      // Guard its typed string reads for malformed library metadata first.
+      if (safe_psf_get_string(psf, "CATEGORY") == "HG" &&
+          !safe_psf_get_string(psf, "TITLE_ID").empty() &&
+          !safe_psf_get_string(psf, "CONTENT_ID").empty() &&
+          fs::is_file(path + "/C00/PARAM.SFO")) {
+        return read_sfo_game_info(rpcs3::utils::get_sfo_dir_from_game_path(path), iconOut);
+      }
+      return read_sfo_game_info(path, iconOut);
     }
     iso_archive archive(path);
     if (!archive.is_valid() || archive.get_key_status() != iso_key_status::OK) {
@@ -3142,6 +3229,11 @@ extern "C" bool emucorec_surfaceEvent(JNIEnv *env, jobject surface, jint event) 
       // transient focus loss) fires the gained event and resumes; that resume has to win
       // the race against this deferred pause, not lose to it.
       if (g_native_window.load() != nullptr) {
+        return;
+      }
+
+      flush_pipeline_cache_before_pause(500);
+      if (g_native_window.load() != nullptr || g_app_pause_in_flight || save_states::busy()) {
         return;
       }
 
@@ -4293,6 +4385,8 @@ static void emit_cfg_json(const cfg::_base *node, std::string &out) {
 
   out += "{\"type\":";
   json_append_escaped(out, cfg_type_name(node));
+  out += ",\"dynamic\":";
+  out += (node->get_is_dynamic() && node != &g_cfg.video.renderer) ? "true" : "false";
 
   // Booleans go out as real JSON booleans -- the Kotlin reads them with
   // getBoolean(), which throws on a quoted string.
@@ -4494,6 +4588,28 @@ static bool settings_set(std::string_view path, std::string_view valueString, bo
   }
 
   const std::string previous = root->to_string();
+  // cfg leaf from_string ignores its dynamic_only argument. Validate the desired
+  // value independently, then persist it without changing a running game's boot config.
+  // Renderer is marked dynamic upstream but Android must also defer it until boot.
+  const bool defer_until_boot = (!root->get_is_dynamic() || root == &g_cfg.video.renderer) &&
+      !Emu.IsStopped(true) && decoded != previous;
+  if (defer_until_boot) {
+    auto validation = std::make_unique<cfg_root>();
+    validation->from_default();
+    if (!validation->from_string(g_cfg.to_string())) return false;
+    auto *candidate = find_cfg_node(validation.get(), path);
+    if (!candidate || !candidate->from_string(decoded)) return false;
+    if (persist) {
+      std::lock_guard lock(g_global_settings_mutex);
+      g_global_settings_edits.emplace_back(path, decoded);
+      if (g_settings_batch_depth.load() <= 0 && !write_global_settings_edits()) {
+        g_global_settings_edits.pop_back();
+        return false;
+      }
+    }
+    emucorec_android.notice("settingsSet: %s saved for the next boot", path);
+    return true;
+  }
   if (!root->from_string(decoded, !Emu.IsStopped())) {
     emucorec_android.error("settingsSet: node %s does not accept value '%s'", path,
                         decoded);
@@ -4545,6 +4661,9 @@ static bool settings_set(std::string_view path, std::string_view valueString, bo
   } else if (path.starts_with("Video@@Debug overlay") ||
              path.starts_with("Miscellaneous@@Debug overlay")) {
     rsx::overlays::reset_debug_overlay();
+  } else if (path.starts_with("Audio@@")) {
+    // The desktop frontend reconfigures active streams after dynamic audio edits.
+    audio::configure_audio();
   }
   return true;
 }

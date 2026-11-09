@@ -1542,6 +1542,7 @@ namespace utils
 			while ((thread_ctrl::state() != thread_state::aborting || m_flush) && !has_error)
 			{
 				const u32 work_signal = m_work_signal;
+
 				// Fetch video frame
 				encoder_frame frame_data;
 				bool got_frame = false;

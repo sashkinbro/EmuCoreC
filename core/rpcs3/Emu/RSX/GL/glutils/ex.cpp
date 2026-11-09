@@ -3,19 +3,34 @@
 
 namespace gl::ex
 {
+	// glGetIntegerv names a binding, not a target. Asked for GL_UNIFORM_BUFFER itself it fails,
+	// and the target was cleared rather than restored, which for GL_ELEMENT_ARRAY_BUFFER took the
+	// bound vertex array's index buffer with it.
+	static GLenum binding_of(GLenum target)
+	{
+		switch (target)
+		{
+		case GL_ARRAY_BUFFER: return GL_ARRAY_BUFFER_BINDING;
+		case GL_ELEMENT_ARRAY_BUFFER: return GL_ELEMENT_ARRAY_BUFFER_BINDING;
+		case GL_PIXEL_PACK_BUFFER: return GL_PIXEL_PACK_BUFFER_BINDING;
+		case GL_PIXEL_UNPACK_BUFFER: return GL_PIXEL_UNPACK_BUFFER_BINDING;
+		case GL_UNIFORM_BUFFER: return GL_UNIFORM_BUFFER_BINDING;
+		case GL_TEXTURE_BUFFER: return GL_TEXTURE_BUFFER_BINDING;
+		case GL_SHADER_STORAGE_BUFFER: return GL_SHADER_STORAGE_BUFFER_BINDING;
+		case GL_COPY_READ_BUFFER: return GL_COPY_READ_BUFFER_BINDING;
+		case GL_COPY_WRITE_BUFFER: return GL_COPY_WRITE_BUFFER_BINDING;
+		default: return GL_NONE;
+		}
+	}
+
 	void glNamedBufferStorageEX(GLuint buffer, GLenum target, GLsizeiptr size, const void* data, GLbitfield flags)
 	{
-#ifdef RSX_GLES
-		// GLES core has no immutable buffer storage. This path is only a safety
-		// fallback because the GLES capability table keeps buffer_storage off.
-		// Preserve the caller's binding and provide equivalent mutable storage.
-		gl::gles::with_buffer(buffer, target, [&]
-		{
-			glBufferData(target, size, data, (flags & GL_DYNAMIC_STORAGE_BIT) ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW);
-		});
-#else
 		GLuint restore = GL_NONE;
-		glGetIntegerv(target, utils::bless<GLint>(&restore));
+		if (const GLenum binding = binding_of(target))
+		{
+			glGetIntegerv(binding, utils::bless<GLint>(&restore));
+		}
+
 
 		glBindBuffer(target, buffer);
 		glBufferStorage(target, size, data, flags);
@@ -24,6 +39,5 @@ namespace gl::ex
 		{
 			glBindBuffer(target, restore);
 		}
-#endif
 	}
 }

@@ -14,6 +14,8 @@ namespace save_states
     // App-owned numbered slots require their committed integrity metadata.
     // External RPCS3 states keep the core's existing compatibility policy.
     bool validate_slot_file(const std::string& path);
+    // Startup only, while fully stopped: reclaim authenticated copies left by a killed process.
+    void cleanup_history();
     void completed(bool success, bool game_stopped, const std::string& path);
     void running();
     void stopped();

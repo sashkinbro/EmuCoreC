@@ -255,7 +255,6 @@ struct cell_audio_config
 	u32 audio_sample_size = 0;
 	f64 audio_min_buffer_duration = 0.0;
 
-	u32 audio_buffer_length = 0;
 
 	/*
 	 * Buffering
@@ -362,6 +361,9 @@ public:
 
 	u64 get_enqueued_samples() const;
 	u64 get_enqueued_playtime() const;
+
+	// Whole audio blocks discarded when the backend ring has no room.
+	atomic_t<u32> m_dropped_blocks{0};
 
 	bool is_playing() const
 	{
@@ -473,6 +475,10 @@ public:
 	u64 m_counter = 0;
 	u64 m_start_time = 0;
 	u64 m_dynamic_period = 0;
+
+	// Diagnostic counters for the periodic backend-buffer report.
+	u64 m_last_buffer_report = 0;
+	u64 m_last_underruns = 0;
 	f32 m_average_playtime = 0.0f;
 	bool m_backend_failed = false;
 	bool m_audio_should_restart = false;

@@ -8,11 +8,15 @@ namespace rsx
 {
 	namespace reports
 	{
+		static occlusion_query_provider s_null_provider;
+
 		ZCULL_control::ZCULL_control()
+			: m_provider(&s_null_provider)
 		{
-			for (auto& query : m_occlusion_query_data)
+			for (u32 i = 0; i < occlusion_query_count; ++i)
 			{
-				m_free_occlusion_pool.push(&query);
+				m_occlusion_query_data[i].slot_index = i;
+				m_free_occlusion_pool.push(&m_occlusion_query_data[i]);
 			}
 
 			for (auto& stat : m_statistics_map)
@@ -21,17 +25,117 @@ namespace rsx
 			}
 		}
 
+		void ZCULL_control::set_provider(occlusion_query_provider* provider)
+		{
+			if (!provider)
+			{
+				provider = &s_null_provider;
+			}
+
+			if (provider == m_provider)
+			{
+				return;
+			}
+
+			on_provider_lost();
+			m_provider = provider;
+		}
+
+		void ZCULL_control::on_provider_lost()
+		{
+			if (m_current_task)
+			{
+				m_current_task->orphaned = true;
+			}
+
+			for (auto& writer : m_pending_writes)
+			{
+				if (writer.query)
+				{
+					writer.query->orphaned = true;
+				}
+			}
+		}
+
+		void ZCULL_control::begin_host_query(occlusion_query_info* query)
+		{
+			// New queries always start on the current provider
+			ensure(!query->orphaned);
+			m_provider->begin_occlusion_query(query);
+		}
+
+		void ZCULL_control::end_host_query(occlusion_query_info* query)
+		{
+			if (!query->orphaned)
+			{
+				m_provider->end_occlusion_query(query);
+			}
+		}
+
+		bool ZCULL_control::check_host_query(occlusion_query_info* query)
+		{
+			return query->orphaned || m_provider->check_occlusion_query_status(query);
+		}
+
+		void ZCULL_control::read_host_query(occlusion_query_info* query)
+		{
+			if (query->orphaned)
+			{
+				// Same result as the null provider
+				query->result = umax;
+				return;
+			}
+
+			m_provider->get_occlusion_query_result(query);
+		}
+
+		void ZCULL_control::discard_host_query(occlusion_query_info* query)
+		{
+			if (!query->orphaned)
+			{
+				m_provider->discard_occlusion_query(query);
+			}
+		}
+
 		ZCULL_control::~ZCULL_control()
 		{
+			// NOTE ON m_pages_mutex: this destructor is the only place that takes it. Every actual
+			// mutator of m_locked_pages -- disable_optimizations, on_access_violation, the page
+			// lock/unlock paths -- is marked "externally synchronized" and never locks anything,
+			// because the RSX thread is meant to be their only writer. So the lock here buys
+			// nothing against a writer still running, and holding it must not be mistaken for
+			// safety: if the RSX thread is still touching this map, the map is already being torn
+			// apart underneath us and clearing it frees garbage. That is the crash seen on device
+			// as scudo reportInvalidChunkState inside this destructor, reached after a fatal
+			// VK_ERROR_SURFACE_LOST killed the RSX thread mid-operation while the Main Callbacks
+			// thread went on to destroy its objects. The real fix was to stop that error being
+			// fatal (see swapchain_WSI::init); this function cannot undo a corrupted container.
 			std::scoped_lock lock(m_pages_mutex);
 
 			for (auto& block : m_locked_pages)
 			{
 				for (auto& p : block)
 				{
-					if (p.second.prot != utils::protection::rw)
+					auto& page = p.second;
+
+					if (page.prot != utils::protection::rw)
 					{
+#ifdef __ANDROID__
 						rsx::mm_protect_immediate(vm::base(p.first), utils::get_page_size(), utils::protection::rw);
+#else
+						utils::memory_protect(vm::base(p.first), utils::get_page_size(), utils::protection::rw);
+#endif
+						page.prot = utils::protection::rw;
+					}
+
+					// Drain the refs the way unlock_pages does. Without this the pages are freed
+					// still holding references and m_critical_reports_in_flight is left permanently
+					// unbalanced -- harmless at process exit, wrong on any teardown that is followed
+					// by another boot in the same process, which is every restart on Android.
+					while (page.has_refs())
+					{
+						m_critical_reports_in_flight++;
+						page.release();
 					}
 				}
 
@@ -49,14 +153,14 @@ namespace rsx
 				{
 					ensure(unit_enabled && m_current_task == nullptr);
 					allocate_new_query(ptimer);
-					begin_occlusion_query(m_current_task);
+					begin_host_query(m_current_task);
 				}
 				else
 				{
 					ensure(m_current_task);
 					if (m_current_task->num_draws)
 					{
-						end_occlusion_query(m_current_task);
+						end_host_query(m_current_task);
 						m_current_task->active = false;
 						m_current_task->pending = true;
 						m_current_task->sync_tag = m_timer++;
@@ -68,7 +172,7 @@ namespace rsx
 					}
 					else
 					{
-						discard_occlusion_query(m_current_task);
+						discard_host_query(m_current_task);
 						free_query(m_current_task);
 						m_current_task->active = false;
 					}
@@ -93,6 +197,15 @@ namespace rsx
 			{
 				// Start
 				set_active(ptimer, true, flush_queue);
+			}
+		}
+
+		void ZCULL_control::on_context_switch(class ::rsx::thread* ptimer)
+		{
+			if (host_queries_active)
+			{
+				// The incoming context's state restarts the queries if it needs them
+				set_active(ptimer, false, false);
 			}
 		}
 
@@ -137,7 +250,7 @@ namespace rsx
 			if (m_current_task && type == CELL_GCM_ZPASS_PIXEL_CNT)
 			{
 				m_current_task->owned = true;
-				end_occlusion_query(m_current_task);
+				end_host_query(m_current_task);
 				m_pending_writes.push_back({});
 
 				m_current_task->active = false;
@@ -147,7 +260,7 @@ namespace rsx
 				m_pending_writes.back().query = m_current_task;
 
 				allocate_new_query(ptimer);
-				begin_occlusion_query(m_current_task);
+				begin_host_query(m_current_task);
 			}
 			else
 			{
@@ -216,11 +329,13 @@ namespace rsx
 					m_current_task = m_free_occlusion_pool.top();
 					m_free_occlusion_pool.pop();
 
+					m_current_task->ctx_id = ptimer->get_context()->id();
 					m_current_task->data_type = 0;
 					m_current_task->num_draws = 0;
 					m_current_task->result = 0;
 					m_current_task->active = true;
 					m_current_task->owned = false;
+					m_current_task->orphaned = false;
 					m_current_task->sync_tag = 0;
 					m_current_task->timestamp = 0;
 
@@ -268,12 +383,12 @@ namespace rsx
 			// Discard any running queries. The results will never be read anyway.
 			if (m_current_task && m_current_task->active)
 			{
-				discard_occlusion_query(m_current_task);
+				discard_host_query(m_current_task);
 				free_query(m_current_task);
 				m_current_task->active = false;
 
 				allocate_new_query(ptimer);
-				begin_occlusion_query(m_current_task);
+				begin_host_query(m_current_task);
 			}
 
 			if (!m_pending_writes.empty())
@@ -284,7 +399,7 @@ namespace rsx
 				{
 					if (!It->sink)
 					{
-						discard_occlusion_query(It->query);
+						discard_host_query(It->query);
 						free_query(It->query);
 						valid_size--;
 						ptimer->async_tasks_pending--;
@@ -395,7 +510,19 @@ namespace rsx
 				write(writer, ptimer->timestamp(), value);
 			}
 
-			if (writer->query && writer->query->sync_tag == ptimer->cond_render_ctrl.eval_sync_tag)
+			if (!writer->query)
+			{
+				return;
+			}
+
+			// Resolve which context this query is meant for.
+			context* owner = ptimer->get_context();
+			if (owner->id() != writer->query->ctx_id) [[unlikely]]
+			{
+				owner = ptimer->find_context(writer->query->ctx_id);
+			}
+
+			if (owner && writer->query->sync_tag == owner->cond_render.eval_sync_tag)
 			{
 				bool eval_failed;
 				if (!writer->forwarder) [[likely]]
@@ -411,7 +538,9 @@ namespace rsx
 					eval_failed = (vm::_ref<CellGcmReportData>(writer->sink).value == 0u);
 				}
 
-				ptimer->cond_render_ctrl.set_eval_result(ptimer, eval_failed);
+				// Only the bound context can have host conditional rendering active (bind_context ends it on the way out)
+				ensure(!owner->cond_render.hw_cond_active || owner == ptimer->get_context());
+				owner->cond_render.set_eval_result(ptimer, eval_failed);
 			}
 		}
 
@@ -471,13 +600,13 @@ namespace rsx
 
 					if (implemented && !have_result && query->num_draws)
 					{
-						get_occlusion_query_result(query);
+						read_host_query(query);
 						counter.result += query->result;
 					}
 					else
 					{
 						// Already have a hit, no need to retest
-						discard_occlusion_query(query);
+						discard_host_query(query);
 					}
 
 					free_query(query);
@@ -611,11 +740,11 @@ namespace rsx
 
 					if (!implemented || !query->num_draws || have_result)
 					{
-						discard_occlusion_query(query);
+						discard_host_query(query);
 					}
-					else if (force_read || check_occlusion_query_status(query))
+					else if (force_read || check_host_query(query))
 					{
-						get_occlusion_query_result(query);
+						read_host_query(query);
 						counter.result += query->result;
 					}
 					else
@@ -844,7 +973,11 @@ namespace rsx
 
 				if (page.prot == utils::protection::rw)
 				{
+#ifdef __ANDROID__
 					rsx::mm_protect_immediate(vm::base(page_address), utils::get_page_size(), utils::protection::no);
+#else
+					utils::memory_protect(vm::base(page_address), utils::get_page_size(), utils::protection::no);
+#endif
 					page.prot = utils::protection::no;
 				}
 			}
@@ -892,7 +1025,11 @@ namespace rsx
 
 				if (page.prot != utils::protection::rw)
 				{
+#ifdef __ANDROID__
 					rsx::mm_protect_immediate(vm::base(this_address), utils::get_page_size(), utils::protection::rw);
+#else
+					utils::memory_protect(vm::base(this_address), utils::get_page_size(), utils::protection::rw);
+#endif
 					page.prot = utils::protection::rw;
 				}
 
@@ -933,12 +1070,18 @@ namespace rsx
 						{
 							// R/W to active block
 							need_disable_optimizations = true;    // Defer actual operation
+#if !defined(__APPLE__) && !defined(__ANDROID__)
 							m_pages_accessed[location] = true;
+#endif
 						}
 						else
 						{
 							// R/W to stale block, unload it and move on
+#ifdef __ANDROID__
 							rsx::mm_protect_immediate(vm::base(page_address), utils::get_page_size(), utils::protection::rw);
+#else
+							utils::memory_protect(vm::base(page_address), utils::get_page_size(), utils::protection::rw);
+#endif
 							m_locked_pages[location].erase(page_address);
 
 							return true;
@@ -953,9 +1096,25 @@ namespace rsx
 				auto thr = rsx::get_current_renderer();
 				rsx::eng_lock rlock(thr);
 				std::scoped_lock lock(m_pages_mutex);
+#if defined(__APPLE__) || defined(__ANDROID__)
+				// A fault that waited for the engine lock can find the pages already unlocked
+				if (!m_pages_accessed[location])
+				{
+					disable_optimizations(thr, location);
+				}
+				else
+				{
+					static atomic_t<bool> s_logged = false;
+					if (!s_logged.exchange(true))
+					{
+						rsx_log.notice("ZCULL: report page fault after optimisations were disabled; pages already unlocked");
+					}
+				}
+#else
 				disable_optimizations(thr, location);
+#endif
 
-				thr->m_eng_interrupt_mask |= rsx::pipe_flush_interrupt;
+				thr->eng_interrupt_mask |= rsx::pipe_flush_interrupt;
 				return true;
 			}
 

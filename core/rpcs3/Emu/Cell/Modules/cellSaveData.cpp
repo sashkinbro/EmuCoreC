@@ -825,6 +825,14 @@ static NEVER_INLINE error_code savedata_op(ppu_thread& ppu, u32 operation, u32 v
 		ppu.check_state();
 	};
 
+	const auto lv2_sleep_until = [&lv2_sleep](ppu_thread& ppu, u64 until_time)
+	{
+		if (const u64 current_time = get_guest_system_time(); current_time < until_time)
+		{
+			lv2_sleep(ppu, until_time - current_time);
+		}
+	};
+
 	lv2_sleep(ppu, 500);
 
 	std::memset(g_savedata_context.get_ptr(), 0, g_savedata_context.size());
@@ -1004,7 +1012,7 @@ static NEVER_INLINE error_code savedata_op(ppu_thread& ppu, u32 operation, u32 v
 
 		if (funcList)
 		{
-			listSet->focusPosition = CELL_SAVEDATA_FOCUSPOS_LISTHEAD;
+			listSet->focusPosition = operation == SAVEDATA_OP_LIST_DELETE ? CELL_SAVEDATA_FOCUSPOS_DIRNAME : CELL_SAVEDATA_FOCUSPOS_LISTHEAD;
 
 			std::memset(result.get_ptr(), 0, ::offset32(&CellSaveDataCBResult::userdata));
 
@@ -1078,6 +1086,13 @@ static NEVER_INLINE error_code savedata_op(ppu_thread& ppu, u32 operation, u32 v
 
 			if (listSet->newData)
 			{
+				if (operation == SAVEDATA_OP_LIST_DELETE)
+				{
+					// A delete list has no new data entry
+					cellSaveData.error("savedata_op(): listSet->newData is set for a delete list");
+					return {CELL_SAVEDATA_ERROR_PARAM, "newData in delete list"};
+				}
+
 				switch (listSet->newData->iconPosition)
 				{
 				case CELL_SAVEDATA_ICONPOS_HEAD:
@@ -1206,6 +1221,14 @@ static NEVER_INLINE error_code savedata_op(ppu_thread& ppu, u32 operation, u32 v
 			{
 				if (!listSet->newData)
 				{
+					if (operation != SAVEDATA_OP_LIST_DELETE)
+					{
+						// No new data entry is listed (e.g. the save slot limit was reached): focus the list head instead
+						cellSaveData.warning("savedata_op(): listSet->newData is null while listSet->focusPosition is NEWDATA, focusing the list head");
+						focused = save_entries.empty() ? -1 : 0;
+						break;
+					}
+
 					// ****** sysutil savedata parameter error : 34 ******
 					cellSaveData.error("savedata_op(): listSet->newData is null while listSet->focusPosition is NEWDATA");
 					return {CELL_SAVEDATA_ERROR_PARAM, "34"};
@@ -1262,7 +1285,17 @@ static NEVER_INLINE error_code savedata_op(ppu_thread& ppu, u32 operation, u32 v
 				// Remove savedata by renaming
 				if (!vfs::host::rename(del_path, old_path, &g_mp_sys_dev_hdd0, false))
 				{
-					fmt::throw_exception("Failed to move directory %s (%s)", del_path, fs::g_tls_error);
+					// ARMSX3: Android storage can refuse this rename with errno 1 (EPERM), as it does
+					// when saving (see savedata_commit_by_copy). The rename only exists on the way to
+					// deleting the folder, so the folder is deleted where it is instead.
+					const fs::error rename_error = fs::g_tls_error;
+
+					if (!fs::remove_all(del_path))
+					{
+						fmt::throw_exception("Failed to move directory %s (%s)", del_path, rename_error);
+					}
+
+					cellSaveData.warning("savedata_op(): Could not rename %s for deletion (%s), deleted it in place", del_path, rename_error);
 				}
 
 				// Cleanup
@@ -1316,7 +1349,11 @@ static NEVER_INLINE error_code savedata_op(ppu_thread& ppu, u32 operation, u32 v
 			// UI returns -1 for new save games
 			if (selected == -1)
 			{
-				message = get_localized_string(localized_string_id::CELL_SAVEDATA_SAVE_CONFIRMATION);
+				// Same title as the new data entry of the list
+				const auto icon = listSet->newData->icon;
+				const std::string title = icon && icon->title ? icon->title.get_ptr() : get_localized_string(localized_string_id::CELL_SAVEDATA_NEW_SAVED_DATA_TITLE);
+				message = get_localized_string(operation == SAVEDATA_OP_LIST_LOAD ? localized_string_id::CELL_SAVEDATA_LOAD : localized_string_id::CELL_SAVEDATA_SAVE, title.c_str());
+
 				save_entry.dirName = listSet->newData->dirName.get_ptr();
 				save_entry.escaped = vfs::escape(save_entry.dirName);
 			}
@@ -1704,6 +1741,13 @@ static NEVER_INLINE error_code savedata_op(ppu_thread& ppu, u32 operation, u32 v
 		statGet->sizeKB = !save_entry.isNew ? ::narrow<s32>((size_bytes / 1024) + statGet->sysSizeKB) : 0;
 
 		std::memset(result.get_ptr(), 0, ::offset32(&CellSaveDataCBResult::userdata));
+
+		if (operation <= SAVEDATA_OP_AUTO_LOAD)
+		{
+			// Lower bound of the time measured on a PS3 from the AutoSave/AutoLoad call to funcStat:
+			// 200 ms, 80 ms for a new save
+			lv2_sleep_until(ppu, op_start_time + (save_entry.isNew ? 80'000 : 200'000));
+		}
 
 		// Stat Callback
 		funcStat(ppu, result, statGet, statSet);
@@ -2272,7 +2316,18 @@ static NEVER_INLINE error_code savedata_op(ppu_thread& ppu, u32 operation, u32 v
 		// Backup old savedata
 		if (!vfs::host::rename(dir_path, old_path, &g_mp_sys_dev_hdd0, false))
 		{
-			fmt::throw_exception("Failed to move directory %s (%s)", dir_path, fs::g_tls_error);
+			// ARMSX3: the same refusal can come a step earlier, for the old save's own folder
+			// (Midnight Club: Los Angeles, Android shared storage, 2026-10-31), so it is copied aside
+			// instead. If the old folder cannot be removed afterwards, the commit below finds it still
+			// there and copies the new save over it.
+			const fs::error rename_error = fs::g_tls_error;
+
+			if (!savedata_commit_by_copy(dir_path, old_path))
+			{
+				fmt::throw_exception("Failed to move directory %s (%s)", dir_path, rename_error);
+			}
+
+			cellSaveData.warning("savedata_op(): Could not rename %s aside (%s), copied it instead", dir_path, rename_error);
 		}
 
 		// Commit new savedata
@@ -2305,10 +2360,7 @@ static NEVER_INLINE error_code savedata_op(ppu_thread& ppu, u32 operation, u32 v
 		return display_callback_result_error_message(ppu, *result, errDialog);
 	}
 
-	if (u64 current_time = get_guest_system_time(); current_time < delay_save_until)
-	{
-		lv2_sleep(ppu, delay_save_until - current_time);
-	}
+	lv2_sleep_until(ppu, delay_save_until);
 
 	return savedata_result;
 }
@@ -2642,7 +2694,7 @@ error_code cellSaveDataGetEnableOverlay()
 	// manager.enable_overlay;
 
 	// TODO
-	
+
 	return CELL_OK;
 }
 
@@ -2679,7 +2731,7 @@ error_code cellSaveDataListImport(ppu_thread& /*ppu*/, PSetList setList, u32 max
 error_code cellSaveDataListExport(ppu_thread& /*ppu*/, PSetList setList, u32 maxSizeKB, PFuncDone funcDone, u32 container, vm::ptr<void> userdata)
 {
 	cellSaveData.todo("cellSaveDataListExport(setList=*0x%x, maxSizeKB=%d, funcDone=*0x%x, container=0x%x, userdata=*0x%x)", setList, maxSizeKB, funcDone, container, userdata);
-	
+
 	if (const auto ecode = savedata_check_args(SAVEDATA_OP_LIST_EXPORT, CELL_SAVEDATA_VERSION_OLD, vm::null, CELL_SAVEDATA_ERRDIALOG_NONE,
 		setList, vm::null, vm::null, vm::null, vm::null, vm::null, container, 0x40, userdata, 0, funcDone))
 	{

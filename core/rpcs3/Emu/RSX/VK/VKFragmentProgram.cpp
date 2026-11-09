@@ -116,6 +116,9 @@ void VKFragmentDecompilerThread::insertHeader(std::stringstream & OS)
 		"GL_EXT_scalar_block_layout"
 	};
 
+	// Requiring this on a driver that lacks the extension fails every pipeline
+	// (Adreno returns VK_ERROR_UNKNOWN). The arrays below take concrete bounds
+	// instead when it is missing.
 	if (vk::get_current_renderer()->get_unsized_array_support())
 	{
 		required_extensions.emplace_back("GL_EXT_uniform_buffer_unsized_array");

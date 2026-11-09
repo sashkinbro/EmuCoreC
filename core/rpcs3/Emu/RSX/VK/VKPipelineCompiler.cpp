@@ -1,8 +1,16 @@
 #include "stdafx.h"
 #include "VKPipelineCompiler.h"
 #include "VKRenderPass.h"
+#include "vk_vspec.h"
 #include "vkutils/device.h"
 #include "Utilities/Thread.h"
+#if defined(__APPLE__) && defined(ARCH_ARM64)
+#include <sys/sysctl.h>
+#endif
+#ifdef __APPLE__
+#include "Emu/Cell/timers.hpp"
+#include <pthread.h>
+#endif
 #include "Emu/system_config.h"
 
 #include "util/sysinfo.hpp"
@@ -13,6 +21,28 @@ namespace vk
 	std::unique_ptr<named_thread_group<pipe_compiler>> g_pipe_compilers;
 	int g_num_pipe_compilers = 0;
 	atomic_t<int> g_compiler_index{};
+#ifdef __APPLE__
+	// Set by destroy only, so a Stop drops queued compiles; a resize must still compile them.
+	atomic_t<bool> g_pipe_compilers_stopping{};
+	pipe_compile_stats g_pipe_compile_stats;
+
+	static void note_pipe_compile(u64 started_us)
+	{
+		const u64 us = get_system_time() - started_us;
+		qos_class_t qos = QOS_CLASS_UNSPECIFIED;
+		pthread_get_qos_class_np(pthread_self(), &qos, nullptr);
+
+		g_pipe_compile_stats.jobs++;
+		g_pipe_compile_stats.total_us += us;
+
+		// Racy max, good enough for a log line.
+		if (us > g_pipe_compile_stats.max_us.observe())
+		{
+			g_pipe_compile_stats.max_us.release(us);
+			g_pipe_compile_stats.max_qos.release(static_cast<u32>(qos));
+		}
+	}
+#endif
 	VkPipelineCache g_pipeline_cache = VK_NULL_HANDLE;
 
 	static bool extended_dynamic_state_active()
@@ -30,7 +60,15 @@ namespace vk
 		}
 
 		// vkCmdSetPrimitiveTopology can only move within the topology CLASS the pipeline object
-		// was created with.
+		// was created with. Crossing classes needs dynamicPrimitiveTopologyUnrestricted, which
+		// comes from extended_dynamic_state3 and is not something mobile drivers report, so the
+		// class has to stay part of the pipeline identity. What collapses is the member inside
+		// it: list, strip and fan share one triangle pipeline instead of three.
+		//
+		// Which member stands for the class is not a free choice. Primitive restart is illegal on
+		// a *_LIST topology unless primitiveTopologyListRestart is enabled, which it is not here,
+		// so a restarting draw has to be represented by the strip form or pipelines that build
+		// today would start failing validation.
 		switch (topology)
 		{
 		case VK_PRIMITIVE_TOPOLOGY_LINE_LIST:
@@ -41,6 +79,8 @@ namespace vk
 		case VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN:
 			return primitive_restart ? VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP : VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 		default:
+			// Points have a class of one, and adjacency/patch topologies never come out of the
+			// RSX decoder. Anything unexpected keeps its exact value rather than being guessed at.
 			return topology;
 		}
 	}
@@ -54,6 +94,9 @@ namespace vk
 
 		props.state.ia.topology = get_pipeline_topology(props.state.ia.topology, props.state.ia.primitiveRestartEnable);
 
+		// The replacements are exactly what graphics_pipeline_state's constructor leaves behind,
+		// so two props that differ only in these fields memcmp equal without operator== having to
+		// learn about the extension -- and without the disk cache's raw struct changing shape.
 		props.state.rs.cullMode  = VK_CULL_MODE_NONE;
 		props.state.rs.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 
@@ -81,26 +124,107 @@ namespace vk
 
 	void pipe_compiler::operator()()
 	{
+		// Keep shader compilation off the cores the frame depends on.
+		//
+		// These workers never set an affinity at all, so on a big.LITTLE phone the scheduler was
+		// free to put a compile burst on the prime core -- the same core RSX needs, and the same
+		// cluster the SPUs were deliberately fenced into. That is what a shader "dip" is: not the
+		// renderer waiting on a pipeline (async modes never stall for one), but the compile work
+		// competing for the cores the emulator is already short of.
+		//
+		// thread_class::general is the existing policy for exactly this, and it already returns
+		// the little cluster on big.LITTLE and every core on a uniform machine, so this changes
+		// nothing on desktop.
+		thread_ctrl::set_thread_affinity_mask(thread_ctrl::get_affinity_mask(thread_class::general));
+		thread_ctrl::scoped_priority low_prio(-1);
+
+#if defined(__APPLE__) && defined(ARCH_ARM64)
+		// A worker with a backlog raises itself from utility QoS to the class iOS threads start with.
+		constexpr u32 backlog_raise_threshold = 4;
+		bool raised = false;
+		u32 spell_raises = 0;
+		u32 spell_peak = 0;
+
+#endif
 		while (thread_ctrl::state() != thread_state::aborting)
 		{
 			for (auto&& job : m_work_queue.pop_all())
 			{
+#ifdef __APPLE__
+				// Stopping: the rest of the queue is dropped and compiled again on a later boot.
+				if (g_pipe_compilers_stopping)
+				{
+					m_pending_jobs--;
+					continue;
+				}
+
+#ifdef ARCH_ARM64
+				// Only on a transition, so a burst costs two calls; pending_jobs() counts this job too.
+				const u32 pending = pending_jobs();
+				if (const bool backlog = pending >= backlog_raise_threshold; backlog != raised)
+				{
+					thread_ctrl::set_native_priority(backlog ? 0 : -1);
+					raised = backlog;
+
+					if (backlog)
+					{
+						if (spell_raises == 0)
+						{
+							rsx_log.notice("Async pipeline compiler worker raised to priority 0 with %u job(s) pending.", pending);
+						}
+
+						spell_raises++;
+					}
+				}
+
+				if (spell_raises != 0)
+				{
+					spell_peak = std::max(spell_peak, pending);
+
+					if (pending == 1)
+					{
+						rsx_log.notice("Async pipeline compiler worker back at priority -1, its backlog down to the job in hand: %u raise(s), peak %u job(s) pending.", spell_raises, spell_peak);
+						spell_raises = 0;
+						spell_peak = 0;
+					}
+				}
+#endif
+
+#endif
 				if (!job.is_graphics_job)
 				{
 					auto compiled = int_compile_compute_pipe(job.compute_data, job.inputs, job.flags);
 					job.callback_func(compiled);
+#ifdef __APPLE__
+					m_pending_jobs--;
+#endif
 					continue;
 				}
 
+#ifdef __APPLE__
+				const u64 started_us = get_system_time();
+#endif
 				if (job.create_info_func)
 				{
 					auto compiled = int_compile_graphics_pipe(job.create_info_func, job.inputs, {}, job.flags);
+#ifdef __APPLE__
+					note_pipe_compile(started_us);
+#endif
 					job.callback_func(compiled);
+#ifdef __APPLE__
+					m_pending_jobs--;
+#endif
 					continue;
 				}
 
-				auto compiled = int_compile_graphics_pipe(job.graphics_data, job.graphics_modules, job.inputs, {}, job.flags);
+				auto compiled = int_compile_graphics_pipe(job.graphics_data, job.graphics_modules, job.inputs, {}, job.flags, &job.vtx_spec);
+#ifdef __APPLE__
+				note_pipe_compile(started_us);
+#endif
 				job.callback_func(compiled);
+#ifdef __APPLE__
+				m_pending_jobs--;
+#endif
 			}
 
 			thread_ctrl::wait_on(m_work_queue);
@@ -113,13 +237,7 @@ namespace vk
 		op_flags flags)
 	{
 		auto program = std::make_unique<glsl::program>(*m_device, create_info, cs_inputs);
-		if (!program->link(m_pipeline_cache, flags & SEPARATE_SHADER_OBJECTS))
-		{
-			// Driver rejected the pipeline (see program::link). Returning null
-			// lets the caller skip this dispatch instead of dying. The program
-			// cache already treats a null pipeline as "not ready".
-			return nullptr;
-		}
+		program->link(m_pipeline_cache, flags & SEPARATE_SHADER_OBJECTS);
 		return program;
 	}
 
@@ -130,14 +248,7 @@ namespace vk
 		op_flags flags)
 	{
 		auto program = std::make_unique<glsl::program>(*m_device, create_info, vs_inputs, fs_inputs);
-		if (!program->link(m_pipeline_cache, flags & SEPARATE_SHADER_OBJECTS))
-		{
-			// Driver rejected the pipeline (see program::link). Returning null
-			// makes get_graphics_pipeline() report "not ready" so the draw is
-			// skipped (or served by the shader interpreter) instead of killing
-			// the emulator.
-			return nullptr;
-		}
+		program->link(m_pipeline_cache, flags & SEPARATE_SHADER_OBJECTS);
 		return program;
 	}
 
@@ -146,7 +257,8 @@ namespace vk
 		VkShaderModule modules[2],
 		const std::vector<glsl::program_input>& vs_inputs,
 		const std::vector<glsl::program_input>& fs_inputs,
-		op_flags flags)
+		op_flags flags,
+		const std::array<u32, 16>* vtx_spec)
 	{
 		VkPipelineShaderStageCreateInfo shader_stages[2] = {};
 		shader_stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -159,6 +271,26 @@ namespace vk
 		shader_stages[1].module = modules[1];
 		shader_stages[1].pName = "main";
 
+		// ARMSX3: vertex fetch specialization constants, one per attribute location (vk_vspec.h).
+		// Without a specialization the stage info stays as it was.
+		VkSpecializationMapEntry vspec_entries[16];
+		VkSpecializationInfo vspec_info{};
+		if (vtx_spec && vk::vspec::any(*vtx_spec))
+		{
+			for (u32 i = 0; i < 16; ++i)
+			{
+				vspec_entries[i].constantID = vk::vspec::constant_id_base + i;
+				vspec_entries[i].offset = i * 4;
+				vspec_entries[i].size = 4;
+			}
+
+			vspec_info.mapEntryCount = 16;
+			vspec_info.pMapEntries = vspec_entries;
+			vspec_info.dataSize = sizeof(u32) * 16;
+			vspec_info.pData = vtx_spec->data();
+			shader_stages[0].pSpecializationInfo = &vspec_info;
+		}
+
 		std::vector<VkDynamicState> dynamic_state_descriptors;
 		dynamic_state_descriptors.push_back(VK_DYNAMIC_STATE_VIEWPORT);
 		dynamic_state_descriptors.push_back(VK_DYNAMIC_STATE_SCISSOR);
@@ -169,6 +301,11 @@ namespace vk
 		dynamic_state_descriptors.push_back(VK_DYNAMIC_STATE_STENCIL_REFERENCE);
 		dynamic_state_descriptors.push_back(VK_DYNAMIC_STATE_DEPTH_BIAS);
 
+		// Must agree exactly with normalize_dynamic_pipeline_state(): a state declared here but
+		// still present in the key costs a vkCmdSet* for no reduction, and a state erased from
+		// the key but NOT declared here renders with whatever value the pipeline happened to be
+		// built with -- wrong culling and wrong depth compare on geometry that now shares an
+		// object with unrelated draws.
 		if (extended_dynamic_state_active())
 		{
 			dynamic_state_descriptors.push_back(VK_DYNAMIC_STATE_PRIMITIVE_TOPOLOGY_EXT);
@@ -200,6 +337,27 @@ namespace vk
 		dynamic_state_info.dynamicStateCount = ::size32(dynamic_state_descriptors);
 
 		VkPipelineVertexInputStateCreateInfo vi = { VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
+
+		// ARMSX3: a vertex shader built for vertex fetch specialization declares one vertex input per
+		// RSX attribute location. Each gets its own binding when the specialization fetches it
+		// natively; every other location reads binding 16, a zero-stride dummy (vk_vspec.h).
+		VkVertexInputBindingDescription vin_bindings[vk::vspec::vertex_binding_count];
+		VkVertexInputAttributeDescription vin_attribs[16];
+		if (flags & VERTEX_FETCH_SPEC_INPUTS)
+		{
+			for (u32 i = 0; i < 16; ++i)
+			{
+				const u32 s = vtx_spec ? (*vtx_spec)[i] : 0u;
+				const bool native = (s & vk::vspec::native_bit) != 0;
+				vin_bindings[i] = { i, native ? ((s >> 12) & 0xFFu) : 0u, VK_VERTEX_INPUT_RATE_VERTEX };
+				vin_attribs[i] = { i, native ? i : 16u, native ? vk::vspec::native_format(s & 7u, (s >> 3) & 7u) : VK_FORMAT_R32G32B32A32_UINT, 0 };
+			}
+			vin_bindings[16] = { 16, 0, VK_VERTEX_INPUT_RATE_VERTEX };
+			vi.vertexBindingDescriptionCount = vk::vspec::vertex_binding_count;
+			vi.pVertexBindingDescriptions = vin_bindings;
+			vi.vertexAttributeDescriptionCount = 16;
+			vi.pVertexAttributeDescriptions = vin_attribs;
+		}
 
 		VkPipelineViewportStateCreateInfo vp = {};
 		vp.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -233,6 +391,10 @@ namespace vk
 		VkPipelineColorBlendStateCreateInfo cs = create_info.state.cs;
 		cs.pAttachments = create_info.state.att_state;
 
+		// Flat shading, from upstream b97f4bd8d. Kept alongside our dynamic-state work rather
+		// than either side of the merge replacing the other: this rebases the rasterization
+		// state so the provoking-vertex extension can be chained onto it, which is independent
+		// of the topology-class collapsing above.
 		VkPipelineRasterizationStateCreateInfo rs = create_info.state.rs;
 		VkPipelineRasterizationProvokingVertexStateCreateInfoEXT provoking_vertex_state{};
 		if (flags & USE_LAST_PROVOKING_VERTEX)
@@ -284,6 +446,9 @@ namespace vk
 			return int_compile_compute_pipe(create_info, cs_inputs, flags);
 		}
 
+#ifdef __APPLE__
+		m_pending_jobs++;
+#endif
 		m_work_queue.push(create_info, cs_inputs, flags, callback);
 		return {};
 	}
@@ -313,7 +478,32 @@ namespace vk
 			return int_compile_graphics_pipe(create_info, modules, vs_inputs, fs_inputs, flags);
 		}
 
+#ifdef __APPLE__
+		m_pending_jobs++;
+#endif
 		m_work_queue.push(create_info, modules, vs_inputs, fs_inputs, flags, callback);
+		return {};
+	}
+
+	std::unique_ptr<glsl::program> pipe_compiler::compile(
+		const vk::pipeline_props &create_info,
+		const std::array<u32, 16>& vtx_spec,
+		VkShaderModule vs,
+		VkShaderModule fs,
+		op_flags flags, callback_t callback,
+		const std::vector<glsl::program_input>& vs_inputs,
+		const std::vector<glsl::program_input>& fs_inputs)
+	{
+		VkShaderModule modules[] = { vs, fs };
+		if (flags & COMPILE_INLINE)
+		{
+			return int_compile_graphics_pipe(create_info, modules, vs_inputs, fs_inputs, flags, &vtx_spec);
+		}
+
+#ifdef __APPLE__
+		m_pending_jobs++;
+#endif
+		m_work_queue.push(create_info, modules, vs_inputs, fs_inputs, flags, callback, vtx_spec);
 		return {};
 	}
 
@@ -328,6 +518,9 @@ namespace vk
 			return int_compile_graphics_pipe(get_create_info, vs_inputs, fs_inputs, flags);
 		}
 
+#ifdef __APPLE__
+		m_pending_jobs++;
+#endif
 		m_work_queue.push(get_create_info, vs_inputs, fs_inputs, flags, callback);
 		return {};
 	}
@@ -341,7 +534,25 @@ namespace vk
 			// shader bursts queued longer than necessary.
 			const auto hw_threads = utils::get_thread_count();
 
-			if (hw_threads >= 24)
+			// Size to the cores these workers are actually allowed on, not to the machine.
+			//
+			// They are pinned to thread_class::general (see pipe_compiler::operator()), which on
+			// big.LITTLE is the little cluster. Counting the whole SoC then picked a number for
+			// cores the workers will never run on: an 8-thread phone landed on 2 workers by the
+			// table below, while its 3 little cores sat idle through every shader burst. Sizing
+			// to the cluster raises throughput without taking anything back from emulation,
+			// because the cores it adds are the ones nothing else wanted.
+			const u64 helper_mask = thread_ctrl::get_affinity_mask(thread_class::general);
+			const int helper_cores = helper_mask ? std::popcount(helper_mask) : 0;
+
+			if (helper_cores > 0 && static_cast<u32>(helper_cores) < hw_threads)
+			{
+				num_worker_threads = helper_cores;
+
+				rsx_log.notice("Async pipeline compiler using %d worker(s) on the %d core(s) it is "
+					"pinned to, of %u host thread(s).", num_worker_threads, helper_cores, hw_threads);
+			}
+			else if (hw_threads >= 24)
 			{
 				num_worker_threads = 12;
 			}
@@ -361,11 +572,32 @@ namespace vk
 			{
 				num_worker_threads = 2;
 			}
+#if defined(__APPLE__) && defined(ARCH_ARM64)
+			else if (hw_threads >= 6)
+			{
+				// Apple reports a general-class mask of 0, so the cluster branch above never fires.
+				num_worker_threads = 2;
+			}
+#endif
 			else
 			{
 				num_worker_threads = 1;
 			}
 
+#if defined(__APPLE__) && defined(ARCH_ARM64)
+			// The efficiency-core count is a floor over the table, so no Apple host gets fewer workers.
+			int efficiency_cores = 0;
+			usz efficiency_cores_size = sizeof(efficiency_cores);
+			if (sysctlbyname("hw.perflevel1.logicalcpu", &efficiency_cores, &efficiency_cores_size, nullptr, 0) != 0)
+			{
+				efficiency_cores = 0;
+			}
+
+			rsx_log.notice("Async pipeline compiler: %d efficiency core(s) from sysctl hw.perflevel1.logicalcpu, %d worker(s) from the host-thread table; using %d.",
+				efficiency_cores, num_worker_threads, std::max(num_worker_threads, efficiency_cores));
+			num_worker_threads = std::max(num_worker_threads, efficiency_cores);
+
+#endif
 			rsx_log.notice("Async pipeline compiler auto-selected %d worker(s) for %u host thread(s).",
 				num_worker_threads, hw_threads);
 		}
@@ -380,17 +612,16 @@ namespace vk
 		ensure(num_worker_threads >= 1);
 		ensure(g_render_device); // "Cannot initialize pipe compiler before creating a logical device"
 
-		// Create the shared pipeline cache
-		if (!pipe_cache)
-		{
-			VkPipelineCacheCreateInfo drv_cache_info{ VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO };
-			vkCreatePipelineCache(*g_render_device, &drv_cache_info, nullptr, &g_pipeline_cache);
-		}
-		else
-		{
-			g_pipeline_cache = pipe_cache;
-		}
+		// The shared pipeline cache is the device's persistent one, borrowed. Upstream creates a
+		// fresh in-memory cache here and destroys it at shutdown; the device's is saved to disk,
+		// so a pipeline compiled in an earlier session costs a lookup instead of a compile.
+		// resize_pipe_compiler() hands the same cache back in.
+		g_pipeline_cache = pipe_cache ? pipe_cache : g_render_device->get_pipeline_cache();
 
+#ifdef __APPLE__
+		g_pipe_compilers_stopping = false;
+
+#endif
 		// Create the thread pool
 		g_pipe_compilers = std::make_unique<named_thread_group<pipe_compiler>>("RSX.W", num_worker_threads);
 		g_num_pipe_compilers = num_worker_threads;
@@ -421,20 +652,62 @@ namespace vk
 
 	void destroy_pipe_compiler()
 	{
+#ifdef __APPLE__
+		// Workers drop the jobs they have not started; each finishes only the compile in hand.
+		g_pipe_compilers_stopping = true;
+
+		if (g_pipe_compilers)
+		{
+			u32 pending = 0;
+			for (pipe_compiler& compiler : *g_pipe_compilers.get())
+			{
+				pending += compiler.pending_jobs();
+			}
+
+			rsx_log.notice("Async pipeline compiler stopping with %u job(s) pending; queued jobs are dropped, "
+				"the ones compiling finish.", pending);
+		}
+
+#endif
 		g_pipe_compilers.reset();
 
-		if (g_pipeline_cache)
-		{
-			vkDestroyPipelineCache(*g_render_device, g_pipeline_cache, nullptr);
-			g_pipeline_cache = VK_NULL_HANDLE;
-		}
+		// Owned by the render_device, which saves and destroys it. Just drop the borrow.
+		g_pipeline_cache = VK_NULL_HANDLE;
 	}
 
 	pipe_compiler* get_pipe_compiler()
 	{
 		ensure(g_pipe_compilers);
+#ifdef __APPLE__
+		// The worker with the fewest pending jobs wins; the scan start rotates so equal loads round-robin.
+		const u32 start = g_compiler_index++;
+		const auto first = g_pipe_compilers->begin();
+
+		pipe_compiler* best = nullptr;
+		u32 best_load = umax;
+
+		for (int i = 0; i < g_num_pipe_compilers; ++i)
+		{
+			pipe_compiler* candidate = first + (start + i) % g_num_pipe_compilers;
+			const u32 load = candidate->pending_jobs();
+
+			if (load < best_load)
+			{
+				best = candidate;
+				best_load = load;
+
+				if (load == 0)
+				{
+					break;
+				}
+			}
+		}
+
+		return best;
+#else
 		int thread_index = g_compiler_index++;
 
 		return g_pipe_compilers.get()->begin() + (thread_index % g_num_pipe_compilers);
+#endif
 	}
 }

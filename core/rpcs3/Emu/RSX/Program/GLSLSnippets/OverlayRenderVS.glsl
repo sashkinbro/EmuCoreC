@@ -39,8 +39,8 @@ struct config_t
 config_t unpack_vertex_options()
 {
 	config_t result;
-	result.no_vertex_snap = bitfieldExtract(vertex_config, 0, 1) != 0u;
-	result.flip_vertically = bitfieldExtract(vertex_config, 1, 1) != 0u;
+	result.no_vertex_snap = bitfieldExtract(vertex_config, 0, 1) != 0;
+	result.flip_vertically = bitfieldExtract(vertex_config, 1, 1) != 0;
 	return result;
 }
 

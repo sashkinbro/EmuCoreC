@@ -149,6 +149,7 @@ app/src/main/jniLibs/arm64-v8a/
 google-services.json
 **/google-services.json
 /emucorec-tools/
+/docs/
 
 # EmuCoreC build intermediates
 .cxx/
@@ -156,6 +157,9 @@ app/.cxx/
 build/
 app/build/
 .gradle/
+.kotlin/
+__pycache__/
+*.py[cod]
 app/release
 app/src/main/assets/catalog/*.db
 *.db

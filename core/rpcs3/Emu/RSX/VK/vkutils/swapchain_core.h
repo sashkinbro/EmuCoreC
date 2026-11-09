@@ -45,6 +45,10 @@ namespace vk
 		u32 m_height = 0;
 		VkFormat m_surface_format = VK_FORMAT_B8G8R8A8_UNORM;
 
+		// Pre-rotation (see swapchain_WSI::init): clockwise quarter turns the images were created
+		// with as their preTransform. 0 = not turned, the images are the window's own shape.
+		u32 m_pre_rotation = 0;
+
 		virtual void init_swapchain_images(render_device& dev, u32 count) = 0;
 
 	public:
@@ -58,7 +62,9 @@ namespace vk
 
 		virtual u32 get_swap_image_count() const = 0;
 		virtual VkImage get_image(u32 index) = 0;
-		virtual VkResult acquire_next_swapchain_image(VkSemaphore semaphore, u64 timeout, u32* result) = 0;
+		// The fence is for callers that must block on the acquire rather than chain it into a
+		// submit. Frame generation needs that: see present_generated_frame.
+		virtual VkResult acquire_next_swapchain_image(VkSemaphore semaphore, u64 timeout, u32* result, VkFence fence = VK_NULL_HANDLE) = 0;
 		virtual void end_frame(command_buffer& cmd, u32 index) = 0;
 		virtual VkResult present(VkSemaphore semaphore, u32 index) = 0;
 		virtual VkImageLayout get_optimal_present_layout() const = 0;
@@ -73,6 +79,46 @@ namespace vk
 			m_width = w;
 			m_height = h;
 			return init();
+		}
+
+		// The extent the swapchain ACTUALLY has, which is not always the one init() was
+		// handed: the WSI backend replaces it with the surface's currentExtent whenever the
+		// platform reports one. Anything sized against the swapchain images - framebuffers
+		// above all - has to use this and not the requested value.
+		u32 get_width() const
+		{
+			return m_width;
+		}
+
+		u32 get_height() const
+		{
+			return m_height;
+		}
+
+		// Pre-rotation. get_width()/get_height() stay the window's own shape, which is what the
+		// frame is laid out and assembled in; a pre-rotated swapchain's IMAGES are turned, and a
+		// quarter turn swaps their axes. Only what writes into a swapchain image directly needs
+		// these (see VKGSRender::flip).
+		u32 get_pre_rotation() const
+		{
+			return m_pre_rotation;
+		}
+
+		u32 get_image_width() const
+		{
+			return (m_pre_rotation & 1) ? m_height : m_width;
+		}
+
+		u32 get_image_height() const
+		{
+			return (m_pre_rotation & 1) ? m_width : m_height;
+		}
+
+		// Whether the surface now asks for a different rotation than it did when this swapchain was
+		// built (the device was turned from one landscape to the other, which keeps the size).
+		virtual bool surface_rotation_changed()
+		{
+			return false;
 		}
 
 		const vk::render_device& get_device()
@@ -119,7 +165,7 @@ namespace vk
 	public:
 		using abstract_swapchain_impl::abstract_swapchain_impl;
 
-		VkResult acquire_next_swapchain_image(VkSemaphore semaphore, u64 timeout, u32* result) override;
+		VkResult acquire_next_swapchain_image(VkSemaphore semaphore, u64 timeout, u32* result, VkFence fence) override;
 
 		// Clients must implement these methods to render without WSI support
 		bool init() override
@@ -165,6 +211,33 @@ namespace vk
 	class swapchain_WSI : public WSI_swapchain_base
 	{
 		VkSurfaceKHR m_surface = VK_NULL_HANDLE;
+
+		// Set when a surface query inside init() came back VK_ERROR_SURFACE_LOST_KHR.
+		//
+		// init() can only report failure as a bool, and the caller has to tell "the window is
+		// minimized, try again later" apart from "the VkSurfaceKHR is dead and has to be recreated
+		// before any retry can work". Without that distinction the retry queries the same dead
+		// surface forever.
+		bool m_surface_is_lost = false;
+
+	public:
+		// True when the last init() failure was a lost surface. Cleared by the next successful init.
+		bool surface_is_lost() const { return m_surface_is_lost; }
+
+		// Tear down ONLY the VkSwapchainKHR, keeping the device and everything else.
+		//
+		// Must run before the surface it was created from is destroyed: a
+		// VkSurfaceKHR with a live swapchain still referencing it may not be
+		// destroyed, and doing so faults inside the driver on the next present.
+		// init() tolerates a null m_vk_swapchain (its oldSwapchain path is guarded),
+		// so the next rebuild is unaffected.
+		void destroy_swapchain_only();
+
+		// Point this swapchain at a freshly created surface. Only meaningful after
+		// the old one was lost, and only once destroy_swapchain_only() has run.
+		void replace_surface(VkSurfaceKHR surface) { m_surface = surface; }
+
+	protected:
 		VkColorSpaceKHR m_color_space = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 		VkSwapchainKHR m_vk_swapchain = nullptr;
 
@@ -175,6 +248,10 @@ namespace vk
 		PFN_vkQueuePresentKHR _vkQueuePresentKHR = nullptr;
 
 		bool m_wm_reports_flag = false;
+
+		// The surface's currentTransform when this swapchain was built, whether or not it could be
+		// pre-rotated to it. See surface_rotation_changed().
+		VkSurfaceTransformFlagBitsKHR m_built_for_transform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
 
 	protected:
 		void init_swapchain_images(render_device& dev, u32 preferred_count = 0) override;
@@ -188,7 +265,6 @@ namespace vk
 		{}
 
 		void destroy(bool = true) override;
-		void reset_surface(VkSurfaceKHR surface);
 
 		std::pair<VkSurfaceCapabilitiesKHR, bool> init_surface_capabilities();
 
@@ -200,9 +276,11 @@ namespace vk
 			return m_wm_reports_flag;
 		}
 
-		VkResult acquire_next_swapchain_image(VkSemaphore semaphore, u64 timeout, u32* result) override
+		bool surface_rotation_changed() override;
+
+		VkResult acquire_next_swapchain_image(VkSemaphore semaphore, u64 timeout, u32* result, VkFence fence) override
 		{
-			return vkAcquireNextImageKHR(dev, m_vk_swapchain, timeout, semaphore, VK_NULL_HANDLE, result);
+			return vkAcquireNextImageKHR(dev, m_vk_swapchain, timeout, semaphore, fence, result);
 		}
 
 		void end_frame(command_buffer& /*cmd*/, u32 /*index*/) override

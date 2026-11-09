@@ -1,6 +1,16 @@
 #include "stdafx.h"
+#include "Emu/android_app_state.h"
+#include "Emu/NP/arkham_revived.h"
+#ifndef _WIN32
+#include <cerrno>
+#include <cstring>
+#include <unistd.h>
+#endif
 #include "VFS.h"
 #include "Utilities/bin_patch.h"
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#endif
 #include "Emu/Memory/vm.h"
 #include "Emu/emu_callbacks.h"
 #include "Emu/System.h"
@@ -20,6 +30,7 @@
 #include "Emu/Cell/SPUThread.h"
 #include "Emu/Cell/SPURecompiler.h"
 #include "Emu/RSX/RSXThread.h"
+#include "Emu/RSX/Utils/rsx_serde.hpp"
 #include "Emu/Cell/lv2/sys_process.h"
 #include "Emu/Cell/lv2/sys_sync.h"
 #include "Emu/Cell/lv2/sys_prx.h"
@@ -62,8 +73,6 @@
 #if defined(HAVE_VULKAN)
 #include "Emu/RSX/VK/VulkanAPI.h"
 #endif
-
-#include "Emu/RSX/GSRender.h"
 
 #ifdef LLVM_AVAILABLE
 #include "llvm/Config/llvm-config.h"
@@ -121,15 +130,13 @@ extern f64 get_cpu_program_usage_percent(u64 hash);
 [[noreturn]] void report_fatal_error(std::string_view text, bool is_html = false, bool include_help_text = true);
 
 void initialize_timebased_time(u64 timebased_init, bool reset = false);
+#ifdef __APPLE__
+void amend_guest_time_for_pause(u64 paused_us);
+#endif
 
 namespace atomic_wait
 {
 	extern void parse_hashtable(bool(*cb)(u64 id, u32 refs, u64 ptr, u32 max_coll));
-}
-
-namespace rsx
-{
-	void set_native_ui_flip();
 }
 
 Emulator::Emulator() noexcept
@@ -203,8 +210,14 @@ void Emulator::CallFromMainThread(std::function<void()>&& func, atomic_t<u32>* w
 {
 	ensure(func);
 
+#ifdef __APPLE__
+	// libc++ leaves a moved-from std::function holding its target, so exchange it to make the main thread its last owner.
+	std::function<void()> final_func = [this, before = IsStopped(true), track_emu_state, thread_name = thread_ctrl::get_name(), src = src_loc
+		, count = (stop_ctr == umax ? +m_stop_ctr : stop_ctr), func = std::exchange(func, nullptr)]
+#else
 	std::function<void()> final_func = [this, before = IsStopped(true), track_emu_state, thread_name = thread_ctrl::get_name(), src = src_loc
 		, count = (stop_ctr == umax ? +m_stop_ctr : stop_ctr), func = std::move(func)]
+#endif
 	{
 		const bool call_it = (!track_emu_state || (count == m_stop_ctr && before == IsStopped(true)));
 
@@ -295,6 +308,140 @@ void init_fxo_for_exec(utils::serial* ar, bool full = false)
 }
 
 // Some settings are not allowed with certain conditions
+static void apply_game_mods(const std::string& title_id, const std::string& game_dir)
+{
+	if (title_id.empty() || game_dir.empty())
+	{
+		return;
+	}
+
+	// Mods sit BESIDE the config directory, not inside it, so that reinstalling a title or
+	// restoring a backup cannot take them with it. get_config_dir() is <root>/config/ here, one
+	// level too deep, so walk up to <root>. The UI builds the same path from its own root and
+	// the two have to agree: get this wrong and every mod is simply never found, with no error
+	// anywhere, which is exactly what the first version of this did.
+	std::string root = fs::get_config_dir();
+	while (!root.empty() && root.back() == '/')
+	{
+		root.pop_back();
+	}
+	if (const usz slash = root.find_last_of('/'); slash != umax)
+	{
+		root.resize(slash);
+	}
+
+	const std::string mods_dir = root + "/mods/" + title_id + "/";
+	const std::string state_dir = mods_dir + ".state/";
+
+	if (!fs::is_dir(state_dir))
+	{
+		// Said out loud because a silent return here is indistinguishable from a mod that did
+		// not apply, and the path is the thing worth seeing when that happens.
+		sys_log.notice("No enabled mods for %s (looked in %s)", title_id, mods_dir);
+		return;
+	}
+
+	sys_log.notice("Applying mods for %s from %s", title_id, mods_dir);
+
+	// A guard, not a policy. A mod is loose game files; anything near this is a mistake, and
+	// the cost of being wrong is a mount table with one entry per file in it.
+	constexpr usz max_mounts = 20000;
+	usz mounted = 0;
+
+	for (const auto& state : fs::dir(state_dir))
+	{
+		if (state.is_directory || !state.name.ends_with(".json"))
+		{
+			continue;
+		}
+
+		const std::string mod_name = state.name.substr(0, state.name.size() - 5);
+		const std::string mod_root = mods_dir + mod_name + "/";
+
+		if (!fs::is_dir(mod_root))
+		{
+			sys_log.warning("Mod '%s' is enabled but its folder is gone", mod_name);
+			continue;
+		}
+
+		// Every root the game reads from, not just the one it booted from.
+		//
+		// A disc title with an update installed reads from BOTH: the update at
+		// /dev_hdd0/game/<id>/ and the disc at /dev_bdvd/PS3_GAME/. game_dir is only the first
+		// of those, so a mod could replace an update file and never a disc file. Call of Duty:
+		// World at War is the case that showed it -- a mod's patch.ff applied correctly from
+		// the update while the nazi_zombie_*_patch.ff beside it on the disc was unreachable.
+		//
+		// Mounting the same relative path under both is safe: they are distinct virtual paths,
+		// the game asks for whichever one it wants, and a mount nothing asks for costs an entry
+		// in a table.
+		std::vector<std::string> roots{game_dir};
+		if (game_dir != "/dev_bdvd/PS3_GAME/" && !vfs::get("/dev_bdvd/PS3_GAME").empty())
+		{
+			roots.emplace_back("/dev_bdvd/PS3_GAME/");
+		}
+
+		// Iterative rather than recursive: the layout is user-supplied, and a pathological tree
+		// should cost a bounded walk rather than the stack.
+		std::vector<std::string> pending{""};
+		usz files = 0;
+
+		while (!pending.empty())
+		{
+			const std::string rel = std::move(pending.back());
+			pending.pop_back();
+
+			for (const auto& entry : fs::dir(mod_root + rel))
+			{
+				if (entry.name == "." || entry.name == "..")
+				{
+					continue;
+				}
+
+				const std::string child = rel + entry.name;
+
+				if (entry.is_directory)
+				{
+					pending.push_back(child + "/");
+					continue;
+				}
+
+				// PARAM.SFO is the title's identity, not its content: title id, version,
+				// category, the things the emulator decides what it is booting from. A package
+				// mod carries one because every package does, and mounting it makes the game
+				// claim to be whatever the mod was built from.
+				//
+				// Seen immediately: a Minecraft mod built for the PSN release (NPUB31419 v1.32)
+				// imported onto the disc release (BLUS31426 v1.84) replaced the title's own SFO
+				// and the game stopped booting with "failed to load and cannot continue".
+				//
+				// A mod may legitimately want to change an icon or the background music, so
+				// only this one file is refused rather than the whole metadata set.
+				if (rel.empty() && entry.name == "PARAM.SFO")
+				{
+					sys_log.warning("Mod '%s': not mounting PARAM.SFO, a mod cannot redefine the title", mod_name);
+					continue;
+				}
+
+				if (++mounted > max_mounts)
+				{
+					sys_log.error("Mod '%s': too many files, stopped at %d mounts", mod_name, max_mounts);
+					return;
+				}
+
+				for (const std::string& root : roots)
+				{
+					vfs::mount(root + child, mod_root + child, false);
+				}
+				files++;
+			}
+		}
+
+		sys_log.success("Mod '%s' applied: %d file(s) over %s%s", mod_name, files, game_dir,
+			roots.size() > 1 ? " and /dev_bdvd/PS3_GAME/" : "");
+	}
+}
+
 static void fixup_settings(const psf::registry* _psf)
 {
 	// Disable some incompatible settings in headless mode
@@ -438,6 +585,14 @@ extern void dump_executable(std::span<const u8> data, const ppu_module<lv2_obj>*
 
 void Emulator::Init()
 {
+	// The games list was first read when the global Emulator was constructed. Where the config directory is only
+	// known later (Android sets it before calling Init), that read found nothing: reload it now, unless entries
+	// added since then are still waiting to be saved. Contributed by k1r4ct (PR #221).
+	if (!m_games_config.is_dirty())
+	{
+		m_games_config.load();
+	}
+
 	// Log LLVM version
 	if (static bool logged_llvm = false; !logged_llvm)
 	{
@@ -801,7 +956,7 @@ void Emulator::Init()
 			// Remove pending backup data
 			if (!fs::remove_all(save_path + entry.name))
 			{
-				sys_log.fatal("Failed to remove save data backup: %s%s (%s)", save_path, entry.name, fs::g_tls_error);
+				sys_log.error("Failed to remove save data backup: %s%s (%s)", save_path, entry.name, fs::g_tls_error);
 			}
 			else
 			{
@@ -1009,6 +1164,7 @@ bool Emulator::BootBigPictureMode()
 	sys_log.notice("Big Picture Mode: booting window");
 
 	m_state = system_state::loading;
+	m_boot_mode = boot_mode::shell;
 
 	m_path.clear();
 	m_path_old.clear();
@@ -1041,7 +1197,7 @@ bool Emulator::BootBigPictureMode()
 	// Initialize performance monitor
 	g_fxo->init<named_thread<perf_monitor>>();
 
-	// No PS3 executable is loaded. GSRender/pad_thread only exist to host the Big Picture Mode overlay.
+	// No PS3 executable is loaded. rsx::thread/pad_thread only exist to host the Big Picture Mode overlay.
 	m_state = system_state::ready;
 	g_emu_callbacks.on_ready();
 
@@ -1192,9 +1348,9 @@ void Emulator::SetContinuousMode(bool continuous_mode)
 {
 	m_continuous_mode = continuous_mode;
 
-	if (GSRender* render = static_cast<GSRender*>(g_fxo->try_get<rsx::thread>()))
+	if (auto rsx = g_fxo->try_get<rsx::thread>())
 	{
-		render->set_continuous_mode(continuous_mode);
+		rsx->display().set_continuous_mode(continuous_mode);
 	}
 }
 
@@ -1222,6 +1378,309 @@ static game_boot_result check_disc_key(const std::string& path)
 	sys_log.error("The disc image '%s' is encrypted and no matching decryption key was found in '%s'", path, rpcs3::utils::get_redump_key_dir());
 
 	return game_boot_result::disc_key_missing;
+}
+
+namespace
+{
+	// UE3 HD-cache install completer.
+	//
+	// Some Unreal Engine 3 PS3 titles (verified: Leisure Suit Larry: Box Office
+	// Bust, BLUS30331) copy their disc asset tree into an on-HDD cache during a
+	// short boot window and abandon the copy partway through when emulated I/O is
+	// slower than a real console, then crash on the missing packages at "New
+	// Game". This finishes that copy once, at boot, before the guest runs.
+	//
+	// It is driven entirely by the disc's own manifest (USRDIR/<proj>/PS3TOC.txt)
+	// and the guest's own sidecar convention (a 0-byte "<file>__time" whose mtime
+	// equals the disc source's mtime). It writes ONLY under
+	// /dev_hdd0/game/<ID>/USRDIR/UnrealEngine3. Titles without the PS3TOC marker
+	// are inert. On any copy/stat/space failure it returns install_failed so the
+	// caller aborts the boot rather than hand the guest a half-finished install.
+
+	bool ue3_reserved_stem(std::string stem)
+	{
+		for (char& c : stem) c = (c >= 'a' && c <= 'z') ? char(c - 32) : c;
+		static constexpr std::string_view names[] =
+		{
+			"CON","PRN","AUX","NUL",
+			"COM1","COM2","COM3","COM4","COM5","COM6","COM7","COM8","COM9",
+			"LPT1","LPT2","LPT3","LPT4","LPT5","LPT6","LPT7","LPT8","LPT9",
+		};
+		for (std::string_view n : names) if (stem == n) return true;
+		return false;
+	}
+
+	// Strip the single leading "..\" and confine the remainder: reject any
+	// traversal ("."/".."), empty component, drive/ADS colon, UNC/leading
+	// separator, or reserved device name. Textual only (the dest does not exist
+	// yet, so path canonicalization cannot confine here). Returns true + the
+	// normalized forward-slash remainder on accept.
+	bool ue3_confine(const std::string& path, std::string& out_rest)
+	{
+		if (path.size() < 3 || path[0] != '.' || path[1] != '.' || path[2] != '\\')
+			return false;
+
+		std::string rest = path.substr(3);
+		for (char& c : rest) if (c == '\\') c = '/';
+
+		if (rest.empty() || rest.front() == '/')
+			return false;
+
+		size_t start = 0;
+		while (true)
+		{
+			const size_t slash = rest.find('/', start);
+			const std::string comp = rest.substr(start, slash == std::string::npos ? std::string::npos : slash - start);
+
+			if (comp.empty() || comp == "." || comp == "..")
+				return false;
+			if (comp.find(':') != std::string::npos)
+				return false;
+			if (ue3_reserved_stem(comp.substr(0, comp.find('.'))))
+				return false;
+
+			if (slash == std::string::npos)
+				break;
+			start = slash + 1;
+		}
+
+		out_rest = std::move(rest);
+		return true;
+	}
+
+	// Tokenize "<size> 0 0 <path...> <trail>": >= 5 space-separated tokens, a
+	// numeric first token, path = tokens[3 .. n-2] rejoined with spaces (asset
+	// names may contain spaces). Blank/short/non-numeric lines return false and
+	// are skipped, matching the offline resolver's validated behavior.
+	bool ue3_parse_line(std::string ln, std::string& out_path)
+	{
+		if (!ln.empty() && ln.back() == '\r') ln.pop_back();
+		if (ln.find_first_not_of(" \t") == std::string::npos)
+			return false;
+
+		std::vector<std::string> toks;
+		for (size_t p = 0; p <= ln.size();)
+		{
+			const size_t sp = ln.find(' ', p);
+			toks.push_back(ln.substr(p, sp == std::string::npos ? std::string::npos : sp - p));
+			if (sp == std::string::npos) break;
+			p = sp + 1;
+		}
+
+		if (toks.size() < 5)
+			return false;
+		for (char c : toks[0]) if (c < '0' || c > '9') return false;
+		if (toks[0].empty())
+			return false;
+
+		out_path.clear();
+		for (size_t i = 3; i + 1 < toks.size(); ++i)
+		{
+			if (i > 3) out_path += ' ';
+			out_path += toks[i];
+		}
+		return !out_path.empty();
+	}
+
+	game_boot_result complete_ue3_hd_cache(const std::string& title_id)
+	{
+		// TITLE-ID GATE. Only act for titles whose HD-cache convention has been
+		// verified on a real disc. PS3TOC.txt is a generic UE3 artifact, so keying
+		// activation on the marker alone would (a) fire on other UE3 discs and risk
+		// breaking a game that already runs, and (b) build the write root from an
+		// unvalidated PARAM.SFO TITLE_ID (set at System.cpp:1879 with no format
+		// check) — a crafted `..` TITLE_ID could then collapse identically on both
+		// sides of the confinement guard below and defeat it. An exact-literal match
+		// closes both. Extend this list only after verifying a title's convention
+		// (single marker + <file>__time sidecar stamped to the disc source mtime +
+		// UnrealEngine3 dest root) on a real disc image.
+		bool verified = false;
+		for (std::string_view t : { std::string_view("BLUS30331") })
+			if (title_id == t) { verified = true; break; }
+		if (!verified)
+			return game_boot_result::no_errors; // not a verified UE3 HD-cache title: inert
+
+		const std::string usr_host = vfs::get("/dev_bdvd/PS3_GAME/USRDIR");
+
+		// GATE: exactly one USRDIR/<proj>/PS3TOC.txt marks a UE3 HD cache.
+		std::string proj;
+		int markers = 0;
+		for (auto&& e : fs::dir(usr_host))
+		{
+			if (!e.is_directory || e.name == "." || e.name == "..")
+				continue;
+			if (fs::is_file(usr_host + "/" + e.name + "/PS3TOC.txt"))
+			{
+				markers++;
+				proj = e.name;
+			}
+		}
+		if (markers == 0)
+			return game_boot_result::no_errors; // no cache marker on the disc: inert
+		if (markers > 1)
+		{
+			// A verified title with more than one project TOC is a shape we have not
+			// validated; stay inert rather than guess which one to complete.
+			sys_log.warning("UE3-completer: %d PS3TOC markers for '%s'; unhandled shape, staying inert", markers, title_id);
+			return game_boot_result::no_errors;
+		}
+
+		fs::file toc(usr_host + "/" + proj + "/PS3TOC.txt");
+		if (!toc)
+			return game_boot_result::no_errors; // marker vanished: inert
+
+		std::string data(toc.size(), '\0');
+		if (toc.read(data.data(), data.size()) != data.size())
+		{
+			// The marker is present, so this is positively the verified UE3 title; a
+			// short read means we cannot know the work set. Fail closed rather than
+			// let the guest boot against a possibly half-finished install.
+			sys_log.error("UE3-completer: short read of PS3TOC.txt for '%s'", title_id);
+			return game_boot_result::install_failed;
+		}
+		toc.close();
+
+		const std::string game_root = "/dev_hdd0/game/" + title_id + "/USRDIR/UnrealEngine3";
+
+		struct work_item { std::string src_host, dest_host; u64 size; s64 mtime; };
+		std::vector<work_item> work;
+		u64 total_bytes = 0;
+		size_t sources = 0; // entries with a real disc source (for the vacuity log)
+
+		for (size_t pos = 0; pos <= data.size();)
+		{
+			const size_t nl = data.find('\n', pos);
+			std::string line = data.substr(pos, nl == std::string::npos ? std::string::npos : nl - pos);
+			pos = (nl == std::string::npos) ? data.size() + 1 : nl + 1;
+
+			std::string toc_path, rest;
+			if (!ue3_parse_line(std::move(line), toc_path))
+				continue;
+			if (!ue3_confine(toc_path, rest))
+				continue;
+
+			const std::string src_host = vfs::get("/dev_bdvd/PS3_GAME/USRDIR/" + rest);
+			fs::stat_t sst{};
+			if (!fs::get_stat(src_host, sst) || sst.is_directory)
+				continue; // no disc source: skip. src is always an iso_device path
+				          // whose get_stat is an in-memory metadata lookup fixed at
+				          // mount, so a false here is genuinely-absent (e.g. the
+				          // shared Engine/ tree), not a transient I/O error.
+			sources++;
+
+			const std::string dest_host = vfs::get(game_root + "/" + rest);
+			ensure(dest_host.starts_with(vfs::get(game_root) + "/"));
+
+			// Completeness mirrors the guest: dest AND its "<file>__time" sidecar
+			// exist, the dest is the full source size, AND the sidecar's mtime equals
+			// the disc source mtime. The size check guards against a guest-abandoned
+			// truncated payload that already carries a correctly-stamped sidecar.
+			fs::stat_t dst{}, scst{};
+			const bool have_file = fs::get_stat(dest_host, dst) && !dst.is_directory;
+			const bool have_side = fs::get_stat(dest_host + "__time", scst) && !scst.is_directory;
+			if (have_file && have_side && dst.size == sst.size && scst.mtime == sst.mtime)
+				continue;
+
+			work.push_back({src_host, dest_host, sst.size, sst.mtime});
+			total_bytes += sst.size;
+		}
+
+		if (work.empty())
+		{
+			// Distinguishes the genuine idempotent path (sources present, all
+			// complete) from a silent no-op where the TOC parsed to nothing (format
+			// drift) — and doubles as the vacuity proof that the fast path fired.
+			sys_log.notice("UE3-completer: nothing to do for '%s' (%u source entries, all complete)", title_id, sources);
+			return game_boot_result::no_errors;
+		}
+
+		// PRE-FLIGHT: free space on hdd0 (the UnrealEngine3 dir may not exist yet).
+		fs::device_stat ds{};
+		if (fs::statfs(vfs::get("/dev_hdd0"), ds))
+		{
+			const u64 margin = 64ull << 20;
+			if (ds.avail_free < total_bytes + margin)
+			{
+				sys_log.error("UE3-completer: not enough space for %s: need %u B + margin, %u B free", proj, total_bytes, ds.avail_free);
+				return game_boot_result::install_failed;
+			}
+		}
+		else
+		{
+			// Pre-flight unavailable. The per-write install_failed in the copy loop
+			// is the backstop against a full disk, so proceed rather than refuse a
+			// boot on a statfs that some FUSE-backed paths fail spuriously; but say so.
+			sys_log.warning("UE3-completer: statfs(/dev_hdd0) failed; skipping space pre-flight for '%s'", title_id);
+		}
+
+		sys_log.notice("UE3-completer: completing %u file(s), %u MiB, for '%s'", work.size(), total_bytes >> 20, proj);
+
+		std::vector<u8> buf(4ull << 20);
+		for (const work_item& w : work)
+		{
+			if (Emu.IsStopped())
+			{
+				sys_log.warning("UE3-completer: stop requested, aborting install");
+				return game_boot_result::install_failed;
+			}
+
+			if (!fs::create_path(fs::get_parent_dir(w.dest_host)))
+			{
+				sys_log.error("UE3-completer: mkdir failed for %s", w.dest_host);
+				return game_boot_result::install_failed;
+			}
+
+			// Atomic copy: write a guest-invisible ＄-temp, then rename.
+			fs::file src(w.src_host);
+			fs::pending_file pf(w.dest_host);
+			if (!src || !pf.file)
+			{
+				sys_log.error("UE3-completer: open failed for %s", w.dest_host);
+				return game_boot_result::install_failed;
+			}
+
+			u64 remaining = w.size;
+			while (remaining)
+			{
+				if (Emu.IsStopped())
+				{
+					sys_log.warning("UE3-completer: stop requested mid-copy, aborting");
+					return game_boot_result::install_failed;
+				}
+				const u64 chunk = std::min<u64>(buf.size(), remaining);
+				if (src.read(buf.data(), chunk) != chunk || pf.file.write(buf.data(), chunk) != chunk)
+				{
+					sys_log.error("UE3-completer: copy I/O failed for %s", w.dest_host);
+					return game_boot_result::install_failed;
+				}
+				remaining -= chunk;
+			}
+
+			if (!pf.commit())
+			{
+				sys_log.error("UE3-completer: commit failed for %s", w.dest_host);
+				return game_boot_result::install_failed;
+			}
+
+			// 0-byte sidecar stamped to the disc source mtime (epoch seconds).
+			{
+				fs::pending_file side(w.dest_host + "__time");
+				if (!side.file || !side.commit())
+				{
+					sys_log.error("UE3-completer: sidecar create failed for %s", w.dest_host);
+					return game_boot_result::install_failed;
+				}
+			}
+			if (!fs::utime(w.dest_host + "__time", w.mtime, w.mtime))
+			{
+				sys_log.error("UE3-completer: sidecar stamp failed for %s", w.dest_host);
+				return game_boot_result::install_failed;
+			}
+		}
+
+		sys_log.success("UE3-completer: completed %u file(s) for '%s'", work.size(), proj);
+		return game_boot_result::no_errors;
+	}
 }
 
 game_boot_result Emulator::Load(const std::string& title_id, bool is_disc_patch, usz recursion_count)
@@ -1289,6 +1748,13 @@ game_boot_result Emulator::Load(const std::string& title_id, bool is_disc_patch,
 		{
 			m_ar = make_savestate_reader(m_path);
 
+#if defined(__APPLE__) || defined(__ANDROID__)
+			// A refused state ends the load here; otherwise Load goes on to boot the state file as a game.
+			if (!m_ar && m_path.ends_with(".zst"))
+			{
+				return game_boot_result::savestate_corrupted;
+			}
+#endif
 			m_boot_source_type = CELL_GAME_GAMETYPE_SYS;
 		}
 	}
@@ -1533,6 +1999,10 @@ game_boot_result Emulator::Load(const std::string& title_id, bool is_disc_patch,
 					return result;
 				}
 
+#ifdef __APPLE__
+				// Restart() boots m_path_real when m_path is on the ISO device
+				m_path_real = disc_info;
+#endif
 				m_path = iso_device::virtual_device_name + "/" + argv[0];
 
 				resolve_path_as_vfs_path = false;
@@ -1954,6 +2424,7 @@ game_boot_result Emulator::Load(const std::string& title_id, bool is_disc_patch,
 			// Load patches from different locations
 			g_fxo->get<patch_engine>().append_global_patches();
 			g_fxo->get<patch_engine>().append_title_patches(m_title_id);
+			arkham_revived::prepare(m_title_id);
 		}
 
 		// Set bdvd_dir
@@ -1993,6 +2464,7 @@ game_boot_result Emulator::Load(const std::string& title_id, bool is_disc_patch,
 		// Special boot mode (directory scan)
 		if (!launching_from_disc_archive && fs::is_dir(m_path))
 		{
+			m_boot_mode = boot_mode::cache_builder;
 			m_state = system_state::ready;
 			g_emu_callbacks.on_ready();
 			ensure(g_fxo->init<main_ppu_module<lv2_obj>>());
@@ -2095,7 +2567,7 @@ game_boot_result Emulator::Load(const std::string& title_id, bool is_disc_patch,
 
 			g_fxo->init<named_thread>("SPRX Loader"sv, [this, dir_queue, is_fast = m_precompilation_option.is_fast]() mutable
 			{
-#ifdef __APPLE__
+#if defined(__APPLE__) && !TARGET_OS_IPHONE && !defined(ARCH_ARM64)
 				// Apple Silicon W^X: this thread invokes ppu_initialize()
 				// and ppu_precompile(), which write into MAP_JIT pages.
 				// Without enabling write mode here, these writes segfault
@@ -2791,6 +3263,8 @@ game_boot_result Emulator::Load(const std::string& title_id, bool is_disc_patch,
 				sys_log.error("Booting HG category outside of HDD0!");
 			}
 
+			apply_game_mods(GetTitleID(), m_dir);
+
 			const auto _main = ensure(g_fxo->init<main_ppu_module<lv2_obj>>());
 
 			if (ppu_load_exec(ppu_exec, false, m_path, DeserialManager()))
@@ -2902,6 +3376,19 @@ game_boot_result Emulator::Load(const std::string& title_id, bool is_disc_patch,
 
 				return game_boot_result::firmware_missing;
 			}
+		}
+
+		// Finish any abandoned UE3 HD-cache install before the guest runs. Inert
+		// for non-UE3 titles; fail-closed (aborts the boot) on a copy failure.
+		if (const game_boot_result ue3 = complete_ue3_hd_cache(GetTitleID()); ue3 != game_boot_result::no_errors)
+		{
+			// Tear the initialized-and-paused emulation down before bailing, exactly
+			// like every other post-`ready` error exit in Load (2887/2940/2957). A
+			// bare return would leave m_state == ready: restore_on_no_boot's
+			// ensure(IsStopped()) would then fire, and a later Play would run the
+			// guest against the half-finished install this path exists to prevent.
+			Kill(false);
+			return ue3;
 		}
 
 		const bool autostart = m_ar || (std::exchange(m_force_boot, false) || g_cfg.misc.autostart);
@@ -3191,9 +3678,15 @@ bool Emulator::Pause(bool freeze_emulation, bool show_resume_message)
 		{
 			while (*msg_ref && GetStatus(false) == status)
 			{
-				// Refresh Native UI
-				rsx::set_native_ui_flip();
-				thread_ctrl::wait_for(33'000);
+				// ARMSX3: out of sight there is nothing to draw it on, so no redraw and 4 checks a
+				// second instead of 30 (#196)
+				if (!g_android_app_backgrounded)
+				{
+					// Refresh Native UI
+					rsx::set_native_ui_flip();
+				}
+
+				thread_ctrl::wait_for(g_android_app_backgrounded ? 250'000 : 33'000);
 			}
 
 			msg_ref->release(0);
@@ -3291,7 +3784,15 @@ void Emulator::Resume()
 	// Try to increment summary pause time
 	if (time)
 	{
+#ifdef __APPLE__
+		const u64 paused_us = get_system_time() - time;
+		m_pause_amend_time += paused_us;
+
+		// Guest clocks stand still while paused; games with a hang watchdog otherwise kill themselves on resume
+		amend_guest_time_for_pause(paused_us);
+#else
 		m_pause_amend_time += get_system_time() - time;
+#endif
 	}
 	else
 	{
@@ -3448,7 +3949,7 @@ void Emulator::GracefulShutdown(bool allow_autoexit, bool async_op, bool savesta
 				Resume();
 			}, nullptr, true, read_counter);
 
-			std::shared_lock rlock(id_manager::g_mutex, std::defer_lock); 
+			std::shared_lock rlock(id_manager::g_mutex, std::defer_lock);
 
 			// Check if the EXITGAME signal was read. We allow the game to terminate itself if that's the case.
 			if (!read_sysutil_signal && read_counter != get_sysutil_cb_manager_read_count() && rlock.try_lock())
@@ -3708,6 +4209,7 @@ void Emulator::Kill(bool allow_autoexit, bool savestate, savestate_stage* save_s
 		m_emu_state_close_pending = false;
 		m_resume_after_failed_savestate = false;
 		m_precompilation_option = {};
+		m_boot_mode = boot_mode::application;
 	};
 
 	if (system_state old_state = m_state.fetch_op([](system_state& state)
@@ -3744,7 +4246,7 @@ void Emulator::Kill(bool allow_autoexit, bool savestate, savestate_stage* save_s
 	const bool continuous_savestate_mode = savestate && !g_cfg.savestate.suspend_emu;
 
 	// Decide upfront (before the renderer is torn down) whether this stop should return to Big Picture
-	// Mode, so SetContinuousMode() takes effect before GSRender::~GSRender() runs and closes the window.
+	// Mode, so SetContinuousMode() takes effect before rsx::display_output::~display_output() runs and closes the window.
 	const bool return_to_big_picture_mode = !after_kill_callback && g_big_picture_mode_active.exchange(false);
 
 	if (return_to_big_picture_mode)
@@ -3766,6 +4268,12 @@ void Emulator::Kill(bool allow_autoexit, bool savestate, savestate_stage* save_s
 
 	if (auto rsx = g_fxo->try_get<rsx::thread>())
 	{
+		if (savestate)
+		{
+			// Implicit WCB callback. Ensures that resuming will show correct graphics.
+			rsx->request_guest_write_back();
+		}
+
 		*static_cast<cpu_thread*>(rsx) = thread_state::aborting;
 	}
 
@@ -4360,7 +4868,7 @@ void Emulator::Kill(bool allow_autoexit, bool savestate, savestate_stage* save_s
 
 			if (return_to_big_picture_mode)
 			{
-				ensure(!after_kill_callback);  
+				ensure(!after_kill_callback);
 				after_kill_callback = [this]()
 				{
 					sys_log.notice("Big Picture Mode: game stopped, returning to Big Picture Mode.");
@@ -5157,6 +5665,41 @@ bool Emulator::IsValidSfb(const std::string& path)
 	return false;
 }
 
+static std::string write_config_file(const fs::file& file, std::string_view data)
+{
+#ifdef _WIN32
+	file.write(data.data(), data.size());
+	return {};
+#else
+	const int fd = file.get_handle();
+	usz done = 0;
+
+	while (done < data.size())
+	{
+		const auto written = ::write(fd, data.data() + done, data.size() - done);
+
+		if (written < 0 && errno == EINTR)
+		{
+			continue;
+		}
+
+		if (written <= 0)
+		{
+			return fmt::format("write failed: %s", written < 0 ? std::strerror(errno) : "nothing written");
+		}
+
+		done += written;
+	}
+
+	if (::fsync(fd) != 0)
+	{
+		return fmt::format("sync failed: %s", std::strerror(errno));
+	}
+
+	return {};
+#endif
+}
+
 static std::string settings_file_path(const std::string& title_id)
 {
 	return title_id.empty() ? fs::get_config_dir(true) + "config.yml" : rpcs3::utils::get_custom_config_path(title_id);
@@ -5165,6 +5708,7 @@ static std::string settings_file_path(const std::string& title_id)
 bool Emulator::SaveSettingsFile(std::string_view settings, const std::string& title_id)
 {
 	const std::string config_name = settings_file_path(title_id);
+
 	// Save config atomically
 	fs::pending_file temp(config_name);
 	if (!temp.file)
@@ -5172,16 +5716,20 @@ bool Emulator::SaveSettingsFile(std::string_view settings, const std::string& ti
 		sys_log.error("Could not save config to %s (failed to create temporary file) (error=%s)", config_name, fs::g_tls_error);
 		return false;
 	}
-	if (temp.file.write(settings.data(), settings.size()) != settings.size())
+
+	if (const std::string failed = write_config_file(temp.file, settings); !failed.empty())
 	{
-		sys_log.error("Could not save config to %s (failed to write) (error=%s)", config_name, fs::g_tls_error);
+		// Not committed, so the config on disk stays as it was.
+		sys_log.error("Could not save config to %s (%s)", config_name, failed);
 		return false;
 	}
+
 	if (!temp.commit())
 	{
 		sys_log.error("Could not save config to %s (failed to commit) (error=%s)", config_name, fs::g_tls_error);
 		return false;
 	}
+
 	return true;
 }
 

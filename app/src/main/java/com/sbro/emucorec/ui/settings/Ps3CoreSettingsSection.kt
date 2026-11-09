@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -57,6 +58,9 @@ import com.sbro.emucorec.core.Ps3CoreSettingOverrides
 import com.sbro.emucorec.core.MicrophoneDevices
 import com.sbro.emucorec.core.CoreSettingsTreeCache
 import com.sbro.emucorec.core.Ps3Runtime
+import com.sbro.emucorec.core.Ps3LaunchBridge
+import com.sbro.emucorec.core.EmulatorState
+import com.sbro.emucorec.core.PRESENTATION_DEFAULTS
 import com.sbro.emucorec.ui.common.SectionCard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -88,6 +92,25 @@ enum class Ps3CoreSettingsCategory {
     Advanced,
 }
 
+internal data class CoreSettingEditState(val value: String, val overridden: Boolean, val pendingRestart: Boolean)
+
+internal fun resolveCoreSettingEditState(
+    path: String,
+    liveValue: String,
+    dynamic: Boolean,
+    globalValues: Map<String, String>,
+    gameValues: Map<String, String>,
+    savedGlobalPaths: Set<String>,
+): CoreSettingEditState {
+    val encoded = gameValues[path] ?: globalValues[path]
+    val desired = encoded?.let(::decodeCoreValue) ?: liveValue
+    return CoreSettingEditState(
+        value = desired,
+        overridden = path in gameValues,
+        pendingRestart = (path in gameValues || path in savedGlobalPaths) && !dynamic && desired != liveValue,
+    )
+}
+
 private data class Ps3CoreSetting(
     val path: String,
     val name: String,
@@ -99,6 +122,9 @@ private data class Ps3CoreSetting(
     val min: Double?,
     val max: Double?,
     val overridden: Boolean = false,
+    val dynamic: Boolean = true,
+    val liveValue: String = value,
+    val pendingRestart: Boolean = false,
 ) {
     fun encodedValue(raw: String = value): String = when (type) {
         "bool", "int", "uint", "float" -> raw
@@ -123,6 +149,7 @@ fun Ps3CoreSettingsSection(
     var settings by remember(scope, titleId) { mutableStateOf<List<Ps3CoreSetting>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
     var revision by remember { mutableIntStateOf(0) }
+    var restarting by remember { mutableStateOf(false) }
 
     LaunchedEffect(scope, titleId, revision) {
         val result = withContext(Dispatchers.IO) {
@@ -137,8 +164,17 @@ fun Ps3CoreSettingsSection(
                     emptyMap()
                 }
                 val globalValues = Ps3CoreSettingOverrides.resolvedGlobalValues(context)
+                val savedGlobalValues = Ps3CoreSettingOverrides.savedGlobalValues(context)
                 if (raw.isBlank()) emptyList() else buildList {
                     flattenCoreSettings(JSONObject(raw), "", "", this)
+                    PRESENTATION_DEFAULTS.forEach { (path, value) ->
+                        val bounds = if (path == "Video@@VR Picture Size") 20.0 to 100.0 else -100.0 to 100.0
+                        add(Ps3CoreSetting(
+                            path, path.substringAfter("@@"), "Video", if (value == "false") "bool" else "int",
+                            value, value, emptyList(), if (value == "false") null else bounds.first,
+                            if (value == "false") null else bounds.second,
+                        ))
+                    }
                 }.map { setting ->
                     val defaultOverride = Ps3CoreSettingOverrides.RECOMMENDED_DEFAULTS[setting.path]
                     val adjustedSetting = if (defaultOverride != null) {
@@ -146,14 +182,11 @@ fun Ps3CoreSettingsSection(
                     } else {
                         setting
                     }
-                    gameOverrides[setting.path]?.let { encoded ->
-                        adjustedSetting.copy(
-                            value = decodeCoreValue(encoded),
-                            overridden = true,
-                        )
-                    } ?: globalValues[setting.path]?.let { encoded ->
-                        adjustedSetting.copy(value = decodeCoreValue(encoded))
-                    } ?: adjustedSetting
+                    val edit = resolveCoreSettingEditState(
+                        setting.path, setting.liveValue, setting.dynamic, globalValues,
+                        gameOverrides, savedGlobalValues.keys,
+                    )
+                    adjustedSetting.copy(value = edit.value, overridden = edit.overridden, pendingRestart = edit.pendingRestart)
                 }
             }
         }
@@ -169,7 +202,9 @@ fun Ps3CoreSettingsSection(
         coroutineScope.launch(Dispatchers.IO) {
             val encoded = setting.encodedValue(raw)
             val applied = runCatching {
-                if (scope == Ps3CoreSettingsScope.Game && !titleId.isNullOrBlank()) {
+                if (setting.path in PRESENTATION_DEFAULTS) {
+                    Ps3CoreSettingOverrides.validPresentationEdit(setting.path, encoded)
+                } else if (scope == Ps3CoreSettingsScope.Game && !titleId.isNullOrBlank()) {
                     Ps3Core.instance.settingsSetTransient(setting.path, encoded)
                 } else {
                     Ps3Core.instance.settingsSet(setting.path, encoded)
@@ -188,6 +223,11 @@ fun Ps3CoreSettingsSection(
                         )
                     } else {
                         Ps3CoreSettingOverrides.recordGlobal(context, setting.path, encoded)
+                    }
+                    if (setting.path in PRESENTATION_DEFAULTS) {
+                        Ps3CoreSettingOverrides.applyPresentationSettings(
+                            context, titleId.takeIf { scope == Ps3CoreSettingsScope.Game },
+                        )
                     }
                     CoreSettingsTreeCache.invalidateTree()
                     onOverridesChanged()
@@ -241,7 +281,9 @@ fun Ps3CoreSettingsSection(
     val filtered = remember(settings, category, additionalCategories, surface) {
         val accepted = additionalCategories + category
         settings.filter {
-            coreSettingsCategory(it.path) in accepted &&
+            (coreSettingsCategory(it.path) in accepted ||
+                (surface == Ps3CoreSettingsSurface.InGame && category == Ps3CoreSettingsCategory.Graphics &&
+                    it.path.startsWith("Core@@"))) &&
                 isCoreSettingVisibleOnSurface(it.path, surface)
         }
     }
@@ -265,6 +307,25 @@ fun Ps3CoreSettingsSection(
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
+        }
+        if (settings.any { it.pendingRestart } &&
+            Ps3Runtime.state() != EmulatorState.Stopped
+        ) {
+            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                Text(stringResource(R.string.ps3_core_pending_restart), style = MaterialTheme.typography.bodySmall)
+                Button(
+                    enabled = !restarting,
+                    onClick = {
+                        restarting = true
+                        coroutineScope.launch {
+                            if (!Ps3LaunchBridge.restartRunningGame(context)) {
+                                error = resources.getString(R.string.game_launch_failed)
+                                restarting = false
+                            }
+                        }
+                    },
+                ) { Text(stringResource(R.string.ps3_core_apply_restart)) }
+            }
         }
         if (category == Ps3CoreSettingsCategory.Audio && surface == Ps3CoreSettingsSurface.FullSettings) {
             val device = settings.firstOrNull { it.path == "Audio@@Microphone Devices" }
@@ -400,7 +461,8 @@ private fun InGameSettingsCard(title: String, content: @Composable () -> Unit) {
 internal fun coreSettingsCategory(path: String): Ps3CoreSettingsCategory {
     val root = path.substringBefore("@@")
     return when (root) {
-        "System", "Miscellaneous" -> Ps3CoreSettingsCategory.General
+        "System" -> Ps3CoreSettingsCategory.General
+        "Miscellaneous" -> if (path in COMPILATION_HINT_PATHS) Ps3CoreSettingsCategory.Overlay else Ps3CoreSettingsCategory.General
         "Video" -> when {
             path.startsWith("Video@@Performance Overlay") ||
                 path.startsWith("Video@@Debug overlay") ||
@@ -433,7 +495,14 @@ internal fun isCoreSettingVisibleOnSurface(
             else -> true
         }
 
-        Ps3CoreSettingsSurface.InGame -> key in IN_GAME_SETTING_KEYS
+        // Native dynamic metadata governs applying edits. Boot-only CPU/graphics
+        // values are accepted as desired settings and wait for Apply & Restart.
+        Ps3CoreSettingsSurface.InGame ->
+            path.startsWith("Core@@") ||
+                (path.startsWith("Video@@") && key !in GAME_PROFILE_GLOBAL_ONLY_KEYS) ||
+                (path.startsWith("Audio@@") && key !in setOf("core_help_audio_audio_device", "core_help_audio_microphone_devices")) ||
+                path in COMPILATION_HINT_PATHS ||
+                key in IN_GAME_SETTING_KEYS
     }
 }
 
@@ -441,6 +510,12 @@ private val GAME_PROFILE_SYSTEM_KEYS = setOf(
     "core_help_system_language",
     "core_help_system_license_area",
     "core_help_system_enter_button_assignment",
+)
+
+private val COMPILATION_HINT_PATHS = setOf(
+    "Miscellaneous@@Show shader compilation hint",
+    "Miscellaneous@@Show PPU compilation hint",
+    "Miscellaneous@@Show SPU compilation hint",
 )
 
 private val GAME_PROFILE_GLOBAL_ONLY_KEYS = setOf(
@@ -774,6 +849,7 @@ private fun flattenCoreSettings(
                 variants = variants,
                 min = child.optString("min").toDoubleOrNull(),
                 max = child.optString("max").toDoubleOrNull(),
+                dynamic = child.optBoolean("dynamic", true),
             )
         }
     }

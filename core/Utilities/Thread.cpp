@@ -2,31 +2,41 @@
 #include "Emu/System.h"
 #include "Emu/Cell/SPUThread.h"
 #include "Emu/Cell/PPUThread.h"
+#include "Emu/Cell/PPUDisAsm.h"
 #include "Emu/Cell/lv2/sys_mmapper.h"
 #include "Emu/Cell/lv2/sys_event.h"
 #include "Emu/Cell/lv2/sys_process.h"
 #include "Emu/RSX/RSXThread.h"
 #include "Emu/system_config.h"
 #include "Thread.h"
+#include <bit>
+#include <cstring>
+#include <cerrno>
 #include "Utilities/JIT.h"
+#ifdef __APPLE__
+#include "ios_jit_dual_map.h"
+#endif
 #include <cfenv>
+#ifdef __ANDROID__
+#include <sys/prctl.h>
+#endif
+
+thread_local char g_tls_last_rsx_op[256]{};
+#include <charconv>
 
 #ifdef ARCH_ARM64
 #include "Emu/CPU/Backends/AArch64/AArch64Signal.h"
 #endif
 
-#ifdef __ANDROID__
-#include <android/log.h>
-#include <dlfcn.h>
-#include <sys/prctl.h>
-#endif
-
-thread_local char g_tls_last_rsx_op[256]{};
-
 #ifdef __cpp_lib_stacktrace
 #include "rpcs3_version.h"
 #include <stacktrace>
 #endif
+
+// Not only under _WIN32 below: the access-violation handler prints a host backtrace on every
+// platform, and on Android that is the only stack anyone gets -- the handler freezes the
+// emulator rather than aborting, so no tombstone is ever written.
+#include "stack_trace.h"
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -48,6 +58,9 @@ DYNAMIC_IMPORT_RENAME("Kernel32.dll", SetThreadDescriptionImport, "SetThreadDesc
 #define __USE_GNU
 #include <mach/thread_act.h>
 #include <mach/thread_policy.h>
+// vm_region_64 is declared here; the iOS SDK refuses mach/mach_vm.h.
+#include <mach/mach.h>
+#include <TargetConditionals.h>
 #endif
 #if defined(__DragonFly__) || defined(__FreeBSD__) || defined(__OpenBSD__)
 #include <pthread_np.h>
@@ -67,6 +80,12 @@ DYNAMIC_IMPORT_RENAME("Kernel32.dll", SetThreadDescriptionImport, "SetThreadDesc
 #include <sys/syscall.h>
 #include <sys/timerfd.h>
 #include <unistd.h>
+#endif
+#ifdef __ANDROID__
+// For the allocation-free breadcrumb the fault handler writes before it risks anything else, and
+// for reaching libsigchain's registration entry point without linking against the ART apex.
+#include <android/log.h>
+#include <dlfcn.h>
 #endif
 
 #if defined(__APPLE__) || defined(__DragonFly__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
@@ -133,12 +152,28 @@ enum cpu_threads_emulation_info_dump_t : u32 {};
 
 std::string dump_useful_thread_info()
 {
+#ifdef __APPLE__
+	// A fault inside the dump re-enters here from the signal handler and would fault forever.
+	thread_local bool s_tls_dumping = false;
+
+	if (s_tls_dumping)
+	{
+		return "Thread dump skipped: the dump itself faulted on this thread.";
+	}
+
+	s_tls_dumping = true;
+#endif
+
 	std::string result;
 
 	if (auto cpu = get_current_cpu_thread())
 	{
 		fmt::append(result, "%s", cpu_threads_emulation_info_dump_t{cpu->id});
 	}
+
+#ifdef __APPLE__
+	s_tls_dumping = false;
+#endif
 
 	return result;
 }
@@ -1312,7 +1347,12 @@ a64_mem_info_t decode_a64_mem_inst(u32 inst)
 	// V[26]
 	// opc[23:22]
 	// class bits[29:24] = 111001
+#ifdef __APPLE__
+	// Also register offset: bits[29:24] = 111000, bit 21 and option<1> set, bits[11:10] = 10.
+	if ((inst & 0x3B000000) == 0x39000000 || (inst & 0x3B204C00) == 0x38204800)
+#else
 	if ((inst & 0x3B000000) == 0x39000000)
+#endif
 	{
 		const u32 size = (inst >> 30) & 3;
 		const u32 opc  = (inst >> 22) & 3;
@@ -1382,7 +1422,17 @@ a64_mem_info_t decode_a64_mem_inst(u32 inst)
 	// size[31:30]
 	// V[26]
 	// opc[23:22]
+	//
+	// ARMSX3: and register offset (LDR/STR Wt, [Xn, Xm{, extend}]), bit 21 set and bits 11:10 = 10.
+	// size and opc mean the same in both, and the address comes from the fault, not the instruction.
+	// LLVM emits this form for a RawSPU register write: WET (BLUS30403) stores SPU_NPC with
+	// str w12, [x22, x11] right after creating its raw SPU, and died there undecoded.
+#ifdef __APPLE__
+	// The branch above already decodes the register-offset forms and checks option<1>.
 	if ((inst & 0x3B200C00u) == 0x38000000u)
+#else
+	if ((inst & 0x3B200C00u) == 0x38000000u || (inst & 0x3B200C00u) == 0x38200800u)
+#endif
 	{
 		const u32 size = (inst >> 30) & 3;
 		const u32 opc  = (inst >> 22) & 3;
@@ -1443,9 +1493,9 @@ a64_mem_info_t decode_a64_mem_inst(u32 inst)
 		}
 	}
 
-	// 
+	//
 	// Literal loads:
-	// 
+	//
 	// LDR Wt, label
 	// LDR Xt, label
 	// LDRSW Xt, label
@@ -1499,7 +1549,7 @@ void put_a64_reg_value(ucontext_t* context, u32 reg_index, u32 reg_size, bool re
 
 	if (reg_index == 31)
 	{
-		// XZR "register" 
+		// XZR "register"
 		ensure(false);
 	}
 
@@ -1554,6 +1604,556 @@ u64 get_a64_reg_value(ucontext_t* context, u32 reg_index, u32 reg_size)
 namespace rsx
 {
 	extern std::function<bool(u32 addr, bool is_writing)> g_access_violation_handler;
+}
+
+// The guest code at the fault AND at its callers.
+//
+// Registers and a call stack come free from dump_useful_thread_info(), and for a bad pointer
+// they are only half the answer: they say WHAT the address was, never what computed it. When
+// the faulting function turns out to be something generic, Borderlands 2 faults inside a
+// memcpy handed dest=0x93aef33d and length=0xc3aaf87d, both garbage, the routine itself is
+// blameless and the whole question is which caller filled those arguments.
+//
+// So: a window at cia, then one at each of the first few return addresses. Only a few, because
+// a PPU call stack here runs fourteen frames deep and the answer is almost always in the
+// immediate caller.
+//
+// The window back from cia is wide on purpose. Sixteen instructions is enough to see what
+// faulted and not enough to see the branch that decided to run it, and the guard is what you
+// need when the plan is a patch rather than a diagnosis. Burnout Paradise is the case: the
+// null check has to go in ahead of a store 0x60 bytes behind the reported pc, and the loop
+// bookkeeping that a patch must preserve sits between them.
+//
+// Every address is checked before it is read: cia and the stack are taken from a thread that
+// just faulted, so both can be garbage, and faulting inside the diagnostic that explains a
+// fault would be the worst possible trade.
+//
+// Called from BOTH access violation paths, for the reason given on the memory dump below.
+static void dump_guest_code_at_fault(cpu_thread* cpu, u32 fault_addr, bool is_writing)
+{
+	if (!cpu || cpu->get_class() != thread_class::ppu)
+	{
+		return;
+	}
+
+	const auto& gpr_ref = static_cast<ppu_thread*>(cpu)->gpr;
+	PPUDisAsm dis_asm(cpu_disasm_mode::dump, vm::g_sudo_addr);
+	std::string code;
+
+	// Follow calls, so one fault answers what used to take one run per level.
+	//
+	// A window at cia says what faulted. It never says what the thing it called did, and on
+	// Android there is no debugger to step into it. Burnout Paradise cost six separate crashes
+	// to walk by hand: a PLT stub, a forwarding thunk, a request builder, a descriptor loop, a
+	// lock wrapper, and finally the heap that was refusing the allocation. Every one of those
+	// addresses was only discoverable from the dump before it, so each hop meant another run.
+	//
+	// ARMSX3_DISASM_DEPTH=N disassembles the target of every bl found in a window, N levels
+	// deep, deduplicated and capped. Default 0 is the old behaviour.
+	u32 follow_depth = 0;
+#if defined(__APPLE__) && defined(ARCH_ARM64)
+	// A phone gets no environment, so follow one level by default there.
+	follow_depth = 1;
+#endif
+
+	if (const char* depth_env = std::getenv("ARMSX3_DISASM_DEPTH"))
+	{
+		follow_depth = std::min<u32>(static_cast<u32>(std::strtoul(depth_env, nullptr, 0)), 4);
+	}
+
+	std::vector<u32> seen;
+	std::vector<std::pair<u32, u32>> pending;
+
+#ifdef __APPLE__
+	// The target of the relative bl at `at`, or 0 when the word there is not one.
+	const auto bl_target = [](u32 at) -> u32
+	{
+		const u32 op = vm::read32(at);
+
+		if ((op & 0xfc000003) != 0x48000001)
+		{
+			return 0;
+		}
+
+		s32 disp = static_cast<s32>(op & 0x03fffffc);
+
+		if (disp & 0x02000000)
+		{
+			disp -= 0x04000000;
+		}
+
+		return at + static_cast<u32>(disp);
+	};
+#endif
+
+	const auto window = [&](const char* what, u32 pc, u32 back, u32 span, u32 depth = 0)
+	{
+		fmt::append(code, "\n%s 0x%08x:\n", what, pc);
+
+		for (u32 at = pc >= back ? pc - back : 0; at <= pc + span; at += 4)
+		{
+			if (!vm::check_addr(at))
+			{
+				continue;
+			}
+
+			dis_asm.disasm(at);
+			code += (at == pc ? "  >>" : "    ");
+			code += dis_asm.last_opcode;
+
+			// Name the instruction that actually faulted.
+			//
+			// The >> marker follows cia, and the recompiler reports cia per BLOCK, so on the
+			// fatal path it routinely points at an instruction that cannot have faulted. Burnout
+			// marked `lwz r9,0(r3)` with r3 = 0x86014100 for a fault at address 0, and that gap
+			// is why every dump read like a fresh mystery.
+			//
+			// The dump already holds the fault address and every register, so it can just work
+			// out which memory operand lands on it: D form (rA + simm), DS form (rA + ds*4) and
+			// X form (rA + rB). rA of 0 means literal zero on PowerPC, not r0, which is exactly
+			// the case that produces a small faulting address out of nowhere.
+			{
+				const u32 iop = vm::read32(at);
+				const u32 primary = iop >> 26;
+				const u32 ra = (iop >> 16) & 0x1f;
+				const u64 base = ra ? gpr_ref[ra] : 0;
+
+				bool hit = false;
+
+				// Only instructions that touch memory, and only in the direction that faulted.
+				//
+				// Both filters are load bearing. Primary 31 is not just indexed loads and stores,
+				// it is also every arithmetic and logical form, so matching it wholesale flags an
+				// `add` whose two registers happen to sum to the fault address. With a fault at 0
+				// that is most of the window, and the real access is buried in the noise.
+				const auto store_d = [](u32 op)
+				{
+					return (op >= 36 && op <= 39) || op == 44 || op == 45 || op == 47
+						|| (op >= 52 && op <= 55);
+				};
+
+				if (primary >= 32 && primary <= 55)
+				{
+					hit = store_d(primary) == is_writing
+						&& static_cast<u32>(base + static_cast<s16>(iop & 0xffff)) == fault_addr;
+				}
+				else if (primary == 58 || primary == 62)
+				{
+					hit = (primary == 62) == is_writing
+						&& static_cast<u32>(base + (static_cast<s16>(iop & 0xfffc))) == fault_addr;
+				}
+				else if (primary == 31)
+				{
+					// Indexed memory forms only, by extended opcode.
+					switch ((iop >> 1) & 0x3ff)
+					{
+					case 21: case 23: case 53: case 55: case 87: case 119:
+					case 279: case 311: case 341: case 343: case 373: case 375:
+					case 534: case 535: case 567: case 597: case 599: case 631:
+					{
+						hit = !is_writing;
+						break;
+					}
+					case 149: case 151: case 181: case 183: case 215: case 247:
+					case 407: case 439: case 662: case 663: case 695: case 725:
+					case 727: case 759: case 918:
+					{
+						hit = is_writing;
+						break;
+					}
+					default: { hit = false; break; }
+					}
+
+					hit = hit && static_cast<u32>(base + gpr_ref[(iop >> 11) & 0x1f]) == fault_addr;
+				}
+
+				if (hit)
+				{
+					code.pop_back();
+					fmt::append(code, "   <== THIS ONE: r%u + offset = 0x%x, the faulting address\n", ra, fault_addr);
+				}
+			}
+
+			if (depth >= follow_depth)
+			{
+				continue;
+			}
+
+#ifdef __APPLE__
+			if (const u32 target = bl_target(at))
+			{
+				pending.emplace_back(target, depth + 1);
+			}
+#else
+			// bl: primary opcode 18, AA clear, LK set. Relative, so the target is computed
+			// from the instruction's own address.
+			const u32 op = vm::read32(at);
+
+			if ((op & 0xfc000003) != 0x48000001)
+			{
+				continue;
+			}
+
+			s32 disp = static_cast<s32>(op & 0x03fffffc);
+
+			if (disp & 0x02000000)
+			{
+				disp -= 0x04000000;
+			}
+
+			pending.emplace_back(at + static_cast<u32>(disp), depth + 1);
+#endif
+		}
+	};
+
+	window("Code at the faulting pc", static_cast<ppu_thread*>(cpu)->cia, 0x100, 0x40);
+
+#ifdef __APPLE__
+	// Under PPU LLVM a direct bl leaves cia behind, so the fault can sit in the callee of the bl at LR - 4.
+	const u64 lr = static_cast<ppu_thread*>(cpu)->lr;
+
+	if (lr >= 4 && lr <= u32{umax} && lr % 4 == 0 && vm::check_addr(static_cast<u32>(lr - 4), vm::page_executable))
+	{
+		const u32 call = static_cast<u32>(lr - 4);
+		const u32 cia = static_cast<ppu_thread*>(cpu)->cia;
+
+		// The faulting-pc window covers [cia - 0x100, cia + 0x40]; inside it, the call is already shown.
+		if (u64{call} + 0x100 < cia || u64{call} > u64{cia} + 0x40)
+		{
+			window("Code at the link register's call", call, 0x60, 0x10);
+		}
+
+		if (const u32 target = bl_target(call); target && vm::check_addr(target, vm::page_executable))
+		{
+			seen.push_back(target);
+			window("Code at the link register's call target", target, 0, 0x100, 1);
+		}
+	}
+#endif
+
+	u32 shown = 0;
+
+	for (auto&& [ret, sp] : cpu->dump_callstack_list())
+	{
+		if (shown++ >= 3)
+		{
+			break;
+		}
+
+		// Back further than forward: the call is BEHIND the return address, and what fills
+		// the arguments sits behind that.
+		window("Code at caller", ret, 0x60, 0x10);
+	}
+
+	// Drain whatever those windows called, breadth first so the immediate callees land
+	// before anything they in turn call. Capped, because a single window can name a dozen
+	// targets and four levels of that is a log nobody reads.
+	for (usz i = 0; i < pending.size() && seen.size() < 24; i++)
+	{
+		const auto [target, depth] = pending[i];
+
+		if (!vm::check_addr(target, vm::page_executable))
+		{
+			continue;
+		}
+
+		if (std::find(seen.begin(), seen.end(), target) != seen.end())
+		{
+			continue;
+		}
+
+		seen.push_back(target);
+
+		// Short windows: what matters about a callee is how it starts and what it calls,
+		// and the one that actually fails is reached by following those, not by reading
+		// any single one to its end.
+		window("Code at a call target", target, 0, 0x60, depth);
+	}
+
+	// A lever for disassembling somewhere the fault does not reach.
+	//
+	// The windows above follow cia and the call stack. That is the right default, and it cannot
+	// answer a question about a function that has already returned. Burnout Paradise is the case:
+	// the crash is a store through a null audio buffer pointer, the pointer is null because the
+	// guest allocator at 0x14160 returned zero, and by the time anything faults that allocator is
+	// long gone from the stack. Nothing in a fault dump can reach it, and on Android there is no
+	// debugger to go and look.
+	//
+	// Put ARMSX3_DISASM_AT=0x14160 in driver_env.txt and the next fault prints it, with
+	// ARMSX3_DISASM_LEN to say how much. Costs one getenv when unset, which is how it should stay
+	// unless somebody is actually chasing something.
+	if (const char* at_env = std::getenv("ARMSX3_DISASM_AT"))
+	{
+		const u32 at = static_cast<u32>(std::strtoul(at_env, nullptr, 0)) & ~3u;
+
+		u32 len = 0x200;
+
+		if (const char* len_env = std::getenv("ARMSX3_DISASM_LEN"))
+		{
+			if (const u32 parsed = static_cast<u32>(std::strtoul(len_env, nullptr, 0)))
+			{
+				len = std::min<u32>(parsed, 0x2000);
+			}
+		}
+
+		// Said out loud when it is wrong: a silent nothing here is indistinguishable from a
+		// fault that never fired, and the whole point of the lever is that someone is waiting
+		// on its output.
+		if (at && vm::check_addr(at, vm::page_executable))
+		{
+			window("Code at ARMSX3_DISASM_AT", at, 0, len);
+		}
+		else
+		{
+			fmt::append(code, "\nARMSX3_DISASM_AT 0x%08x is not executable guest memory\n", at);
+		}
+	}
+
+	// Follow a pointer chain from a register, and disassemble wherever it lands.
+	//
+	// ARMSX3_DISASM_AT answers "what is at this address". It cannot answer "what does this call
+	// actually reach" when the target is behind a vtable, because that address only exists at
+	// runtime. Burnout Paradise needs exactly that: the audio allocator it calls turns out to be
+	// a forwarding thunk that loads r3->[0x14], then that object's vtable, then a slot in it, and
+	// calls through ctr. Five dereferences, not one of them a fixed address.
+	//
+	// ARMSX3_CHAIN=r31,4,0x14,0,0xc,0 starts at r31 and walks those offsets. Every step is
+	// printed, because a chain that takes a wrong turn still produces a plausible looking number
+	// and silently disassembling whatever it lands on is worse than saying nothing. The end of
+	// the chain is disassembled when it points at executable memory.
+	if (const char* chain_env = std::getenv("ARMSX3_CHAIN"))
+	{
+		const auto& gpr = static_cast<ppu_thread*>(cpu)->gpr;
+
+		std::string spec = chain_env;
+		std::string trace;
+		u32 cur = 0;
+		bool ok = true;
+
+		usz pos = spec.find(',');
+		const std::string first = spec.substr(0, pos);
+
+		if (first.size() > 1 && (first[0] == 'r' || first[0] == 'R'))
+		{
+			if (const u32 idx = static_cast<u32>(std::strtoul(first.c_str() + 1, nullptr, 10)); idx < 32)
+			{
+				cur = static_cast<u32>(gpr[idx]);
+				fmt::append(trace, "\n  %s = 0x%08x", first, cur);
+			}
+			else
+			{
+				fmt::append(trace, "\n  '%s' is not a register", first);
+				ok = false;
+			}
+		}
+		else
+		{
+			cur = static_cast<u32>(std::strtoul(first.c_str(), nullptr, 0));
+			fmt::append(trace, "\n  start = 0x%08x", cur);
+		}
+
+		while (ok && pos != std::string::npos)
+		{
+			const usz next = spec.find(',', pos + 1);
+			const std::string tok = spec.substr(pos + 1, next == std::string::npos ? next : next - pos - 1);
+			pos = next;
+
+			const u32 off = static_cast<u32>(std::strtoul(tok.c_str(), nullptr, 0));
+
+			if (!vm::check_addr(cur + off, vm::page_readable, 4))
+			{
+				fmt::append(trace, "\n  [0x%08x + 0x%x] is not readable, chain stops here", cur, off);
+				ok = false;
+				break;
+			}
+
+			const u32 val = vm::read32(cur + off);
+			fmt::append(trace, "\n  [0x%08x + 0x%x] = 0x%08x", cur, off, val);
+			cur = val;
+		}
+
+		fmt::append(code, "\nARMSX3_CHAIN %s:%s\n", spec, trace);
+
+		if (ok && cur && vm::check_addr(cur, vm::page_executable))
+		{
+			window("Code at the end of ARMSX3_CHAIN", cur, 0, 0x200);
+		}
+		else if (ok)
+		{
+			fmt::append(code, "  end of chain 0x%08x is not executable, not disassembling\n", cur);
+		}
+	}
+
+	// Find every instruction matching a bit pattern, anywhere in guest code.
+	//
+	// Some questions are not "what is at this address" but "who writes this field", and a
+	// fault dump cannot answer that by following anything: the writer already ran, possibly
+	// minutes ago, and is not on the stack. On desktop that is a write watchpoint. On Android
+	// there is none, so the next best thing is that the instruction which does it has a fixed
+	// encoding and can simply be looked for.
+	//
+	// Burnout Paradise is the case. One field of an otherwise intact audio structure,
+	// r31+0x17c, holds 0x6387194f where a buffer size belongs, so the game asks the heap for
+	// 1.67GB, the allocation fails, and every pointer that should have come from it stays
+	// null. Every crash after that is downstream of the one bad word, and the only thing left
+	// to learn is who put it there. `stw rX,0x17c(rY)` is 0x9000017c under mask 0xfc00ffff.
+	//
+	// ARMSX3_SCAN=<value>/<mask>, both hex. Pages are checked before they are read and
+	// unmapped ones skipped, so the default range can be generous without caring what is
+	// actually mapped. ARMSX3_SCAN_FROM and ARMSX3_SCAN_TO narrow it.
+	if (const char* scan_env = std::getenv("ARMSX3_SCAN"))
+	{
+		const u32 want = static_cast<u32>(std::strtoul(scan_env, nullptr, 16));
+		const char* slash = std::strchr(scan_env, '/');
+		const u32 mask = slash ? static_cast<u32>(std::strtoul(slash + 1, nullptr, 16)) : 0xffffffffu;
+
+		u32 from = 0x10000;
+		u32 to = 0x10000000;
+
+		if (const char* e = std::getenv("ARMSX3_SCAN_FROM")) from = static_cast<u32>(std::strtoul(e, nullptr, 0)) & ~3u;
+		if (const char* e = std::getenv("ARMSX3_SCAN_TO")) to = static_cast<u32>(std::strtoul(e, nullptr, 0)) & ~3u;
+
+		std::string found;
+		u32 hits = 0;
+
+		for (u32 page = from & ~0xfffu; page < to && hits < 64; page += 0x1000)
+		{
+			if (!vm::check_addr(page, vm::page_executable, 0x1000))
+			{
+				continue;
+			}
+
+			for (u32 at = std::max(page, from); at < page + 0x1000 && at < to && hits < 64; at += 4)
+			{
+				if ((vm::read32(at) & mask) != want)
+				{
+					continue;
+				}
+
+				hits++;
+				dis_asm.disasm(at);
+				found += "    ";
+				found += dis_asm.last_opcode;
+			}
+		}
+
+		fmt::append(code, "\nARMSX3_SCAN %08x/%08x over 0x%08x..0x%08x, %u %s:\n%s",
+			want, mask, from, to, hits, hits == 64 ? "matches (CAPPED)" : "matches", found);
+	}
+
+	vm_log.always()("Guest code around the fault:%s", code);
+}
+
+// The memory the guest registers point AT, not only the values they hold.
+//
+// A null pointer fault names the register that was zero and stops there. What decides the
+// bug is the structure around it. Burnout Paradise (BLUS30061) faults storing through
+// entry->[0x10] of an audio voice table at index 6, with the table base live in r28, and
+// the whole question is whether that voice was never set up or was torn down while the
+// count still included it. The neighbouring entries answer it immediately: every other
+// pointer valid means something cleared exactly one of them, a tail of zeroes means the
+// table was never filled that far. That table is live in guest memory at the moment of the
+// fault and was being thrown away.
+//
+// On desktop a write watchpoint answers this in one run. On Android there is no debugger to
+// attach, which is the same reason the register dump had to be raised to error, so the fault
+// handler is the only place this state can be read at all.
+//
+// Called from BOTH access violation paths. They are easy to confuse: the recoverable one
+// prefixes the thread name and the fatal one does not, and a diagnostic added to only the
+// first is silent for every fault that takes the second.
+//
+// One window per distinct base, so a table address held in three registers prints once, and
+// capped so the answer is not buried in hex. Every window is bounds checked over its full
+// span before any of it is read, because half of a faulted thread's registers are garbage
+// and faulting inside the diagnostic that explains a fault helps nobody.
+static void dump_guest_memory_at_registers(cpu_thread* cpu)
+{
+	if (!cpu || cpu->get_class() != thread_class::ppu)
+	{
+		return;
+	}
+
+	constexpr u32 span = 0x200;
+	constexpr u32 max_windows = 8;
+
+	// Order matters, because the cap bites on every real fault.
+	//
+	// r1, r2 and r13 are the stack, TOC and TLS pointers. They are always valid, so they win
+	// every race to fill a slot, and they are almost never the answer. Burnout Paradise is the
+	// case: r1, r2, r5, r6, r9 and r13 took all six slots and r28, the base of the audio voice
+	// table the fault is about, never got one. The callee saved registers are where a compiler
+	// parks the object a function is working on, so walk those first and leave the pointers
+	// every frame happens to hold until last.
+	static constexpr u8 order[] =
+	{
+		31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14,
+		3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+		1, 2, 13, 0,
+	};
+
+	const auto& gpr = static_cast<ppu_thread*>(cpu)->gpr;
+
+	std::string data;
+	u32 bases[max_windows]{};
+	u32 windows = 0;
+
+	for (const u8 i : order)
+	{
+		if (windows >= max_windows)
+		{
+			break;
+		}
+
+		const u32 base = static_cast<u32>(gpr[i]) & ~0xfu;
+
+		// A small value is an integer the game is carrying, not an address. Only the first row
+		// has to be readable to be worth printing: a structure that runs off the end of its
+		// mapping still says what it held up to that point, and requiring the whole span would
+		// drop exactly the windows near a boundary that tend to matter.
+		if (base < 0x10000 || !vm::check_addr(base, vm::page_readable, 0x10))
+		{
+			continue;
+		}
+
+		bool dup = false;
+
+		for (u32 j = 0; j < windows; j++)
+		{
+			dup |= bases[j] == base;
+		}
+
+		if (dup)
+		{
+			continue;
+		}
+
+		bases[windows++] = base;
+
+		fmt::append(data, "\nr%u -> 0x%08x:\n", i, base);
+
+		for (u32 row = 0; row < span; row += 0x10)
+		{
+			if (!vm::check_addr(base + row, vm::page_readable, 0x10))
+			{
+				break;
+			}
+
+			fmt::append(data, "  %08x:", base + row);
+
+			for (u32 off = 0; off < 0x10; off += 4)
+			{
+				fmt::append(data, " %08x", vm::read32(base + row + off));
+			}
+
+			data += '\n';
+		}
+	}
+
+	if (windows)
+	{
+		vm_log.always()("Guest memory at the register values:%s", data);
+	}
 }
 
 bool handle_access_violation(u32 addr, bool is_writing, bool is_exec, ucontext_t* context) noexcept
@@ -1968,6 +2568,13 @@ bool handle_access_violation(u32 addr, bool is_writing, bool is_exec, ucontext_t
 
 	if (vm::check_addr(addr, required_page_perms))
 	{
+#if defined(__APPLE__) || defined(__ANDROID__)
+		// The RSX locked this host page; while stopping its handler may be gone, so unlock it here.
+		if (Emu.IsStopped())
+		{
+			utils::memory_protect(vm::base(utils::page_start(addr)), utils::get_page_size(), utils::protection::rw);
+		}
+#endif
 		return true;
 	}
 
@@ -2005,7 +2612,12 @@ bool handle_access_violation(u32 addr, bool is_writing, bool is_exec, ucontext_t
 		if (vm::writer_lock mlock; area->flags & vm::preallocated || vm::check_addr(addr, 0))
 		{
 			// For allocated memory with protection lower than required (such as protection::no or read-only while writing to it)
+#ifdef __APPLE__
+			// Host pages can be 16 KiB, so protect the whole host page rather than a 4 KiB slice of it.
+			utils::memory_protect(vm::base(utils::page_start(addr)), utils::get_page_size(), utils::protection::rw);
+#else
 			utils::memory_protect(vm::base(addr & -0x1000), 0x1000, utils::protection::rw);
+#endif
 			reprotected = true;
 		}
 
@@ -2015,7 +2627,7 @@ bool handle_access_violation(u32 addr, bool is_writing, bool is_exec, ucontext_t
 			{
 				ppu_register_range(addr & -0x10000, 0x10000);
 			}
-			
+
 			if (added_flag)
 			{
 				cpu->check_state();
@@ -2047,7 +2659,7 @@ bool handle_access_violation(u32 addr, bool is_writing, bool is_exec, ucontext_t
 		{
 			cpu->check_state();
 		}
-	
+
 		return false;
 	};
 
@@ -2196,8 +2808,58 @@ bool handle_access_violation(u32 addr, bool is_writing, bool is_exec, ucontext_t
 		{
 			if (g_tls_access_violation_recovered != addr)
 			{
-				vm_log.notice("\n%s", dump_useful_thread_info());
-				vm_log.always()("[%s] Access violation %s location 0x%x (%s)", cpu->get_name(), is_writing ? "writing" : "reading", addr, (is_writing && vm::check_addr(addr)) ? "read-only memory" : "unmapped memory");
+				// error, not notice: Android's logcat sink drops anything below warning, so
+				// this dump -- the guest registers and callstack, the only thing that says
+				// WHICH pointer was null and what the game was holding -- was built on every
+				// fault and then discarded on the one platform that cannot attach a debugger
+				// to read it another way. The fault line beside it is fatal and survives, so
+				// every Android guest crash report has arrived with the answer stripped out.
+				vm_log.error("\n%s", dump_useful_thread_info());
+
+				// Name a guest halt for what it is.
+				//
+				// The SPU recompilers implement the HALT family (HGT/HEQ/HLGT and friends) by
+				// storing to 0xffdead00 on purpose, so the fault handler catches it -- see
+				// make_halt in SPULLVMRecompiler.cpp and its ASMJIT counterpart. Reported as a
+				// bare access violation it reads like an emulator crash at a nonsense address,
+				// and it is neither: those instructions are assertions the GAME compiled into
+				// its own SPU code, so reaching one means the program checked its state, found
+				// it wrong, and stopped itself. The interesting question is what fed it bad
+				// data, which is a completely different investigation from a stray pointer.
+				//
+				// The interpreter already says "Halt" here; only the recompiled path was
+				// silent about it. Hit on Eternal Sonata (BLJS10017), whose TCX_CellSpursKernel0
+				// halts and takes the game's forward progress with it.
+				if (addr >= 0xffdead00 && addr < 0xffdeae00)
+				{
+					vm_log.always()("[%s] SPU halted itself: the guest executed a HALT instruction"
+						" (trap store to 0x%x). This is the game's own assertion firing, not a bad"
+						" pointer -- something upstream handed it state it rejected.",
+						cpu->get_name(), addr);
+				}
+				else
+				{
+					vm_log.always()("[%s] Access violation %s location 0x%x (%s)", cpu->get_name(), is_writing ? "writing" : "reading", addr, (is_writing && vm::check_addr(addr)) ? "read-only memory" : "unmapped memory");
+
+					// The guest code at the fault AND at its callers.
+					//
+					// Registers and a call stack come free from dump_useful_thread_info() above,
+					// and for a bad pointer they are only half the answer: they say WHAT the
+					// address was, never what computed it. When the faulting function turns out to
+					// be something generic -- Borderlands 2 faults inside a memcpy, handed
+					// dest=0x93aef33d and length=0xc3aaf87d, both garbage -- the routine itself is
+					// blameless and the whole question is which caller filled those arguments.
+					//
+					// So: a window at cia, then one at each of the first few return addresses. Only
+					// a few, because a PPU call stack here runs fourteen frames deep and the answer
+					// is almost always in the immediate caller.
+					//
+					// Every address is checked before it is read: cia and the stack are taken from
+					// a thread that just faulted, so both can be garbage, and faulting inside the
+					// diagnostic that explains a fault would be the worst possible trade.
+					dump_guest_code_at_fault(cpu, addr, is_writing);
+					dump_guest_memory_at_registers(cpu);
+				}
 			}
 
 			// TODO:
@@ -2205,11 +2867,15 @@ bool handle_access_violation(u32 addr, bool is_writing, bool is_exec, ucontext_t
 			// SPUThread: Send sys_spu exception event
 			cpu->state += cpu_flag::dbg_pause;
 
+			// Remove flags preventing check_state() from waiting here (access violation cannot be returned without being handled)
 			bs_t<cpu_flag> to_restore_flags = {};
 			constexpr bs_t<cpu_flag> remove_cpu_flags = cpu_flag::stop + cpu_flag::ret;
+
 			while (cpu->check_state())
 			{
-				if (::is_stopped(cpu->state - cpu_flag::stop))
+				const bool is_emu_stopped = ::is_stopped(cpu->state - cpu_flag::stop);
+
+				if (is_emu_stopped)
 				{
 					for (u32 try_count = 0; !hack_alloc(); try_count++)
 					{
@@ -2217,15 +2883,19 @@ bool handle_access_violation(u32 addr, bool is_writing, bool is_exec, ucontext_t
 						{
 							fmt::throw_exception("Failed to rescue CPU thread from access violation handler.");
 						}
+
 						thread_ctrl::wait_for(10000);
 					}
+
 					break;
 				}
+
 				ensure(cpu->state & cpu_flag::stop);
 				to_restore_flags += cpu->state.fetch_sub(remove_cpu_flags) & remove_cpu_flags;
 			}
-			cpu->state += to_restore_flags;
 
+			// Restore them
+			cpu->state += to_restore_flags;
 			return true;
 		}
 		else
@@ -2248,8 +2918,35 @@ bool handle_access_violation(u32 addr, bool is_writing, bool is_exec, ucontext_t
 	// Do not log any further access violations in this case.
 	if (g_tls_access_violation_recovered != addr)
 	{
-		vm_log.notice("\n%s", dump_useful_thread_info());
+		// error, not notice -- see the SPU path above. Dropped by the logcat cutoff otherwise.
+		vm_log.error("\n%s", dump_useful_thread_info());
 		vm_log.fatal("Access violation %s location 0x%x (%s)", is_writing ? "writing" : (is_exec ? "executing" : "reading"), addr, (is_writing && vm::check_addr(addr)) ? "read-only memory" : "unmapped memory");
+
+		dump_guest_code_at_fault(cpu, addr, is_writing);
+		dump_guest_memory_at_registers(cpu);
+
+		// The host stack, which is the half that was missing.
+		//
+		// dump_useful_thread_info prints GUEST state, and for a fault taken on an emulator
+		// thread rather than inside guest code that says where the emulator was in the game,
+		// not which of our functions dereferenced null. Nor is there a tombstone to fall back
+		// on: this path freezes the emulator instead of aborting, so the process survives and
+		// Android never writes one.
+		//
+		// Yakuza Dead Souls reads location 0xc on the RSX thread with the FIFO empty and
+		// parked at a self-jump -- so the fault is in whatever runs while no commands are
+		// pending, and there are several candidates. Naming the frame settles it.
+		if (const auto stack = utils::get_backtrace_symbols(utils::get_backtrace(32)); !stack.empty())
+		{
+			std::string out;
+
+			for (usz i = 0; i < stack.size(); i++)
+			{
+				fmt::append(out, "\n  #%02u %s", i, stack[i]);
+			}
+
+			vm_log.fatal("Host backtrace:%s", out);
+		}
 	}
 
 	while (Emu.IsPausedOrReady())
@@ -2308,6 +3005,7 @@ bool handle_access_violation(u32 addr, bool is_writing, bool is_exec, ucontext_t
 			{
 				fmt::throw_exception("Failed to rescue CPU thread from access violation handler.");
 			}
+
 			thread_ctrl::wait_for(10000);
 		}
 	}
@@ -2364,7 +3062,7 @@ static LONG exception_handler(PEXCEPTION_POINTERS pExp) noexcept
 			is_exec = true;
 			addr = static_cast<u32>(seg_off * 2);
 		}
-		else 
+		else
 		{
 			std::this_thread::sleep_for(1ms);
 			return EXCEPTION_CONTINUE_SEARCH;
@@ -2490,7 +3188,7 @@ static LONG exception_filter(PEXCEPTION_POINTERS pExp) noexcept
 	}
 
 	fmt::append(msg, "RPCS3 image base: %p.\n", GetModuleHandle(NULL));
-	
+
 #if defined(ARCH_X64)
 	fmt::append(msg, "RAX: %016llX	RBX: %016llX\n", pExp->ContextRecord->Rax, pExp->ContextRecord->Rbx);
 	fmt::append(msg, "RCX: %016llX	RDX: %016llX\n", pExp->ContextRecord->Rcx, pExp->ContextRecord->Rdx);
@@ -2522,7 +3220,7 @@ static LONG exception_filter(PEXCEPTION_POINTERS pExp) noexcept
 	{
 		fmt::append(msg, "%s\n", symbol);
 	}
-	
+
 	sys_log.fatal("\n%s", msg);
 	logs::listener::sync_all();
 
@@ -2551,18 +3249,26 @@ const bool s_exception_handler_set = []() -> bool
 #else
 
 #ifdef __ANDROID__
-// The handler that was installed before ours -- libsigchain's, which fronts ART and debuggerd.
-// Kept so that faults which are not the emulator's can be forwarded to it.
+// The handlers that were installed before ours -- libsigchain's, which fronts ART and debuggerd.
+// Kept so that faults which are not the emulator's can be forwarded to them.
 static struct ::sigaction s_prev_fault_action[NSIG]{};
 
 // True when this fault is one the emulator's own memory model is responsible for.
+//
+// The ranges are exactly the ones the handler can act on: guest memory (try_get_addr spans 8GiB
+// from g_base_addr, so the sudo mirror is included), the executable map, and the segment map.
+// Everything else is somebody else's fault, in both senses.
 static bool is_emulator_fault(void* addr)
 {
-	if (!addr || !vm::g_exec_addr)
+	// None is, until vm's reservations exist. This handler is installed by a static initializer
+	// (s_exception_handler_set below) and vm's bases are set by others, in vm.cpp, in no order the
+	// language promises. In between, g_base_addr and g_exec_addr are still null, so every address
+	// below 8GiB reads as guest memory and address 0 as offset 0 of the exec map, and ART's own
+	// suspend and null checks -- faults at address 0 on whichever managed thread is running -- were
+	// taken for ours and made fatal. Seen at launch on the test emulator: the main thread in
+	// Thread.join under MediaPlayer.prepare, while the core library was still loading.
+	if (!vm::g_base_addr || !vm::g_exec_addr)
 	{
-		// No address, or the VM is not up yet: before g_exec_addr is set the exec/seg offsets
-		// below are computed against a null base, so every address looks like an emulator fault.
-		// An ART-internal SIGSEGV early in the process would then be reported as one and abort.
 		return false;
 	}
 
@@ -2572,43 +3278,75 @@ static bool is_emulator_fault(void* addr)
 	return vm::try_get_addr(addr).second || exec64 < 0x100000000ull || seg_off < 0x80000000ull;
 }
 
-// Bionic's own sigaction, reached past libsigchain's interposition: an ordinary call registers
-// INSIDE ART's chain, behind its FaultManager, which reads guest registers as ArtMethod* and dies.
-using native_sigaction_fn = int (*)(int, const struct ::sigaction*, struct ::sigaction*);
+// Bionic's own sigaction, reached past libsigchain's interposition.
+//
+// libsigchain exports sigaction() and is loaded with global visibility, so an ordinary call
+// registers us INSIDE ART's chain -- behind its FaultManager, which is the entire problem. Looking
+// the symbol up in libc's own handle gets the real one, letting us install at the kernel level and
+// genuinely go first. RTLD_NOLOAD because libc is obviously already here; this must never load
+// anything. Returns null if bionic ever stops exporting it, and the caller then keeps the ordinary
+// registration rather than starting with no handler at all.
+using armsx3_sigaction_fn = int (*)(int, const struct ::sigaction*, struct ::sigaction*);
 
-static native_sigaction_fn real_sigaction()
+static armsx3_sigaction_fn real_sigaction()
 {
 	void* const libc = ::dlopen("libc.so", RTLD_NOLOAD | RTLD_LOCAL);
 
-	return libc ? reinterpret_cast<native_sigaction_fn>(::dlsym(libc, "sigaction")) : nullptr;
+	return libc ? reinterpret_cast<armsx3_sigaction_fn>(::dlsym(libc, "sigaction")) : nullptr;
 }
-#endif
 
+// Installs a fault handler, remembering what it replaced.
 static int install_fault_handler(int sig, const struct ::sigaction& sa)
 {
-#ifdef __ANDROID__
 	return ::sigaction(sig, &sa, sig > 0 && sig < NSIG ? &s_prev_fault_action[sig] : nullptr);
-#else
-	return ::sigaction(sig, &sa, nullptr);
-#endif
 }
+#else
+static int install_fault_handler(int sig, const struct ::sigaction& sa)
+{
+	return ::sigaction(sig, &sa, nullptr);
+}
+#endif
 
+// Installs a fault handler ahead of the Android runtime, not inside its chain.
+//
+// Two registrations were a mistake worth recording. Registering through the interposed sigaction()
+// AS WELL as at kernel level puts this handler in libsigchain's chain, so forwarding a fault that
+// is not ours goes to libsigchain, which walks its chain straight back to here, which forwards
+// again -- recursing until the alternate stack is gone. The process died of that with no
+// breadcrumb, no tombstone and no ART frames: quieter than the bug it was meant to fix.
+//
+// So: capture the handler the kernel currently calls (libsigchain's, which fronts ART), then
+// replace it, and never register through the interposed entry point for this signal. The chain we
+// forward into then does not contain us.
 static bool install_fault_handler_first(int sig, const struct ::sigaction& sa)
 {
 #ifdef __ANDROID__
-	if (const native_sigaction_fn real_sa = real_sigaction())
+	if (const armsx3_sigaction_fn real_sa = real_sigaction())
 	{
 		if (real_sa(sig, nullptr, &s_prev_fault_action[sig]) != -1 && real_sa(sig, &sa, nullptr) != -1)
 		{
+			char line[96];
+
+			if (::snprintf(line, sizeof(line), "sigchain: installed ahead of the runtime for signal %d", sig) > 0)
+			{
+				__android_log_write(ANDROID_LOG_INFO, "ARMSX3", line);
+			}
+
 			return true;
 		}
 	}
+
+	__android_log_write(ANDROID_LOG_WARN, "ARMSX3", "sigchain: could not get ahead of the runtime; it will see faults first");
 #endif
 
+	// No bionic entry point, or it refused: fall back to the ordinary registration. The runtime
+	// then sees faults first, which is how this behaved before, crash included.
 	return install_fault_handler(sig, sa) != -1;
 }
 
-#ifdef __ANDROID__
+
+// What a SIGBUS was actually about. si_code is the only thing that tells an unbacked page apart
+// from a misaligned operand, and those point at completely different bugs.
 static const char* bus_error_kind(int code) noexcept
 {
 	switch (code)
@@ -2618,6 +3356,134 @@ static const char* bus_error_kind(int code) noexcept
 	case BUS_OBJERR: return "hardware error on the mapped object";
 	default: return "unrecognised si_code";
 	}
+}
+
+#ifdef __APPLE__
+// Darwin raises SIGBUS for a protection fault, so recovery is decided from the emulator's page table, not the signal.
+enum class fault_class
+{
+	emulator_protection,
+	no_mapping,
+	not_produced,
+	unallocated_guest_page,
+	undetermined,
+};
+
+static fault_class classify_fault(int sig, const siginfo_t* info, bool is_writing) noexcept
+{
+	const std::pair<vm::addr_t, bool> located = vm::try_get_addr(info->si_addr);
+
+	if (located.second)
+	{
+		const std::pair<bool, u8> state = vm::get_addr_flags(located.first);
+		const u8 required = is_writing ? vm::page_writable : vm::page_readable;
+
+		if (state.first && (~state.second & required) != 0)
+		{
+			return fault_class::emulator_protection;
+		}
+
+		if (state.first && sig == SIGBUS)
+		{
+			return fault_class::not_produced;
+		}
+
+		if (!state.first)
+		{
+			return fault_class::unallocated_guest_page;
+		}
+	}
+
+	if (sig != SIGBUS)
+	{
+		return fault_class::no_mapping;
+	}
+
+	return fault_class::undetermined;
+}
+
+// The RSX can lock host pages without marking vm::g_pages, so ask the kernel what it allows.
+static constexpr u32 k_host_retry_bound = 16;
+static constexpr u64 k_host_retry_window_ns = 1'000'000;
+
+static thread_local struct
+{
+	vm_address_t addr;
+	u32 races;
+	u64 t_ns;
+	kern_return_t kr;
+	vm_prot_t prot;
+	vm_prot_t max;
+} s_host_query{};
+
+static bool host_denies_write(const siginfo_t* info, bool is_writing) noexcept
+{
+	const vm_prot_t needed = is_writing ? VM_PROT_WRITE : VM_PROT_READ;
+
+	const vm_address_t fault_addr = reinterpret_cast<vm_address_t>(info->si_addr);
+
+	timespec now{};
+	clock_gettime(CLOCK_UPTIME_RAW, &now);
+	const u64 now_ns = static_cast<u64>(now.tv_sec) * 1'000'000'000ull + static_cast<u64>(now.tv_nsec);
+	const bool same_burst = s_host_query.addr == fault_addr && now_ns - s_host_query.t_ns <= k_host_retry_window_ns;
+	const u32 races = same_burst ? s_host_query.races : 0;
+	s_host_query = {fault_addr, 0, now_ns, KERN_FAILURE, VM_PROT_NONE, VM_PROT_NONE};
+
+	vm_address_t region_base = fault_addr;
+	vm_size_t region_size = 0;
+	vm_region_basic_info_data_64_t basic_info{};
+	mach_msg_type_number_t info_count = VM_REGION_BASIC_INFO_COUNT_64;
+	mach_port_t object_name = MACH_PORT_NULL;
+
+	const kern_return_t kr = vm_region_64(mach_task_self(), &region_base, &region_size,
+		VM_REGION_BASIC_INFO_64, reinterpret_cast<vm_region_info_t>(&basic_info), &info_count,
+		&object_name);
+
+	s_host_query.kr = kr;
+	s_host_query.prot = basic_info.protection;
+	s_host_query.max = basic_info.max_protection;
+
+	if (object_name != MACH_PORT_NULL)
+	{
+		mach_port_deallocate(mach_task_self(), object_name);
+	}
+
+	if (kr != KERN_SUCCESS)
+	{
+		return false;
+	}
+
+	// vm_region_64 returns the next region up when the address itself is unmapped.
+	if (fault_addr < region_base || (fault_addr - region_base) >= region_size)
+	{
+		return false;
+	}
+
+	// The host already allows the access, so another thread unprotected it after the fault.
+	if ((basic_info.protection & needed) != 0)
+	{
+		s_host_query.races = races + 1;
+		return s_host_query.races <= k_host_retry_bound;
+	}
+
+	s_host_query.races = races + 1;
+	return (basic_info.protection & needed) == 0
+		&& (basic_info.max_protection & needed) != 0
+		&& s_host_query.races <= k_host_retry_bound;
+}
+
+static bool fault_is_recoverable(fault_class fault) noexcept
+{
+	switch (fault)
+	{
+	case fault_class::emulator_protection: return true;
+	case fault_class::no_mapping: return true;
+	case fault_class::not_produced: return false;
+	case fault_class::unallocated_guest_page: return true;
+	case fault_class::undetermined: return false;
+	}
+
+	return false;
 }
 #endif
 
@@ -2629,17 +3495,264 @@ static void signal_handler(int sig, siginfo_t* info, void* uct) noexcept
 		__android_log_print(ANDROID_LOG_FATAL, "EmuCoreC", "LAST RSX OP: %s", g_tls_last_rsx_op);
 	}
 #endif
+	ucontext_t* context = static_cast<ucontext_t*>(uct);
+
 #ifdef __ANDROID__
-	// Not our fault: hand it to whoever we displaced (see install_fault_handler_first).
-	// Also hand it over whenever the faulting thread is not one of ours: a SIGSEGV on an ART or
-	// binder thread is ART's to handle (its JIT uses implicit null checks), and treating it as a
-	// fatal emulator fault takes the whole app down with it.
+	// Not our fault: hand it to whoever we displaced.
+	//
+	// We install ahead of libsigchain deliberately (see the registration site), which means ART's
+	// FaultManager no longer sees the emulator's own faults -- it was reading guest registers as
+	// ArtMethod* and dying. But ART still needs its own faults: implicit null checks in JIT'd Java
+	// code arrive as SIGSEGV and are how a NullPointerException gets thrown. This forward is what
+	// keeps that working, and keeps ordinary tombstones for crashes that are genuinely elsewhere.
 	if (!is_emulator_fault(info->si_addr) || !thread_ctrl::get_current())
 	{
+		// Say whether this is a stack overflow before handing the fault on, because the tombstone
+		// cannot. A guard page is PROT_NONE, so overrunning a stack reports SEGV_ACCERR at an address
+		// that looks like any other bad pointer, and the backtrace shows only the JIT'd frame that
+		// happened to touch it -- nothing that says "you ran out of stack".
+		//
+		// Worth the cost here specifically: the ARM64 SPU gateway subtracts SPU_GW_SCRATCH_SIZE from
+		// sp per entry and unwinds by reloading sp rather than adding it back, so a path that re-enters
+		// without restoring walks the stack down in fixed steps to a guard page at a FIXED address --
+		// which is what a repeated identical fault address means. sp against the stack bounds tells
+		// that apart from one oversized function overflowing the scratchpad in a single call.
+		//
+		// Only runs on a fault that is already fatal, so pthread_getattr_np not being async-signal-safe
+		// costs nothing we still have.
+		//
+		// Skip a fault at address 0. On ARM64 that is how ART does both its implicit suspend
+		// checks and its implicit null checks -- a load through a register the runtime zeroes --
+		// so they land here on whichever managed thread happened to be running: the GC daemons,
+		// binder, hwui, the JIT. They are not crashes. libsigchain hands them to ART, which
+		// handles them and carries on, so the note above about this only running on an
+		// already-fatal fault is simply not true for them. Reporting each one wrote a
+		// fatal-level logcat line plus a register dump: 116 of them in twenty minutes of one
+		// tester's session, in the logs we ask people to send us. A real null dereference on a
+		// non-emulator thread still gets a tombstone from debuggerd, which is its proper reporter.
+#ifdef ARCH_ARM64
+		// Hard lifetime cap on this whole report.
+		//
+		// The note above says this only runs on a fault that is already fatal. That is not true on
+		// Android 15, whose ART uses a userfaultfd concurrent mark-compact collector: HeapTaskDaemon
+		// takes ordinary, recoverable faults at NON-ZERO addresses inside [anon:dalvik-LinearAlloc]
+		// as normal GC work, so they clear the fault_at != 0 filter above and get the full treatment
+		// -- pthread_getattr_np, an fopen and full parse of /proc/self/maps, and five logcat writes,
+		// per fault, inside a signal handler.
+		//
+		// Observed on an Odin 3 (Adreno 830, Android 15): 109 of these in about a second across
+		// HeapTaskDaemon, rumble-pump, pool-3-thread-1 and the main thread. The GC cannot make
+		// progress while every one of its faults parses the process map, so the Java heap stops, the
+		// UI never draws, and the app presents as hung with audio still playing -- audio being a
+		// native thread that needs nothing from the managed heap. It followed a VK_ERROR_DEVICE_LOST,
+		// so what should have been a fatal-error dialog became an indefinite freeze instead.
+		//
+		// The first few reports carry all the diagnostic value; a storm carries none and costs the
+		// process. Capping trades away stack-overflow detection for any overflow that happens after
+		// a storm has already burned the budget, which is the right way round: the storm makes the
+		// app unusable on its own, and a genuine crash elsewhere still gets a debuggerd tombstone.
+		static atomic_t<u32> s_foreign_fault_reports{0};
+
+		if (const u64 fault_at = reinterpret_cast<u64>(info->si_addr);
+			fault_at != 0 && s_foreign_fault_reports.fetch_add(1) < 8)
+		{
+			const u64 sp = static_cast<u64>(context->uc_mcontext.sp);
+
+			void* stack_addr = nullptr;
+			usz stack_size = 0;
+			pthread_attr_t attr;
+
+			if (pthread_getattr_np(pthread_self(), &attr) == 0)
+			{
+				pthread_attr_getstack(&attr, &stack_addr, &stack_size);
+				pthread_attr_destroy(&attr);
+			}
+
+			const u64 lo = reinterpret_cast<u64>(stack_addr);
+			const u64 hi = lo + stack_size;
+
+			char tname[32]{};
+			pthread_getname_np(pthread_self(), tname, sizeof(tname));
+
+			char line[512]{};
+
+			if (stack_size && fault_at < lo && lo - fault_at < 0x100000)
+			{
+				std::snprintf(line, sizeof(line),
+					"STACK OVERFLOW in '%s': fault 0x%llx is %llu bytes below the stack [0x%llx,0x%llx). "
+					"sp=0x%llx, %llu of %llu KB used (%.1f x 256KB gateway frames).",
+					tname, static_cast<unsigned long long>(fault_at),
+					static_cast<unsigned long long>(lo - fault_at),
+					static_cast<unsigned long long>(lo), static_cast<unsigned long long>(hi),
+					static_cast<unsigned long long>(sp),
+					static_cast<unsigned long long>((hi - sp) / 1024),
+					static_cast<unsigned long long>(stack_size / 1024),
+					static_cast<double>(hi - sp) / 262144.0);
+			}
+			else
+			{
+				std::snprintf(line, sizeof(line),
+					"non-emulator fault in '%s': addr=0x%llx sp=0x%llx stack=[0x%llx,0x%llx) %lluKB, "
+					"%llu KB of stack used. Not a guard page.",
+					tname, static_cast<unsigned long long>(fault_at),
+					static_cast<unsigned long long>(sp),
+					static_cast<unsigned long long>(lo), static_cast<unsigned long long>(hi),
+					static_cast<unsigned long long>(stack_size / 1024),
+					static_cast<unsigned long long>(stack_size ? (hi - sp) / 1024 : 0));
+			}
+
+			__android_log_write(ANDROID_LOG_FATAL, "ARMSX3", line);
+
+			// The faulting instruction and whichever registers formed the address.
+			//
+			// The address is identical across processes while the mappings around it move with
+			// ASLR, so it is computed rather than loaded from anything that got relocated. The
+			// encoding says which register was dereferenced and the register file says what went
+			// into it -- a base that should be a live pointer, an index that should have been
+			// masked, or a value that is simply guest data being used as a host address.
+			{
+				char regs[640]{};
+				int off = std::snprintf(regs, sizeof(regs), "  pc=0x%llx",
+					static_cast<unsigned long long>(context->uc_mcontext.pc));
+
+				// PC is what just executed, so it is mapped and readable.
+				const u32 insn = *reinterpret_cast<const u32*>(context->uc_mcontext.pc);
+				off += std::snprintf(regs + off, sizeof(regs) - off, " insn=0x%08x", insn);
+
+				for (int i = 0; i < 31 && off < static_cast<int>(sizeof(regs)) - 32; i++)
+				{
+					const u64 v = context->uc_mcontext.regs[i];
+
+					// Only the ones that plausibly built the address; a full dump is unreadable.
+					if (v == fault_at || (v <= fault_at && fault_at - v < 0x10000) || (v > fault_at && v - fault_at < 0x10000))
+					{
+						off += std::snprintf(regs + off, sizeof(regs) - off, " x%d=0x%llx%s",
+							i, static_cast<unsigned long long>(v), v == fault_at ? "(=fault)" : "");
+					}
+				}
+
+				__android_log_write(ANDROID_LOG_FATAL, "ARMSX3", regs);
+
+				// SPU context, to place the bad pointer against the things it could have come from.
+				//
+				// The value is byte-identical in every process while the mappings around it move,
+				// so it is not a relocated host pointer. LS is the one buffer whose CONTENTS are
+				// identical run to run, being guest data, so the question is whether this is a
+				// value read out of LS and used as a host address -- and if it is an LS access
+				// gone wrong, fault-ls lands inside or just past the 256K window.
+				if (const auto cpu_at_fault = get_current_cpu_thread();
+					cpu_at_fault && cpu_at_fault->get_class() == thread_class::spu)
+				{
+					const auto spu = static_cast<spu_thread*>(cpu_at_fault);
+					const u64 ls_base = reinterpret_cast<u64>(spu->ls);
+
+					char sc[512]{};
+					std::snprintf(sc, sizeof(sc),
+						"  spu: pc=0x%05x ls=0x%llx fault-ls=%lld (LS window is %u bytes) index=%u",
+						spu->pc, static_cast<unsigned long long>(ls_base),
+						static_cast<long long>(fault_at - ls_base),
+						static_cast<u32>(SPU_LS_SIZE), spu->index);
+					__android_log_write(ANDROID_LOG_FATAL, "ARMSX3", sc);
+				}
+			}
+
+			// Name the mapping the fault landed in.
+			//
+			// SEGV_ACCERR means the page is there and the access was refused, so the mapping's
+			// permissions and backing file are the whole answer -- and a tombstone prints neither.
+			// Reading maps from outside is not an option: /proc/<pid>/maps of another app is not
+			// readable by shell, and perf only records executable mappings, so a data mapping is
+			// invisible to both. In-process it is just a file.
+			{
+				if (FILE* maps = std::fopen("/proc/self/maps", "re"))
+				{
+					char row[512]{};
+					char prev1[640]{};
+					char prev2[640]{};
+
+					while (std::fgets(row, sizeof(row), maps))
+					{
+						u64 lo_a = 0, hi_a = 0;
+
+						if (std::sscanf(row, "%llx-%llx",
+							reinterpret_cast<unsigned long long*>(&lo_a),
+							reinterpret_cast<unsigned long long*>(&hi_a)) != 2)
+						{
+							continue;
+						}
+
+						if (fault_at >= lo_a && fault_at < hi_a)
+						{
+							if (char* nl = std::strchr(row, '\n')) *nl = '\0';
+
+							char hit[640]{};
+							std::snprintf(hit, sizeof(hit), "  fault mapping (+0x%llx into it): %s",
+								static_cast<unsigned long long>(fault_at - lo_a), row);
+							__android_log_write(ANDROID_LOG_FATAL, "ARMSX3", hit);
+
+							// Neighbours, because an anonymous PROT_NONE row identifies nothing on its
+							// own. The rows either side do: an rwx one above it means this is the
+							// uncommitted tail of the JIT pool, a named one means it belongs to whoever
+							// is named, and a stack guard sits next to a matching rw- stack.
+							if (prev2[0]) __android_log_write(ANDROID_LOG_FATAL, "ARMSX3", prev2);
+							if (prev1[0]) __android_log_write(ANDROID_LOG_FATAL, "ARMSX3", prev1);
+
+							for (int seen = 0; seen < 2 && std::fgets(row, sizeof(row), maps); seen++)
+							{
+								if (char* nl = std::strchr(row, '\n')) *nl = '\0';
+
+								char nxt[640]{};
+								std::snprintf(nxt, sizeof(nxt), "  after : %s", row);
+								__android_log_write(ANDROID_LOG_FATAL, "ARMSX3", nxt);
+							}
+
+							break;
+						}
+
+						std::snprintf(prev2, sizeof(prev2), "%s", prev1);
+						{
+							char tmp[512]{};
+							std::snprintf(tmp, sizeof(tmp), "%s", row);
+							if (char* nl = std::strchr(tmp, '\n')) *nl = '\0';
+							std::snprintf(prev1, sizeof(prev1), "  before: %s", tmp);
+						}
+					}
+
+					std::fclose(maps);
+				}
+			}
+		}
+#endif
+
+		// Forward once and once only. If whatever we forward to comes back here -- which it did
+		// while this handler was also registered inside libsigchain's chain -- looping would burn
+		// the alternate stack and kill the process silently. Second time through, stand down: put
+		// the PREVIOUS handler back and return, so the instruction faults again and the platform
+		// produces an honest tombstone instead of a recursion.
+		//
+		// It has to be the previous handler and not SIG_DFL. s_prev_fault_action is libsigchain's,
+		// which fronts ART and debuggerd, and debuggerd's handler is what writes the tombstone.
+		// Installing SIG_DFL does not "let the platform report it" -- it removes the only thing that
+		// would have. The re-fault then terminates the process by signal with no tombstone, nothing
+		// in the crash buffer, and nothing in logcat after the last line the emulator itself wrote.
+		//
+		// Observed on an Odin 3: a VK_ERROR_DEVICE_LOST teardown re-entered this handler and the
+		// process left as "exited due to signal 11 (Segmentation fault)" with no tombstone written,
+		// which is indistinguishable from a lowmemorykiller kill in the log and cost a long time to
+		// tell apart. This is the same restore-and-return the recoverable path already does further
+		// down; a handler that does not return cannot loop, and debuggerd's does not return.
 		static thread_local bool s_forwarding = false;
 
 		if (s_forwarding)
 		{
+			const struct ::sigaction& fallback = s_prev_fault_action[sig];
+
+			if (fallback.sa_sigaction && fallback.sa_handler != SIG_IGN)
+			{
+				::sigaction(sig, &fallback, nullptr);
+				return;
+			}
+
 			struct ::sigaction dfl{};
 			dfl.sa_handler = SIG_DFL;
 			sigemptyset(&dfl.sa_mask);
@@ -2666,11 +3779,19 @@ static void signal_handler(int sig, siginfo_t* info, void* uct) noexcept
 
 		s_forwarding = false;
 	}
-
-	const bool is_bus_error = sig == SIGBUS;
 #endif
 
-	ucontext_t* context = static_cast<ucontext_t*>(uct);
+#ifndef __APPLE__
+
+	// SIGBUS arrives here too now (see the sigaction block below), and never takes a recovery
+	// path. The recovery below is for pages this process protected itself, and a write to an
+	// mprotect'd page raises SIGSEGV/SEGV_ACCERR, never SIGBUS. A bus error means the page behind
+	// an otherwise valid address could not be produced at all -- unbacked, past the backing size,
+	// or an operand the instruction cannot address at that alignment. Nothing here changes any of
+	// those, so handling one and returning would re-execute the same instruction and fault again
+	// immediately: a livelock in place of a crash report.
+	const bool is_bus_error = sig == SIGBUS;
+#endif
 
 #if defined(ARCH_X64)
 #ifdef __APPLE__
@@ -2688,12 +3809,37 @@ static void signal_handler(int sig, siginfo_t* info, void* uct) noexcept
 	const bool is_executing = err & 0x10;
 	const bool is_writing = err & 0x2;
 #elif defined(ARCH_ARM64)
-	const bool is_executing = uptr(info->si_addr) == uptr(RIP(context));
+	// Guess, replaced below by the hardware's own answer wherever that is available.
+	//
+	// This comparison is a heuristic and it decides something load-bearing: is_executing gates
+	// EVERY recovery path in this handler, so getting it wrong does not merely mislabel a log
+	// line, it skips handle_access_violation entirely and kills the thread. A data access whose
+	// faulting address happens to coincide with the PC is classified as an instruction fetch and
+	// takes that path, and the guest addresses most likely to collide are exactly the ones our
+	// own mappings sit at.
+	bool is_executing = uptr(info->si_addr) == uptr(RIP(context));
 
 #if defined(__linux__) || defined(__APPLE__)
 	// Current CPU state decoder is reverse-engineered from the linux kernel and may not work on other platforms.
 	const auto decoded_reason = aarch64::decode_fault_reason(context);
 	const bool is_writing = (decoded_reason == aarch64::fault_reason::data_write);
+
+	// ESR_EL1 says what the fault actually was, so prefer it over the address comparison.
+	//
+	// Only when the decode produced something meaningful: it returns 'undefined' when the signal
+	// frame carries no ESR record, and on that path the guess is still the best available answer.
+	// data_read/data_write are positive evidence that this is NOT an instruction fetch, which is
+	// the direction that matters -- it is what lets a genuine access violation reach the recovery
+	// path instead of terminating the thread.
+	if (decoded_reason == aarch64::fault_reason::data_read ||
+		decoded_reason == aarch64::fault_reason::data_write)
+	{
+		is_executing = false;
+	}
+	else if (decoded_reason == aarch64::fault_reason::instruction_execute)
+	{
+		is_executing = true;
+	}
 
 	if (decoded_reason != aarch64::fault_reason::data_write &&
 		decoded_reason != aarch64::fault_reason::data_read)
@@ -2729,12 +3875,15 @@ static void signal_handler(int sig, siginfo_t* info, void* uct) noexcept
 	const u64 seg_off = (reinterpret_cast<u64>(info->si_addr) - reinterpret_cast<u64>(vm::g_exec_addr)) - vm::g_exec_addr_seg_offset;
 	const auto cause = is_executing ? "executing" : is_writing ? "writing" : "reading";
 
-#ifdef __ANDROID__
-	// SIGBUS never takes the recovery path: a write to an mprotect'd page raises SIGSEGV,
-	// and a bus error means the page behind a valid address cannot be produced at all.
-	const bool try_recovery = !is_executing && !is_bus_error;
+#ifdef __APPLE__
+	const fault_class fault = classify_fault(sig, info, is_writing);
+
+	// A not_produced fault the host denies is an RSX lock that its own handler can lift.
+	const bool try_recovery = !is_executing && (fault_is_recoverable(fault)
+		|| (fault == fault_class::not_produced && host_denies_write(info, is_writing)));
 #else
-	const bool try_recovery = !is_executing;
+	// Gated on more than "not an instruction fetch" now: see is_bus_error above.
+	const bool try_recovery = !is_executing && !is_bus_error;
 #endif
 
 	if (auto [addr, ok] = vm::try_get_addr(info->si_addr); ok && try_recovery)
@@ -2762,73 +3911,79 @@ static void signal_handler(int sig, siginfo_t* info, void* uct) noexcept
 	}
 
 #ifdef __ANDROID__
-	// Raw state, before anything that can fault. Only reached for faults that are actually
-	// fatal: every recovery path above has already declined.
+	// Raw state, before anything that can fault.
+	//
+	// Placed here deliberately: every recovery path above has already declined, so this only runs
+	// for faults that are actually fatal -- the write-protection faults the RSX relies on come
+	// through here hundreds of times a second and must not be logged at all.
+	//
+	// Everything below this point formats strings, allocates, takes the logger's locks and walks
+	// thread and guest state, and on a process sick enough to be here any of those can fault
+	// again. A second fault while this signal is blocked is force-delivered with the default
+	// action, killing the process instantly with the fatal message still sitting unflushed in the
+	// async log -- Borderlands 2 died that way three times, handler reached, nothing written.
+	//
+	// So: fixed stack buffers and liblog writes. No allocation, no locks, no ordering with the
+	// async log. Registers and the faulting instruction are what a wild address needs anyway --
+	// they say which operand went bad, which the formatted report never does.
 	{
-		const auto fault_addr = info ? info->si_addr : nullptr;
-		const auto si_code = info ? info->si_code : 0;
-		const auto cur_tid = static_cast<int>(gettid());
+		char line[256];
+		const u64 pc = RIP(context);
 
-		__android_log_print(ANDROID_LOG_FATAL, "EmuCoreC",
-			"CRASH: signal %d fault=%p code=%d tid=%d",
-			sig, static_cast<const void*>(fault_addr), si_code, cur_tid);
-
-#ifdef ARCH_ARM64
-		ucontext_t* uc = context;
-		__android_log_print(ANDROID_LOG_FATAL, "EmuCoreC",
-			"REGS: PC=%lx LR=%lx SP=%lx"
-			" x0=%lx x1=%lx x2=%lx x3=%lx"
-			" x4=%lx x5=%lx x6=%lx x7=%lx"
-			" x8=%lx x9=%lx x10=%lx x11=%lx"
-			" x12=%lx x13=%lx x14=%lx x15=%lx"
-			" x16=%lx x17=%lx x18=%lx x19=%lx"
-			" x20=%lx x21=%lx x22=%lx x23=%lx"
-			" x24=%lx x25=%lx x26=%lx x27=%lx"
-			" x28=%lx fp=%lx",
-			static_cast<unsigned long>(uc->uc_mcontext.pc),
-			static_cast<unsigned long>(uc->uc_mcontext.regs[30]),
-			static_cast<unsigned long>(uc->uc_mcontext.sp),
-			static_cast<unsigned long>(uc->uc_mcontext.regs[0]), static_cast<unsigned long>(uc->uc_mcontext.regs[1]),
-			static_cast<unsigned long>(uc->uc_mcontext.regs[2]), static_cast<unsigned long>(uc->uc_mcontext.regs[3]),
-			static_cast<unsigned long>(uc->uc_mcontext.regs[4]), static_cast<unsigned long>(uc->uc_mcontext.regs[5]),
-			static_cast<unsigned long>(uc->uc_mcontext.regs[6]), static_cast<unsigned long>(uc->uc_mcontext.regs[7]),
-			static_cast<unsigned long>(uc->uc_mcontext.regs[8]), static_cast<unsigned long>(uc->uc_mcontext.regs[9]),
-			static_cast<unsigned long>(uc->uc_mcontext.regs[10]), static_cast<unsigned long>(uc->uc_mcontext.regs[11]),
-			static_cast<unsigned long>(uc->uc_mcontext.regs[12]), static_cast<unsigned long>(uc->uc_mcontext.regs[13]),
-			static_cast<unsigned long>(uc->uc_mcontext.regs[14]), static_cast<unsigned long>(uc->uc_mcontext.regs[15]),
-			static_cast<unsigned long>(uc->uc_mcontext.regs[16]), static_cast<unsigned long>(uc->uc_mcontext.regs[17]),
-			static_cast<unsigned long>(uc->uc_mcontext.regs[18]), static_cast<unsigned long>(uc->uc_mcontext.regs[19]),
-			static_cast<unsigned long>(uc->uc_mcontext.regs[20]), static_cast<unsigned long>(uc->uc_mcontext.regs[21]),
-			static_cast<unsigned long>(uc->uc_mcontext.regs[22]), static_cast<unsigned long>(uc->uc_mcontext.regs[23]),
-			static_cast<unsigned long>(uc->uc_mcontext.regs[24]), static_cast<unsigned long>(uc->uc_mcontext.regs[25]),
-			static_cast<unsigned long>(uc->uc_mcontext.regs[26]), static_cast<unsigned long>(uc->uc_mcontext.regs[27]),
-			static_cast<unsigned long>(uc->uc_mcontext.regs[28]), static_cast<unsigned long>(uc->uc_mcontext.regs[29]));
-
-		char tname[32] = {};
-		prctl(PR_GET_NAME, tname);
-		u32 insn = 0;
-
-		if (!is_executing)
+		if (::snprintf(line, sizeof(line), "fatal signal %d (si_code %d) at %p, pc 0x%llx, tid %d",
+			sig, info->si_code, info->si_addr, static_cast<unsigned long long>(pc),
+			static_cast<int>(::syscall(__NR_gettid))) > 0)
 		{
-			insn = *reinterpret_cast<const volatile u32*>(uc->uc_mcontext.pc);
+			__android_log_write(ANDROID_LOG_FATAL, "ARMSX3", line);
 		}
 
-		const u64 guest_off = reinterpret_cast<uptr>(fault_addr) - reinterpret_cast<uptr>(vm::g_base_addr);
-		const u64 exec_off = static_cast<u64>(uc->uc_mcontext.pc) - reinterpret_cast<uptr>(vm::g_exec_addr);
-		__android_log_print(ANDROID_LOG_FATAL, "EmuCoreC",
-			"CTX: comm=%s insn=%08x base=%p exec=%p sudo=%p pc_exec_off=%llx fault_guest_off=%llx",
-			tname, insn,
-			static_cast<const void*>(vm::g_base_addr),
-			static_cast<const void*>(vm::g_exec_addr),
-			static_cast<const void*>(vm::g_sudo_addr),
-			static_cast<unsigned long long>(exec_off),
-			static_cast<unsigned long long>(guest_off));
+#if defined(ARCH_ARM64)
+		// Only when the fault was a data access: an instruction-fetch fault means pc itself is
+		// what could not be read, so reading it here would fault a second time.
+		if (!is_executing && ::snprintf(line, sizeof(line), "  insn 0x%08x", *reinterpret_cast<const u32*>(pc)) > 0)
+		{
+			__android_log_write(ANDROID_LOG_FATAL, "ARMSX3", line);
+		}
+
+		for (int i = 0; i < 31; i += 4)
+		{
+			char* p = line;
+			int rem = static_cast<int>(sizeof(line));
+
+			for (int j = i; j < i + 4 && j < 31; ++j)
+			{
+				const int w = ::snprintf(p, rem, "  x%d=0x%llx", j, static_cast<unsigned long long>(GPR(context, j)));
+
+				if (w <= 0 || w >= rem)
+				{
+					break;
+				}
+
+				p += w;
+				rem -= w;
+			}
+
+			__android_log_write(ANDROID_LOG_FATAL, "ARMSX3", line);
+		}
 #endif
 	}
 
-	// A fault outside guest memory is handed back to the platform's crash handler: restoring
-	// the previous action and returning re-executes the instruction, so debuggerd sees the
-	// original pc, address and registers instead of this handler's frame.
+	// A fault outside guest memory is handed straight back to the platform's crash handler.
+	//
+	// Installing this handler displaced debuggerd's, which is why none of these crashes ever
+	// produced a tombstone: emergency_exit() takes the process down itself, throwing away the one
+	// artifact carrying a symbolised backtrace of every thread. For a guest access violation that
+	// is the right trade -- the emulator reports those far better than a tombstone would. For a
+	// fault at an address that is not guest memory, the backtrace IS the diagnosis: it names
+	// whoever handed out the corrupt pointer, which nothing here can work out by itself.
+	//
+	// Before the formatting below, not after, and this is the whole point: the report allocates,
+	// and on a process whose heap is already corrupt the allocation faults again. That second
+	// fault killed the process every time, so a chain placed after the report never ran.
+	//
+	// Restoring the previous handler and returning rather than re-raising: the faulting
+	// instruction executes again and faults again, so debuggerd sees the original pc, address and
+	// registers instead of this handler's frame. Ours is no longer installed, so there is no loop.
 	if (!vm::try_get_addr(info->si_addr).second && s_prev_fault_action[sig].sa_sigaction)
 	{
 		::sigaction(sig, &s_prev_fault_action[sig], nullptr);
@@ -2836,13 +3991,11 @@ static void signal_handler(int sig, siginfo_t* info, void* uct) noexcept
 	}
 #endif
 
-#ifdef __ANDROID__
+	// Named for what it was: a bus error reported as "Segfault" sends whoever reads the log
+	// looking for a bad pointer, when the address is usually fine and the mapping behind it is not.
 	std::string msg = sig == SIGBUS
 		? fmt::format("Bus error (%s) %s location %p at %p.\n", bus_error_kind(info->si_code), cause, info->si_addr, RIP(context))
 		: fmt::format("Segfault %s location %p at %p.\n", cause, info->si_addr, RIP(context));
-#else
-	std::string msg = fmt::format("Segfault %s location %p at %p.\n", cause, info->si_addr, RIP(context));
-#endif
 
 	if (vm::try_get_addr(info->si_addr).second)
 	{
@@ -2851,7 +4004,9 @@ static void signal_handler(int sig, siginfo_t* info, void* uct) noexcept
 
 	append_thread_name(msg);
 
-#ifdef __APPLE__
+// The dual JIT mapping never makes a page writable and executable at once, so Apple ARM64 has
+// no W^X toggle fault to recover, and iOS has no pthread_jit_write_protect_np.
+#if defined(__APPLE__) && !TARGET_OS_IPHONE && !defined(ARCH_ARM64)
 	thread_local bool s_tls_is_attempting_recovery = false;
 	thread_local bool s_tls_last_cause_is_executing = false;
 
@@ -2882,11 +4037,29 @@ static void signal_handler(int sig, siginfo_t* info, void* uct) noexcept
 	}
 #endif
 
+#if defined(__APPLE__) && defined(ARCH_ARM64)
+	// A store to the r-x execute view or a call through the rw alias faults at an address that
+	// names neither view, so say which view the faulting address and the pc are in.
+	fmt::append(msg, "JIT dual map: si_addr view %s, pc view %s, code_rw_offset 0x%llx.\n",
+		utils::jit_view_name(utils::jit_view_of(info->si_addr)),
+		utils::jit_view_name(utils::jit_view_of(
+			reinterpret_cast<const void*>(static_cast<uptr>(RIP(context))))),
+		static_cast<unsigned long long>(utils::g_code_rw_offset));
+
+	// What host_denies_write() last saw here; races above the bound means the retry gave up.
+	if (s_host_query.addr == reinterpret_cast<vm_address_t>(info->si_addr))
+	{
+		fmt::append(msg, "Host at query: kr=%d prot=%d max=%d races=%u.\n",
+			s_host_query.kr, s_host_query.prot, s_host_query.max, s_host_query.races);
+	}
+#endif
+
 	sys_log.fatal("\n%s", msg);
 
-	// Flushed before the dump: dump_useful_thread_info() walks thread state and guest memory,
-	// so it is the most likely thing in this handler to fault again, and a fault there would
-	// lose the fatal message with it.
+	// Flushed here rather than only after the dump. dump_useful_thread_info() walks thread state
+	// and guest memory, so it is the single most likely thing in this handler to fault again, and
+	// a fault there loses the fatal message with it -- it is still sitting in the async log's
+	// buffer at this point. The message is the part worth keeping; the dump is a bonus.
 	logs::listener::sync_all();
 
 	sys_log.notice("\n%s", dump_useful_thread_info());
@@ -2930,8 +4103,16 @@ const bool s_exception_handler_set = []() -> bool
 {
 	struct ::sigaction sa;
 #ifdef __ANDROID__
-	// Run the handler on the alternate stack installed per thread in thread_base::initialize,
-	// so a stack overflow still has somewhere to report itself from.
+	// Run the handler on the alternate stack installed per thread in
+	// thread_base::initialize. Without this the handler runs on the faulting thread's own
+	// stack, so a stack overflow has nowhere to report itself from: the handler faults
+	// again immediately and the kernel applies the default action, killing the process
+	// having written nothing.
+	//
+	// Arkham City does exactly that. The only record anywhere of the crash was a single
+	// Zygote line, "exited due to signal 11 (Segmentation fault)", with no tombstone, no
+	// crash-buffer entry and no line from this handler, which cost hours of diagnosing it
+	// as an external kill.
 	sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
 #else
 	sa.sa_flags = SA_SIGINFO;
@@ -2946,6 +4127,16 @@ const bool s_exception_handler_set = []() -> bool
 	}
 
 #if defined(__APPLE__) || defined(__ANDROID__)
+	// Android too, and not for tidiness: with no handler, SIGBUS takes the default action and
+	// the process dies having written nothing at all -- no line from this handler, no tombstone,
+	// and an ARMSX3.log that simply stops mid-sentence. The only record of Borderlands 2 dying
+	// this way was one Zygote line, "exited due to signal 7 (Bus error)".
+	//
+	// It is a fault class this emulator can genuinely hit. Guest memory is a MAP_SHARED mapping
+	// of a memfd, and a shared file mapping raises SIGBUS rather than SIGSEGV whenever the page
+	// behind an otherwise valid address cannot be produced -- past the backing size, or with
+	// nothing left to back it. None of that is recoverable here, but all of it is diagnosable,
+	// and none of it was.
 	if (!install_fault_handler_first(SIGBUS, sa))
 	{
 		std::fprintf(stderr, "sigaction(SIGBUS) failed (%d).\n", errno);
@@ -2961,7 +4152,7 @@ const bool s_exception_handler_set = []() -> bool
 	}
 
 	sa.sa_handler = sigpipe_signaling_handler;
-	if (install_fault_handler(SIGPIPE, sa) == -1)
+	if (::sigaction(SIGPIPE, &sa, NULL) == -1)
 	{
 		std::fprintf(stderr, "sigaction(SIGPIPE) failed (%d).\n", errno);
 		std::abort();
@@ -2977,6 +4168,20 @@ const bool s_terminate_handler_set = []() -> bool
 {
 	std::set_terminate([]()
 	{
+		// Re-entrancy guard. Under memory exhaustion the terminate path itself allocates
+		// (report_fatal_error formats a message -> operator new; with -fno-exceptions a failed
+		// allocation calls std::terminate again), which recurses forever and buries the real
+		// crash under a stack of aborts. If terminate re-enters, hard-stop without allocating
+		// so there is exactly one clean tombstone.
+		// Ported from an earlier Android fork (281654906).
+		static atomic_t<int> s_terminating{0};
+
+		if (s_terminating.exchange(1) != 0)
+		{
+			::signal(SIGABRT, SIG_DFL);
+			std::abort();
+		}
+
 		if (IsDebuggerPresent())
 		{
 			logs::listener::sync_all();
@@ -3015,14 +4220,36 @@ void thread_base::start()
 	sp.sched_priority=99;
 	pthread_attr_init(&attrs);
 	pthread_attr_setstacksize(&attrs, 0x800000);
-	
+
+#if TARGET_OS_IPHONE
+	// A real-time policy puts every emulator thread above the main thread and iOS kills the app.
+	pthread_attr_set_qos_class_np(&attrs, QOS_CLASS_USER_INITIATED, 0);
+#else
 	pthread_attr_set_qos_class_np(&attrs, QOS_CLASS_USER_INTERACTIVE, 0);
 	pthread_attr_setschedpolicy(&attrs, SCHED_RR);
 	pthread_attr_setschedparam(&attrs, &sp);
+#endif
 	ensure(pthread_create(&thread_id, &attrs, entry_point, this) == 0);
 #else
 	pthread_t thread_id{};
+
+#ifdef __ANDROID__
+	// Give Android threads the stack desktop Linux already gives them.
+	//
+	// bionic's default is 1 MB; glibc's is 8 MB. Passing null attributes here meant every emulator
+	// thread on Android ran on an eighth of the stack the same code gets everywhere else, and
+	// nothing said so -- an SPU thread's stack mapping measured 0xfc000.
+	//
+	// Address space only; stack pages are committed on first use.
+	pthread_attr_t attrs;
+	pthread_attr_init(&attrs);
+	pthread_attr_setstacksize(&attrs, 0x800000);
+	const int rc = pthread_create(&thread_id, &attrs, entry_point, this);
+	pthread_attr_destroy(&attrs);
+	ensure(rc == 0);
+#else
 	ensure(pthread_create(&thread_id, nullptr, entry_point, this) == 0);
+#endif
 #endif
 
 #ifndef _WIN32
@@ -3040,9 +4267,16 @@ void thread_base::start()
 void thread_base::initialize(void (*error_cb)())
 {
 #ifdef __ANDROID__
-	// Somewhere for the SIGSEGV handler to run, per thread. See SA_ONSTACK in the handler's
-	// registration. Thread-local rather than shared: two threads can fault at once and a
-	// shared stack would corrupt whichever report lost the race.
+	// Somewhere for the SIGSEGV handler to run, per thread. See SA_ONSTACK above.
+	//
+	// Deliberately a thread_local rather than a shared buffer: the handler can fire on any
+	// thread, two threads can fault at once, and a shared stack would corrupt whichever
+	// report lost the race. It is released with the thread, after which no handler can run
+	// on it.
+	//
+	// 128KB because the handler formats and logs rather than just setting a flag. That is
+	// real memory across the emulator's thread count, and it buys turning a silent death
+	// into a reported one.
 	static thread_local std::array<u8, 128 * 1024> s_signal_stack;
 
 	stack_t alt{};
@@ -3052,6 +4286,9 @@ void thread_base::initialize(void (*error_cb)())
 
 	if (::sigaltstack(&alt, nullptr) == -1)
 	{
+		// Not fatal: the handler simply falls back to the faulting stack, which is the
+		// behaviour everywhere else. Worth knowing about, because it means a stack
+		// overflow will go unreported again.
 		sig_log.error("sigaltstack failed (%d); stack overflows will not be reported", errno);
 	}
 #endif
@@ -3065,6 +4302,7 @@ void thread_base::initialize(void (*error_cb)())
 	[[maybe_unused]] u64 new_tid = 0;
 #elif defined(ANDROID)
 	const u64 new_tid = pthread_self();
+	m_native_tid = static_cast<u32>(gettid());
 #else
 	const u64 new_tid = reinterpret_cast<u64>(pthread_self());
 #endif
@@ -3072,14 +4310,6 @@ void thread_base::initialize(void (*error_cb)())
 	if (!m_thread && !m_thread.compare_and_swap_test(0, new_tid))
 	{
 		ensure(m_thread == new_tid);
-	}
-#endif
-
-#if !defined(ANDROID) && (defined(__linux__) || defined(__DragonFly__) || defined(__FreeBSD__))
-	// A new thread inherits its creator's affinity mask (e.g. compile workers spawned by a pinned PPU thread): reset it to the process mask
-	if (g_cfg.core.thread_scheduler != thread_scheduler_mode::os)
-	{
-		thread_ctrl::set_thread_affinity_mask(0);
 	}
 #endif
 
@@ -3226,6 +4456,10 @@ u64 thread_base::finalize(thread_state result_state) noexcept
 
 	// Avoid race with the destructor
 	const u64 _self = m_thread;
+
+#ifdef ANDROID
+	m_native_tid = 0;
+#endif
 
 	// Set result state (errored or finalized)
 	m_sync.fetch_op([&](u32& v)
@@ -3567,8 +4801,10 @@ bool thread_base::join(bool dtor) const
 void thread_base::notify()
 {
 	// Set notification
-	m_sync |= 4;
-	m_sync.notify_all();
+	if (~m_sync.fetch_or(4) & 4)
+	{
+		m_sync.notify_all();
+	}
 }
 
 u64 thread_base::get_native_id() const
@@ -3602,11 +4838,21 @@ u64 thread_base::get_cycles()
 	clockid_t _clock;
 	struct timespec thread_time;
 #ifdef ANDROID
-	pthread_t thread_id = handle;
+	const u32 native_tid = m_native_tid;
+
+	if (!handle || !native_tid)
+	{
+		return m_cycles;
+	}
+
+	_clock = (~static_cast<clockid_t>(native_tid) << 3) | 6;
+
+	if (!clock_gettime(_clock, &thread_time))
 #else
 	pthread_t thread_id = reinterpret_cast<pthread_t>(handle);
-#endif
+
 	if (!pthread_getcpuclockid(thread_id, &_clock) && !clock_gettime(_clock, &thread_time))
+#endif
 	{
 		cycles = static_cast<u64>(thread_time.tv_sec) * 1'000'000'000 + thread_time.tv_nsec;
 #endif
@@ -3710,11 +4956,13 @@ void thread_ctrl::set_name(std::string name)
 	}
 #endif
 
+#ifndef __APPLE__
 	if (const std::string info = dump_useful_thread_info(); !info.empty())
 	{
 		sys_log.notice("\n%s", info);
 	}
 
+#endif
 	std::string reason_buf;
 
 	if (auto ppu = cpu_thread::get_current<ppu_thread>())
@@ -3743,6 +4991,15 @@ void thread_ctrl::set_name(std::string name)
 	sig_log.fatal("Thread terminated due to fatal error: %s", reason);
 
 	logs::listener::sync_all();
+
+#ifdef __APPLE__
+	// Log the reason first: a fault inside the dump never returns here.
+	if (const std::string info = dump_useful_thread_info(); !info.empty())
+	{
+		sys_log.notice("\n%s", info);
+		logs::listener::sync_all();
+	}
+#endif
 
 	if (IsDebuggerPresent())
 	{
@@ -3824,10 +5081,78 @@ void thread_ctrl::silent_exit() noexcept
 	std::abort();
 }
 
+
+#if defined(ARCH_ARM64) && defined(__linux__)
+// Per-core capacity from sysfs, read ONCE.
+//
+// Deliberately plain POSIX I/O rather than fs::file: sysfs nodes report
+// st_size == 0, so a size-based read returns nothing, and fs::file raised
+// "Unexpected fs::error OK" from whichever thread asked -- which killed the RSX
+// thread outright, since get_affinity_mask() runs on it.
+static const std::array<u32, 64>& get_arm_core_capacities()
+{
+	static const std::array<u32, 64> s_caps = []
+	{
+		std::array<u32, 64> caps{};
+
+		for (u32 core = 0; core < 64u; core++)
+		{
+			char path[128];
+			std::snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%u/cpu_capacity", core);
+
+			const int fd = ::open(path, O_RDONLY | O_CLOEXEC);
+			if (fd < 0)
+			{
+				continue;
+			}
+
+			char buf[32]{};
+			const auto got = ::read(fd, buf, sizeof(buf) - 1);
+			::close(fd);
+
+			if (got > 0)
+			{
+				caps[core] = static_cast<u32>(std::atoi(buf));
+			}
+		}
+
+		return caps;
+	}();
+
+	return s_caps;
+}
+#endif
+
 void thread_ctrl::detect_cpu_layout()
 {
 	if (!g_native_core_layout.compare_and_swap_test(native_core_arrangement::undefined, native_core_arrangement::generic))
 		return;
+
+#if defined(ARCH_ARM64) && defined(__linux__)
+	// Heterogeneous if the kernel reports differing per-core capacity. Every
+	// big.LITTLE/DynamIQ SoC exposes cpu_capacity; a uniform machine reports the
+	// same value everywhere (or nothing at all), and falls through to generic.
+	{
+		const auto& caps = get_arm_core_capacities();
+		u32 lowest = umax, highest = 0;
+
+		for (u32 core = 0; core < 64u; core++)
+		{
+			if (caps[core])
+			{
+				lowest = std::min(lowest, caps[core]);
+				highest = std::max(highest, caps[core]);
+			}
+		}
+
+		if (highest && lowest != umax && highest > lowest)
+		{
+			sig_log.notice("Detected ARM heterogeneous CPU (capacity %u..%u)", lowest, highest);
+			g_native_core_layout.store(native_core_arrangement::arm_big_little);
+			return;
+		}
+	}
+#endif
 
 	const auto system_id = utils::get_cpu_brand();
 	if (system_id.find("Ryzen") != umax)
@@ -3897,6 +5222,117 @@ u64 thread_ctrl::get_affinity_mask(thread_class group)
 		case native_core_arrangement::generic:
 		{
 			return all_cores_mask;
+		}
+		case native_core_arrangement::arm_big_little:
+		{
+#ifdef __APPLE__
+			// get_arm_core_capacities() exists only on Linux, and Apple never detects this arrangement.
+			return all_cores_mask;
+#else
+			// Put the threads that gate the frame -- SPU and RSX -- on the cores
+			// that can actually keep up, and leave the little cluster for PPU and
+			// helpers. Without this the OS spreads six SPU threads across a mix of
+			// big and LITTLE cores, and the slow ones set the pace.
+			const auto& caps = get_arm_core_capacities();
+			u64 fast_mask = 0;
+			u64 slow_mask = 0;
+			u32 threshold = 0;
+
+			for (u32 core = 0; core < 64u; core++)
+			{
+				threshold = std::max(threshold, caps[core]);
+			}
+
+			// Anything within 25% of the fastest core counts as "fast", so a
+			// mid cluster (A715/A710) joins the prime core rather than being
+			// lumped in with the A510s.
+			threshold = threshold * 3 / 4;
+
+			// Cores that exist. process_affinity_mask is all 64 bits on Android (see
+			// get_thread_affinity_mask), and every bit past the last core lands in slow_mask below.
+			u64 present_mask = 0;
+
+			for (u32 core = 0; core < 64u; core++)
+			{
+				if (~process_affinity_mask & (u64{1} << core))
+				{
+					continue;
+				}
+
+				const u32 capacity = caps[core];
+
+				if (capacity)
+				{
+					present_mask |= (u64{1} << core);
+				}
+
+				((capacity && capacity >= threshold) ? fast_mask : slow_mask) |= (u64{1} << core);
+			}
+
+			if (!fast_mask || !slow_mask)
+			{
+				// Degenerate reading -- do not fence anything off.
+				return all_cores_mask;
+			}
+
+			// Reserve the single fastest core for RSX where there is one to spare.
+			//
+			// RSX and all the SPU threads previously shared one mask, so on a 4+3+1 phone
+			// that was six hot threads over five cores. RSX is the thread the frame waits
+			// on: it was measured spending about 10ms per frame inside its own loop without
+			// running, not blocked on the GPU and not faulting, simply waiting for a core.
+			//
+			// Keeping the SPUs off the prime core leaves it for RSX without fencing RSX in,
+			// since RSX keeps the whole fast cluster and only loses the contention for the
+			// best core. Only applied when doing so still leaves the SPUs more than one
+			// core, otherwise they would be crowded worse than the problem being fixed.
+			u64 prime_mask = 0;
+			u32 best_capacity = 0;
+
+			for (u32 core = 0; core < 64u; core++)
+			{
+				if (~fast_mask & (u64{1} << core))
+				{
+					continue;
+				}
+
+				if (caps[core] > best_capacity)
+				{
+					best_capacity = caps[core];
+					prime_mask = (u64{1} << core);
+				}
+			}
+
+			const u64 spu_mask = (std::popcount(fast_mask & ~prime_mask) > 1)
+				? (fast_mask & ~prime_mask)
+				: fast_mask;
+
+			switch (group)
+			{
+			case thread_class::spu:
+				return spu_mask;
+			case thread_class::rsx:
+				return fast_mask;
+			case thread_class::ppu:
+				// PPU still needs a fast core for the main thread, but letting it
+				// spill to the little cluster keeps it out of the SPUs' way.
+				return all_cores_mask;
+			default:
+			{
+				// Only the little cores that exist. The bits past the last core never
+				// changed where a thread ran, but they made this mask 59 cores wide on a
+				// Snapdragon 8 Gen 2 for anyone sizing a pool to it (the pipeline compiler
+				// picked 2 workers for 3 little cores), and where every core reads as
+				// fast (expected on a Snapdragon 8 Elite, not run) they were the whole mask,
+				// which sched_setaffinity rejects with EINVAL, leaving the thread wherever
+				// it was. There it gets the fast cores, which is every core. Contributed by
+				// k1r4ct (PR #234); the 8 Elite case is confirmed on an Odin 3, whose every boot
+				// logged that EINVAL for both pipeline compiler workers.
+				const u64 helper_mask = slow_mask & present_mask;
+				return helper_mask ? helper_mask : fast_mask;
+			}
+			}
+#endif
 		}
 		case native_core_arrangement::amd_ccx:
 		{
@@ -4107,7 +5543,56 @@ void thread_ctrl::set_native_priority(int priority)
 	{
 		sig_log.error("SetThreadPriority() failed: %s", fmt::win_error{GetLastError(), nullptr});
 	}
+#elif defined(__ANDROID__)
+	// Nice value, not sched_priority.
+	//
+	// Android threads run under SCHED_OTHER, where sched_priority must be 0 and
+	// sched_get_priority_max returns 0, so the pthread_setschedparam path below sets
+	// nothing at all. The RSX thread asks for a boost on startup and was still measured at
+	// nice 0, being involuntarily preempted about 5300 times a second, roughly 130 times
+	// per frame, by the PPU, SPU and audio threads sharing its cores.
+	//
+	// Under SCHED_OTHER the scheduler's weighting comes from nice, which setpriority does
+	// set. Android grants apps enough RLIMIT_NICE headroom to go negative for their own
+	// threads, which is how audio threads get their priority.
+	//
+	// Modest values on purpose: this is a hint to be scheduled ahead of the other emulator
+	// threads, not a bid to starve them, and the RSX thread is the one everything else
+	// waits on.
+	const int nice_value = (priority > 0) ? -8 : (priority < 0 ? 8 : 0);
+
+	errno = 0;
+	if (setpriority(PRIO_PROCESS, static_cast<id_t>(gettid()), nice_value) == -1 && errno)
+	{
+		// Not fatal. Without the headroom the thread simply keeps its default weighting.
+		sig_log.warning("setpriority(%d) failed: %s", nice_value, strerror(errno));
+	}
 #else
+#if defined(__APPLE__)
+	// pthread_setschedparam takes a thread out of QoS for good, so a thread with a class moves bands instead.
+	qos_class_t own_class = QOS_CLASS_UNSPECIFIED;
+	pthread_get_qos_class_np(pthread_self(), &own_class, nullptr);
+
+	if (own_class != QOS_CLASS_UNSPECIFIED)
+	{
+		const qos_class_t wanted = priority > 0 ? QOS_CLASS_USER_INTERACTIVE : (priority < 0 ? QOS_CLASS_UTILITY : QOS_CLASS_USER_INITIATED);
+
+		const int err = pthread_set_qos_class_self_np(wanted, 0);
+
+		if (err == 0)
+		{
+			return;
+		}
+
+		// Not expected: report once, then fall back to the policy below.
+		static atomic_t<bool> s_qos_refused{false};
+
+		if (!s_qos_refused.exchange(true))
+		{
+			sig_log.warning("pthread_set_qos_class_self_np() failed: %d (priority %d)", err, priority);
+		}
+	}
+#endif
 	int policy;
 	struct sched_param param;
 
@@ -4164,7 +5649,11 @@ void thread_ctrl::set_thread_affinity_mask(u64 mask)
 	thread_affinity_policy_data_t policy = { static_cast<integer_t>(std::countr_zero(mask)) };
 	thread_port_t mach_thread = pthread_mach_thread_np(pthread_self());
 	thread_policy_set(mach_thread, THREAD_AFFINITY_POLICY, reinterpret_cast<thread_policy_t>(&policy), !mask ? 0 : 1);
-#elif !defined(ANDROID) && (defined(__linux__) || defined(__DragonFly__) || defined(__FreeBSD__))
+// NOTE: Android was excluded here upstream, which made every affinity request a
+// silent no-op -- Thread Scheduler Mode looked settable but did nothing. bionic
+// provides pthread_setaffinity_np, and other Android ports run this path without
+// the carve-out. Failures are already logged rather than fatal.
+#elif (defined(__linux__) || defined(__DragonFly__) || defined(__FreeBSD__))
 	if (!mask)
 	{
 		// Reset affinity mask
@@ -4192,10 +5681,19 @@ void thread_ctrl::set_thread_affinity_mask(u64 mask)
 		}
 	}
 
+#ifdef ANDROID
+	// bionic has no pthread_setaffinity_np. sched_setaffinity with pid 0 targets
+	// the calling THREAD on Linux, which is what we want.
+	if (sched_setaffinity(0, sizeof(cpu_set_t), &cs) != 0)
+	{
+		sig_log.error("Failed to set thread affinity 0x%x: errno %d.", mask, errno);
+	}
+#else
 	if (int err = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cs))
 	{
 		sig_log.error("Failed to set thread affinity 0x%x: error %d.", mask, err);
 	}
+#endif
 #endif
 }
 
@@ -4318,7 +5816,7 @@ usz map_workload(std::string_view thread_name, usz thread_count, usz count, std:
 		{
 			func(i);
 		}
-		return 1;
+		return thread_count;
 	}
 
 	atomic_t<u32> num_threads_succeeded {0}; // Check if any thread didn't finish. For example when hitting an exception.
@@ -4368,7 +5866,7 @@ usz map_workload(std::string_view thread_name, usz thread_count, std::function<v
 	if (thread_count <= 1)
 	{
 		func();
-		return 1;
+		return thread_count;
 	}
 
 	atomic_t<u32> num_threads_succeeded {0}; // Check if any thread didn't finish. For example when hitting an exception.

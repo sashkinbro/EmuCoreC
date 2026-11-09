@@ -86,7 +86,7 @@ static void select_from_nids_scenpdrm_addrs(std::map<u32, std::vector<std::pair<
 
 	for (const auto& [nid, use] : fnid_to_use_addr)
 	{
-		if (std::count(std::begin(fnids_list), std::end(fnids_list), nid))
+		if (std::ranges::contains(fnids_list, nid))
 		{
 			result.emplace(use, 0);
 		}
@@ -2125,6 +2125,14 @@ bool ppu_load_exec(const ppu_exec_object& elf, bool virtual_load, const std::str
 	if (elf != elf_error::ok)
 	{
 		return false;
+	}
+
+	if (!virtual_load)
+	{
+		// Naughty Bear: Panic in Paradise trials: see ppu_nb_stream_lock in PPUThread.cpp
+		extern void ppu_nb_stream_lock_reset(bool on);
+		const std::string& title = Emu.GetTitleID();
+		ppu_nb_stream_lock_reset(title == "NPUB30828" || title == "NPEB01054");
 	}
 
 	// Check if it is a standalone executable first

@@ -109,20 +109,37 @@ else()
 	else()
 		# we don't have the system libusb, so we compile from submodule
 		unset(LIBUSB_LIBRARIES CACHE)
-		add_subdirectory(libusb EXCLUDE_FROM_ALL)
+		# libusb does not configure for iOS; an empty target keeps the 3rdparty::libusb alias valid.
+		if(NOT IOS)
+			add_subdirectory(libusb EXCLUDE_FROM_ALL)
 
-		if (NOT TARGET usb-1.0 AND TARGET usb-1.0-static)
-			add_library(usb-1.0 ALIAS usb-1.0-static)
+			if (NOT TARGET usb-1.0 AND TARGET usb-1.0-static)
+				add_library(usb-1.0 ALIAS usb-1.0-static)
+			endif()
+		else()
+			add_library(usb-1.0-static INTERFACE)
 		endif()
 	endif()
 endif()
 
 
 # hidapi
-add_subdirectory(hidapi)
+if(NOT IOS)
+	add_subdirectory(hidapi)
+else()
+	# hidapi's darwin backend needs IOKit HID, which iOS lacks; an empty target keeps the alias valid.
+	add_library(3rdparty_hidapi INTERFACE)
+endif()
 
 # glslang
 add_subdirectory(glslang EXCLUDE_FROM_ALL)
+
+# SPIRV-Cross (Android only: GLSL ES for the OpenGL renderer, see spirv-cross/CMakeLists.txt)
+if(ANDROID)
+	add_subdirectory(spirv-cross EXCLUDE_FROM_ALL)
+else()
+	add_library(3rdparty_spirv_cross INTERFACE)
+endif()
 
 # yaml-cpp
 add_subdirectory(yaml-cpp)
@@ -150,7 +167,8 @@ elseif(ANDROID)
 	# renderer enabled and let the Android compatibility layer provide the few
 	# desktop-only operations used by the upstream RSX backend.
 	add_library(3rdparty_opengl INTERFACE)
-	target_link_libraries(3rdparty_opengl INTERFACE EGL GLESv3)
+	target_compile_definitions(3rdparty_opengl INTERFACE RSX_GLES=1)
+	target_link_libraries(3rdparty_opengl INTERFACE dl)
 else()
 	add_library(3rdparty_opengl INTERFACE)
 	target_compile_definitions(3rdparty_opengl INTERFACE WITHOUT_OPENGL=1)
@@ -340,31 +358,10 @@ if(NOT ANDROID)
 	else()
 		message(STATUS "RPCS3: using builtin ffmpeg")
 		add_subdirectory(ffmpeg EXCLUDE_FROM_ALL)
-		# ffmpeg-core libraries are extracted to CMAKE_BINARY_DIR
-		set(FFMPEG_LIB_DIR "${CMAKE_BINARY_DIR}/3rdparty/ffmpeg/lib")
 
-		if (WIN32)
-			target_link_libraries(3rdparty_ffmpeg INTERFACE "Bcrypt.lib")
-		endif()
-
-		find_library(FFMPEG_LIB_AVFORMAT avformat PATHS ${FFMPEG_LIB_DIR} NO_DEFAULT_PATH)
-		find_library(FFMPEG_LIB_AVCODEC avcodec PATHS ${FFMPEG_LIB_DIR} NO_DEFAULT_PATH)
-		find_library(FFMPEG_LIB_AVUTIL avutil PATHS ${FFMPEG_LIB_DIR} NO_DEFAULT_PATH)
-		find_library(FFMPEG_LIB_SWSCALE swscale PATHS ${FFMPEG_LIB_DIR} NO_DEFAULT_PATH)
-		find_library(FFMPEG_LIB_SWRESAMPLE swresample PATHS ${FFMPEG_LIB_DIR} NO_DEFAULT_PATH)
-
-		if (FFMPEG_LIB_AVFORMAT MATCHES "FFMPEG_LIB_AVFORMAT-NOTFOUND")
-			message(FATAL_ERROR "@#$%! FFMPEG NOT FOUND! ${FFMPEG_LIB_DIR}")
-		endif()
-
-		target_link_libraries(3rdparty_ffmpeg
-		INTERFACE
-			${FFMPEG_LIB_AVFORMAT}
-			${FFMPEG_LIB_AVCODEC}
-			${FFMPEG_LIB_AVUTIL}
-			${FFMPEG_LIB_SWSCALE}
-			${FFMPEG_LIB_SWRESAMPLE}
-		)
+		# The submodule target also carries the platform system libraries
+		# (e.g. the frameworks on macOS).
+		target_link_libraries(3rdparty_ffmpeg INTERFACE ffmpeg)
 		target_include_directories(3rdparty_ffmpeg SYSTEM INTERFACE "ffmpeg/include")
 	endif()
 endif()
@@ -415,6 +412,7 @@ add_library(3rdparty::7zip ALIAS 3rdparty_7zip)
 add_library(3rdparty::protobuf ALIAS 3rdparty_protobuf)
 add_library(3rdparty::pugixml ALIAS pugixml)
 add_library(3rdparty::glslang ALIAS 3rdparty_glslang)
+add_library(3rdparty::spirv-cross ALIAS 3rdparty_spirv_cross)
 add_library(3rdparty::yaml-cpp ALIAS yaml-cpp)
 add_library(3rdparty::hidapi ALIAS 3rdparty_hidapi)
 add_library(3rdparty::libpng ALIAS ${LIBPNG_TARGET})

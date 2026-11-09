@@ -17,6 +17,13 @@ namespace vk
 {
 	struct compute_task
 	{
+		// Set by get_compute_task<T>() so a dispatch can name its own concrete type.
+		const char* m_debug_name = "<unknown>";
+		bool m_logged_first_dispatch = false;
+		u64  m_dispatch_count = 0;
+		// -1 = not resolved yet, 0 = dispatch, 1 = skip (ARMSX3_SKIP_COMPUTE matched this name)
+		s8   m_skip_state = -1;
+
 		std::string m_src;
 		vk::glsl::shader m_shader;
 		std::unique_ptr<vk::glsl::program> m_program;
@@ -412,8 +419,14 @@ namespace vk
 			create();
 
 			m_src =
+#ifdef __APPLE__
+			// Apple builds take the 3D-aware mip loop
+			#include "ios_gpu_deswizzle.glsl"
+			;
+#else
 			#include "../Program/GLSLSnippets/GPUDeswizzle.glsl"
 			;
+#endif
 
 			std::string transform;
 			if constexpr (_SwapBytes)
@@ -672,6 +685,15 @@ namespace vk
 		{
 			e = std::make_unique<T>();
 			e->create();
+
+			// Which compute tasks actually dispatch, by concrete type.
+			//
+			// Every graphics->compute engine switch is a GPU hang risk on Adreno 830, and two
+			// rounds of guessing which call sites were responsible were both wrong -- the
+			// texture-cache byteswap and the tiling job were each assumed and each turned out not
+			// to be the path in use. This prints the real answer once per type instead.
+			e->m_debug_name = typeid(T).name();
+			rsx_log.notice("Compute task instantiated: %s", e->m_debug_name);
 		}
 
 		return static_cast<T*>(e.get());

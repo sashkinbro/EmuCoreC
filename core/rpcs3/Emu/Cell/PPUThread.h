@@ -331,6 +331,9 @@ public:
 	u64 last_succ = 0;
 	u64 exec_bytes = 0; // Amount of "bytes" executed (4 for each instruction)
 
+	// Teardown can re-enter: emit performance statistics once per run.
+	bool perf_stats_reported = false;
+
 	u32 dbg_step_pc = 0;
 	atomic_t<ppu_debugger_mode> debugger_mode{};
 

@@ -91,6 +91,26 @@ void FragmentProgramDecompiler::SetDst(std::string code, u32 flags)
 {
 	if (!src0.exec_if_eq && !src0.exec_if_gr && !src0.exec_if_lt) return;
 
+	// With native half types an operation runs at the precision of its operands, so one whose
+	// inputs are half registers was computed in fp16 even when its result goes to a full-precision
+	// register. The RSX does not work that way: its fragment ALU computes in fp32, and the half
+	// registers only store fp16. A product, reciprocal or exponential that briefly passes 65504
+	// became infinity here and poisoned everything after it. Metal Gear Solid V: The Phantom Pain
+	// (BLUS31491) drew its whole sky as one flat colour on Shader Precision Low (Odin 3, Turnip);
+	// High fixed it but cost a lot of frame rate, since it gives up fp16 everywhere.
+	//
+	// So compute in fp32 wherever the hardware's result is fp32, and for division whatever the
+	// destination, since its reciprocal can overflow when the quotient would not. Half-to-half
+	// arithmetic, most of a typical shader's colour math, keeps native fp16. Ops already casting
+	// (op_extern: dot products, comparisons) or managing their own types are left as they are.
+	if (device_props.has_native_half_support && !(flags & (OPFLAGS::skip_type_cast | OPFLAGS::texture_ref)))
+	{
+		if (!dst.fp16 || dst.opcode == RSX_FP_OPCODE_DIV || dst.opcode == RSX_FP_OPCODE_DIVSQ)
+		{
+			flags |= OPFLAGS::src_cast_f32;
+		}
+	}
+
 	if (src1.scale)
 	{
 		std::string modifier;
@@ -834,10 +854,13 @@ std::string FragmentProgramDecompiler::BuildCode()
 	for (u32 n = 0; n < 4; ++n)
 	{
 		const auto& reg_name = output_register_names[n];
-		if (!m_parr.HasParam(PF_PARAM_NONE, float4_type, reg_name))
+		if (m_parr.HasParam(PF_PARAM_NONE, float4_type, reg_name))
 		{
-			m_parr.AddParam(PF_PARAM_NONE, float4_type, reg_name, init_value);
+			// Register is already declared, nothing to add and nothing to report.
+			continue;
 		}
+
+		m_parr.AddParam(PF_PARAM_NONE, float4_type, reg_name, init_value);
 
 		if (n >= m_prog.mrt_buffers_count)
 		{
@@ -846,7 +869,14 @@ std::string FragmentProgramDecompiler::BuildCode()
 		}
 
 		// Emit debug warning. Useful to diagnose regressions, but should be removed in future.
-		rsx_log.warning("ROP reads from %s without writing to it. Final value will be gathered.", reg_name);
+		//
+		// The guard above is why this is worth keeping at warning level: it used to sit OUTSIDE
+		// the HasParam test and fired on every decompile regardless, which is both spam and a
+		// false statement on the path it usually printed on. Reachable now only when the register
+		// is not declared at all -- which is what HasParam actually tests, since AddReg() is
+		// called for source reads as well as destination writes, so the wording says "referenced"
+		// rather than "written".
+		rsx_log.warning("ROP output register %s is never referenced by the ucode. Default value will be gathered.", reg_name);
 	}
 
 	if (properties.has_dynamic_register_load)

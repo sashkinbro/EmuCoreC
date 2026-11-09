@@ -62,6 +62,71 @@ static bool leaves_directory(std::string_view name)
 	return false;
 }
 
+// Where a name that leaves its directory lands, for a package unpacking on the emulated hard drive. "Custom installer"
+// packages (PS3 avatar and mod packs) declare an ordinary content type, then name their files from the root:
+// "../../dev_hdd0/home/psn_avatar/PSNA_....edat" from dev_hdd0/theme/, which a PS3 resolves from the install directory.
+// Resolved the same way from install_dir, the install directory's PS3 path ("dev_hdd0/theme/"). The result is the path
+// below dev_hdd0 (empty for dev_hdd0 itself), or nothing when the name leaves the emulated hard drive.
+static std::optional<std::string> resolve_on_hdd0(std::string_view install_dir, std::string_view name)
+{
+	if (install_dir.empty() || name.starts_with('/'))
+	{
+		return std::nullopt;
+	}
+
+	std::vector<std::string_view> parts;
+
+	const auto append = [&parts](std::string_view path)
+	{
+		for (std::string_view rest = path; !rest.empty();)
+		{
+			const usz sep = rest.find('/');
+			const std::string_view component = rest.substr(0, sep);
+			rest = sep == umax ? std::string_view{} : rest.substr(sep + 1);
+
+			if (component.empty() || component == ".")
+			{
+				continue;
+			}
+
+			if (component == "..")
+			{
+				// Above the root: a PS3 has nothing there
+				if (parts.empty())
+				{
+					return false;
+				}
+
+				parts.pop_back();
+				continue;
+			}
+
+			parts.push_back(component);
+		}
+
+		return true;
+	};
+
+	if (!append(install_dir) || !append(name) || parts.empty() || parts[0] != "dev_hdd0")
+	{
+		return std::nullopt;
+	}
+
+	std::string result;
+
+	for (usz i = 1; i < parts.size(); i++)
+	{
+		if (i > 1)
+		{
+			result += '/';
+		}
+
+		result += parts[i];
+	}
+
+	return result;
+}
+
 package_reader::package_reader(const std::string& path, fs::file file)
 	: m_path(path)
 	, m_file(std::move(file))
@@ -858,16 +923,36 @@ package_install_result package_reader::check_target_app_version() const
 	};
 }
 
-bool package_reader::set_install_path()
+// Empty unless a caller is extracting outside dev_hdd0. Installs are serialised behind one
+// worker thread, so a plain global is enough and an extra lock would only describe a race that
+// cannot happen.
+static std::string s_install_root_override;
+
+void package_reader::set_install_root_override(std::string root)
+{
+	s_install_root_override = std::move(root);
+}
+
+std::string package_reader::get_install_path() const
 {
 	if (!m_is_valid)
 	{
-		return false;
+		return {};
 	}
 
-	m_install_path.clear();
-
 	// Get full path
+	// An override skips the dev_hdd0 layout entirely: the caller has already decided exactly
+	// where this should land, and the game/<id> shaping below is the thing it is avoiding.
+	if (!s_install_root_override.empty())
+	{
+		std::string dir = s_install_root_override;
+		if (dir.back() != '/')
+		{
+			dir += '/';
+		}
+		return dir;
+	}
+
 	std::string dir = rpcs3::utils::get_hdd0_dir();
 
 	// Based on https://www.psdevwiki.com/ps3/PKG_files#ContentType
@@ -901,20 +986,56 @@ bool package_reader::set_install_path()
 	// Append title ID depending on content type
 	if (m_metadata.content_type != PKG_CONTENT_TYPE_THEME && m_metadata.content_type != PKG_CONTENT_TYPE_LICENSE)
 	{
-		// The name is read as it comes from the package
-		if (m_install_dir.empty() || leaves_directory(m_install_dir))
+		// The install directory comes straight out of the package and was never checked.
+		//
+		// It has two sources and both can yield nothing. read_metadata() sizes it to 9 and
+		// reads the title ID over it without testing the result, so a short read leaves nine
+		// NUL bytes; and the DLC path takes c_str() + 8, which is empty whenever byte 8 is a
+		// NUL. Appending either one left the destination as dev_hdd0/game itself, so the
+		// package unpacked its own contents over the games root: users ended up with a
+		// library full of asset directories (manhat01, props_ab, script_network from GTA IV),
+		// storage consumed with nothing listed as installed, and folders that survived
+		// uninstalling the title because uninstall only removes dev_hdd0/game/<TITLEID>.
+		//
+		// c_str(), not the string itself, so the nine-NUL case reads as empty rather than as
+		// a nine character name. Separators and dot entries are refused too: this value is a
+		// single path component chosen by the package, and it should not be able to point
+		// anywhere else.
+		const std::string_view name = m_install_dir.c_str();
+
+		if (name.empty() || name == "." || name == ".." || name.find_first_of("/\\") != umax || leaves_directory(name))
 		{
-			pkg_log.error("Invalid installation directory name '%s'", m_install_dir);
-			return false;
+			pkg_log.error("PKG has no usable install directory (content_type=0x%x, name='%s'). "
+				"Refusing to unpack into '%s'.", static_cast<u32>(m_metadata.content_type), name, dir);
+			return {};
 		}
 
-		dir += vfs::escape(m_install_dir) + '/';
+		// Escaped like every other host path built from guest data (upstream c4d834480).
+		dir += vfs::escape(name) + '/';
+	}
+
+	return dir;
+}
+
+bool package_reader::set_install_path()
+{
+	if (!m_is_valid)
+	{
+		return false;
+	}
+
+	m_install_path.clear();
+
+	std::string dir = get_install_path();
+	if (dir.empty())
+	{
+		return false;
 	}
 
 	// If false, an existing directory is being overwritten: cannot cancel the operation
 	m_was_null = !fs::is_dir(dir);
 
-	m_install_path = dir;
+	m_install_path = std::move(dir);
 	return true;
 }
 
@@ -929,6 +1050,32 @@ bool package_reader::fill_data(std::map<std::string, install_entry*>& all_instal
 	{
 		pkg_log.error("Could not create the installation directory %s (error=%s)", m_install_path, fs::g_tls_error);
 		return false;
+	}
+
+	// Refuse an install that cannot fit, before writing a single byte.
+	//
+	// Nothing on this path checked. A full device produced one of two outcomes, neither of
+	// them a "disk full" message: a hard abort out of ensure(r > 0) in fs::file::write, or --
+	// if the backend returned a short write instead of failing -- a truncated file that was
+	// logged as "Created file", counted as fully written, and reported as a successful
+	// install, surfacing later as a corrupt game nobody can explain.
+	//
+	// data_size is the PKG's own total for its contents, so unlike the game-data check this
+	// one is exact rather than a floor. The 64MiB margin covers the directory entries and
+	// filesystem overhead the figure does not include.
+	if (fs::device_stat dev{}; fs::statfs(m_install_path, dev))
+	{
+		const u64 needed = m_header.data_size + (64 * 1024 * 1024);
+
+		if (dev.avail_free < needed)
+		{
+			pkg_log.error("Not enough space to install: need %u MiB, %u MiB free on the target device",
+				needed / (1024 * 1024), dev.avail_free / (1024 * 1024));
+			return false;
+		}
+
+		pkg_log.notice("Installing %u MiB, %u MiB free",
+			m_header.data_size / (1024 * 1024), dev.avail_free / (1024 * 1024));
 	}
 
 	const auto canonicalize = [](std::string_view utf8_path)
@@ -971,6 +1118,27 @@ bool package_reader::fill_data(std::map<std::string, install_entry*>& all_instal
 		return std::mismatch(install_path.begin(), install_path.end(), path.begin(), path.end()).first == install_path.end();
 	};
 
+	// The install directory's PS3 path, for the names a custom installer gives from the root (resolve_on_hdd0). Only for a
+	// package unpacking where its content type puts it on the emulated hard drive: a root the caller chose has no PS3 path,
+	// so there such names are still refused. What they reach is held to dev_hdd0 instead of the install directory.
+	const std::string hdd0_dir = rpcs3::utils::get_hdd0_dir();
+	const std::string guest_install_dir = s_install_root_override.empty() && m_install_path.starts_with(hdd0_dir)
+		? "dev_hdd0/" + m_install_path.substr(hdd0_dir.size()) : std::string{};
+
+	std::string_view hdd0_trimmed = hdd0_dir;
+
+	while (hdd0_trimmed.ends_with('/'))
+	{
+		hdd0_trimmed.remove_suffix(1);
+	}
+
+	const std::filesystem::path hdd0_path = guest_install_dir.empty() ? std::filesystem::path{} : canonicalize(hdd0_trimmed);
+
+	const auto is_on_hdd0 = [&hdd0_path](const std::filesystem::path& path)
+	{
+		return !hdd0_path.empty() && std::mismatch(hdd0_path.begin(), hdd0_path.end(), path.begin(), path.end()).first == hdd0_path.end();
+	};
+
 	m_install_entries.clear();
 	m_bootable_file_path.clear();
 	m_entry_indexer = 0;
@@ -1008,14 +1176,29 @@ bool package_reader::fill_data(std::map<std::string, install_entry*>& all_instal
 
 		std::string_view name = fmt::trim_back_sv(name_buf, "\0"sv);
 
+		std::string path;
+
+		// Named from the root by a custom installer, and held to dev_hdd0 rather than the install directory
+		bool from_root = false;
+
 		if (leaves_directory(name))
 		{
-			num_failures++;
-			pkg_log.error("PKG entry path escapes installation directory: '%s'", name);
-			break;
-		}
+			const std::optional<std::string> below_hdd0 = resolve_on_hdd0(guest_install_dir, name);
 
-		std::string path = m_install_path + vfs::escape(name);
+			if (!below_hdd0)
+			{
+				num_failures++;
+				pkg_log.error("PKG entry path escapes installation directory: '%s'", name);
+				break;
+			}
+
+			path = below_hdd0->empty() ? std::string(hdd0_trimmed) : hdd0_dir + vfs::escape(*below_hdd0);
+			from_root = true;
+		}
+		else
+		{
+			path = m_install_path + vfs::escape(name);
+		}
 
 		const u8 entry_type = entry.type & 0xff;
 		const bool is_folder = entry_type == PKG_FILE_ENTRY_FOLDER || entry_type == 0x12;
@@ -1046,7 +1229,7 @@ bool package_reader::fill_data(std::map<std::string, install_entry*>& all_instal
 			canonical_path = found->second / fs_path_from_utf8(std::string_view(path).substr(slash + 1));
 		}
 
-		if (canonical_path.empty() || !is_inside_install_path(canonical_path))
+		if (canonical_path.empty() || !(from_root ? is_on_hdd0(canonical_path) : is_inside_install_path(canonical_path)))
 		{
 			num_failures++;
 			pkg_log.error("PKG entry path escapes installation directory: '%s'", name);
@@ -1088,9 +1271,8 @@ bool package_reader::fill_data(std::map<std::string, install_entry*>& all_instal
 		}
 		default:
 		{
-			// The name reached "path" through "vfs::escape", which turns whatever the host file system cannot take
-			// into characters it can, a byte that is not valid UTF-8 included (macOS refuses a name carrying one)
-			auto map_ptr = &*all_install_entries.try_emplace(path).first;
+			// "path" went through "vfs::escape", which also takes care of the bytes that are not valid UTF-8
+			auto map_ptr = &*all_install_entries.try_emplace(std::move(path)).first;
 
 			m_install_entries.push_back({
 				.weak_reference = map_ptr,
@@ -1393,8 +1575,27 @@ void package_reader::extract_worker()
 
 				while (usz read_size = final_data.read(buffer.data(), buffer.size() - BUF_PADDING))
 				{
-					out.write(buffer.data(), read_size);
-					m_written_bytes += read_size;
+					// Check what actually landed.
+					//
+					// This return value was discarded, and extract_success was declared true and
+					// never assigned again -- so the failure branch below was unreachable, every
+					// file logged "Created file" whatever happened, and m_written_bytes counted
+					// bytes INTENDED rather than written, which is why the progress bar reaches
+					// 100% on a failed install.
+					//
+					// A short write is what a full device produces if the backend returns one
+					// instead of raising, and it leaves a truncated file that installs
+					// "successfully" and surfaces much later as a corrupt game.
+					const usz wrote = out.write(buffer.data(), read_size);
+					m_written_bytes += wrote;
+
+					if (wrote != read_size)
+					{
+						pkg_log.error("Short write extracting %s: wrote %u of %u bytes (%s)",
+							path, wrote, read_size, fs::g_tls_error);
+						extract_success = false;
+						break;
+					}
 				}
 
 				final_data.close();

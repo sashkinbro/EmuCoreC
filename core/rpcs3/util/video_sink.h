@@ -38,9 +38,15 @@ namespace utils
 				return false;
 
 			std::vector<u8> sample(buf, buf + sample_count * channels * sizeof(f32));
-			std::lock_guard lock(m_audio_mtx);
-			m_samples_to_encode.emplace_back(timestamp_us, sample_count, channels, std::move(sample));
+
+			{
+				std::lock_guard lock(m_audio_mtx);
+				m_samples_to_encode.emplace_back(timestamp_us, sample_count, channels, std::move(sample));
+			}
+
 			signal_work();
+			samples_added++;
+			samples_added.notify_one();
 			return true;
 		}
 
@@ -104,6 +110,15 @@ namespace utils
 		bool use_internal_audio = false; // True if we want to fetch samples from cellAudio
 		bool use_internal_video = false; // True if we want to fetch frames from rsx
 
+		// ARMSX3 remote play: take every audio block. The provider drops a block whose timestamp
+		// lands in the same 256-sample slot as the previous one, which a file recorder can absorb
+		// but a live stream hears as a click whenever cellAudio delivers two blocks close together.
+		bool accept_all_samples = false;
+
+		// ARMSX3 remote play: counts audio blocks as they arrive, so the stream's audio thread can
+		// sleep until there is one instead of checking every millisecond.
+		atomic_t<u32> samples_added{0};
+
 	protected:
 		shared_mutex m_video_mtx;
 		std::deque<encoder_frame> m_frames_to_encode;
@@ -117,6 +132,7 @@ namespace utils
 		s32 m_sample_format = -1;
 		static constexpr u32 m_samples_per_block = 256;
 
+	protected:
 		void signal_work()
 		{
 			m_work_signal++;

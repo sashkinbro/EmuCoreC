@@ -6,6 +6,8 @@
 #include "sampler.h"
 
 #include "../VKResourceManager.h"
+#include "../VKRenderPass.h"
+#include "Emu/RSX/rsx_profiler.h"
 #include <memory>
 
 namespace vk
@@ -302,6 +304,16 @@ namespace vk
 		}
 
 		ensure(m_layout_stack.empty());
+
+		// Most layout changes arrive through here rather than calling change_image_layout
+		// directly, so without this every teardown would be attributed to this one function.
+		// Recorded before the call, and only when a pass is actually open, so the count is
+		// teardowns caused rather than layout changes attempted.
+		if (rsx::prof::enabled() && vk::is_renderpass_open(cmd)) [[unlikely]]
+		{
+			rsx::prof::note_rp_teardown(__builtin_return_address(0), 1);
+		}
+
 		change_image_layout(cmd, this, new_layout);
 
 		current_queue_family = cmd.get_queue_family();
@@ -514,7 +526,22 @@ namespace vk
 		}
 
 		const VkImageSubresourceRange range = { aspect() & mask, 0, info.mipLevels, 0, info.arrayLayers };
+#ifdef __APPLE__
+		if (!range.aspectMask) [[unlikely]]
+		{
+			// Name the image, the request and the caller (symbolicate the address with the build's dSYM)
+#if defined(__GNUC__) || defined(__clang__)
+			const void* caller = __builtin_return_address(0);
+#else
+			const void* caller = nullptr;
+#endif
+			fmt::throw_exception("get_view: image aspect 0x%x has nothing in common with mask 0x%x (format=%d, %ux%ux%u, mips=%u, layers=%u, remap=0x%x, caller=%p)",
+				aspect(), mask, static_cast<int>(info.format), info.extent.width, info.extent.height, info.extent.depth,
+				info.mipLevels, info.arrayLayers, remap_encoding, caller);
+		}
+#else
 		ensure(range.aspectMask);
+#endif
 
 		auto view = std::make_unique<vk::image_view>(*g_render_device, this, format(), VK_IMAGE_VIEW_TYPE_MAX_ENUM, real_mapping, range);
 		auto result = view.get();

@@ -94,6 +94,8 @@ namespace cfg
 		// Get numeric value range (optional; 0,0 means unbounded)
 		virtual s64 get_min() const { return 0; }
 		virtual s64 get_max() const { return 0; }
+		virtual std::string min_to_string() const { return {}; }
+		virtual std::string max_to_string() const { return {}; }
 
 		// Reset defaults
 		virtual void from_default() = 0;
@@ -337,6 +339,8 @@ namespace cfg
 
 		s64 get_min() const override { return Min; }
 		s64 get_max() const override { return Max; }
+		std::string min_to_string() const override { return std::to_string(min); }
+		std::string max_to_string() const override { return std::to_string(max); }
 
 		_int(node* owner, const std::string& name, int_type def = std::min<int_type>(Max, std::max<int_type>(Min, 0)), bool dynamic = false)
 			: _base(type::_int, owner, name, dynamic)
@@ -419,6 +423,8 @@ namespace cfg
 
 		s64 get_min() const override { return Min; }
 		s64 get_max() const override { return Max; }
+		std::string min_to_string() const override { return std::to_string(min); }
+		std::string max_to_string() const override { return std::to_string(max); }
 
 		_float(node* owner, const std::string& name, float_type def = std::min<float_type>(Max, std::max<float_type>(Min, 0)), bool dynamic = false)
 			: _base(type::_int, owner, name, dynamic)
@@ -521,6 +527,8 @@ namespace cfg
 
 		s64 get_min() const override { return static_cast<s64>(Min); }
 		s64 get_max() const override { return static_cast<s64>(Max); }
+		std::string min_to_string() const override { return std::to_string(min); }
+		std::string max_to_string() const override { return std::to_string(max); }
 
 		uint(node* owner, const std::string& name, int_type def = std::max<int_type>(Min, 0), bool dynamic = false)
 			: _base(type::uint, owner, name, dynamic)

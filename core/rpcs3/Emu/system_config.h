@@ -1,5 +1,8 @@
 #pragma once
 
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#endif
 #include "system_config_types.h"
 #include "Utilities/Config.h"
 
@@ -26,6 +29,10 @@ struct cfg_root : cfg::node
 		// this value on boot so existing config files with 0 are upgraded.
 		cfg::_int<0, 1024> llvm_threads{ this, "Max LLVM Compile Threads", 2 };
 		cfg::_bool llvm_precompilation{ this, "LLVM Precompilation", true };
+#ifdef __APPLE__
+		// Part of the PPU object name, so not dynamic.
+		cfg::_bool ppu_llvm_early_cse{ this, "PPU LLVM EarlyCSE", false };
+#endif
 		cfg::_enum<thread_scheduler_mode> thread_scheduler{this, "Thread Scheduler Mode", thread_scheduler_mode::os};
 		cfg::_bool set_daz_and_ftz{ this, "Set DAZ and FTZ", false };
 		cfg::_enum<spu_decoder_type> spu_decoder{ this, "SPU Decoder", spu_decoder_type::llvm };
@@ -38,6 +45,9 @@ struct cfg_root : cfg::node
 		cfg::_int<0, 6> preferred_spu_threads{ this, "Preferred SPU Threads", 0, true }; // Number of hardware threads dedicated to heavy simultaneous spu tasks
 		cfg::_int<0, 16> spu_delay_penalty{ this, "SPU delay penalty", 3 }; // Number of milliseconds to block a thread if a virtual 'core' isn't free
 		cfg::_bool spu_loop_detection{ this, "SPU loop detection", false }; // Try to detect wait loops and trigger thread yield
+#ifdef __APPLE__
+		cfg::string spu_poll_park_sites{ this, "SPU Poll Park Sites" };
+#endif
 		cfg::_int<1, 6> max_spurs_threads{ this, "Max SPURS Threads", 6, true }; // HACK. If less then 6, max number of running SPURS threads in each thread group.
 		cfg::_enum<spu_block_size_type> spu_block_size{ this, "SPU Block Size", spu_block_size_type::safe };
 		cfg::_bool spu_accurate_dma{ this, "Accurate SPU DMA", false };
@@ -142,9 +152,9 @@ struct cfg_root : cfg::node
 		node_video(cfg::node* _this) : cfg::node(_this, "Video") {}
 
 #if defined(HAVE_VULKAN)
-		cfg::_enum<video_renderer> renderer{ this, "Renderer", video_renderer::vulkan };
+		cfg::_enum<video_renderer> renderer{ this, "Renderer", video_renderer::vulkan, true };
 #else
-		cfg::_enum<video_renderer> renderer{ this, "Renderer", video_renderer::opengl };
+		cfg::_enum<video_renderer> renderer{ this, "Renderer", video_renderer::opengl, true };
 #endif
 
 		cfg::_enum<video_resolution> resolution{ this, "Resolution", video_resolution::_720p };
@@ -183,6 +193,12 @@ struct cfg_root : cfg::node
 		cfg::_bool stretch_to_display_area{ this, "Stretch To Display Area", false, true };
 		cfg::_bool force_high_precision_z_buffer{ this, "Force High Precision Z buffer" };
 		cfg::_bool strict_rendering_mode{ this, "Strict Rendering Mode" };
+		// ARMSX3: on a screen mounted sideways to the picture (a phone held in landscape, the Odin 3
+		// and most handhelds, whose panels are portrait), the Vulkan swapchain is created already
+		// turned (preTransform = the surface's currentTransform) and the frame is turned into it as
+		// the last pass, so the compositor does not have to turn every frame on the GPU. On hands the
+		// turning back to the compositor, as before. Dynamic: the swapchain is rebuilt on a change.
+		cfg::_bool disable_swapchain_prerotation{ this, "Disable Swap Chain Pre-Rotation", false, true };
 		cfg::_enum<framebuffer_aliasing_bias> fb_aliasing_bias{ this, "Framebuffer Aliasing Heuristic Bias", framebuffer_aliasing_bias::_auto, true };
 		cfg::_bool disable_zcull_queries{ this, "Disable ZCull Occlusion Queries", false, true };
 		cfg::_bool disable_video_output{ this, "Disable Video Output", false, true };
@@ -209,6 +225,9 @@ struct cfg_root : cfg::node
 		cfg::uint<25, 800> resolution_scale_percent{ this, "Resolution Scale", 100, true };
 		cfg::uint<0, 16> anisotropic_level_override{ this, "Anisotropic Filter Override", 0, true };
 		cfg::_float<-32, 32> texture_lod_bias{ this, "Texture LOD Bias Addend", 0, true };
+		cfg::_int<0, 4000> display_aspect_permille{ this, "Display Aspect Override", 0, true };
+		cfg::_bool rsx_profiler{ this, "RSX Profiler", false, true };
+		cfg::uint<0, 200> sgsr_sharpening_intensity{ this, "SGSR Edge Sharpness", 100, true };
 		cfg::uint<1, 1024> min_scalable_dimension{ this, "Minimum Scalable Dimension", 16, true };
 		cfg::_int<0, 16> shader_compiler_threads_count{ this, "Shader Compiler Threads", 0 };
 		cfg::_int<0, 30000000> driver_recovery_timeout{ this, "Driver Recovery Timeout", 1000000, true };
@@ -220,6 +239,49 @@ struct cfg_root : cfg::node
 		cfg::_bool disable_msl_fast_math{ this, "Disable MSL Fast Math", false };
 		cfg::_bool disable_async_host_memory_manager{ this, "Disable Asynchronous Memory Manager", false, true };
 		cfg::_enum<output_scaling_mode> output_scaling{ this, "Output Scaling Mode", output_scaling_mode::bilinear, true };
+#if defined(__ANDROID__) || defined(__APPLE__)
+		// ARMSX3: Lossless Scaling frame generation.
+		//
+		// Default off and it stays off unless the user supplies shaders from their own copy of
+		// Lossless Scaling -- nothing here ships or downloads them. Dynamic (the trailing true)
+		// because it can be turned off mid-game; turning it ON mid-game still has to rebuild the
+		// shared images, which the present path handles.
+		cfg::_enum<frame_generation_mode> frame_generation{ this, "Frame Generation", frame_generation_mode::off, true };
+
+		// Defaults to ON. This selects framegen's 3.1p shader family, which is materially cheaper
+		// than 3.1, and on a mobile GPU the full-quality path costs more than the frames it buys.
+		// Both families are extracted from the user's DLL already, so this switches between shaders
+		// that are both sitting in the cache.
+		cfg::_bool frame_generation_performance{ this, "Frame Generation Performance Mode", true, true };
+
+		// Optical-flow resolution, as a percentage of full. Lower is cheaper and blurrier in
+		// motion. Stored as a percentage rather than upstream's divisor because a slider from 25
+		// to 100 reads the right way round -- bigger is better quality -- and the conversion to
+		// framegen's fraction happens at the one call site.
+		cfg::uint<25, 100> frame_generation_flow_scale{ this, "Frame Generation Flow Scale", 100, true };
+
+		// Adaptive pacing: the refresh rate to aim for, in Hz, or 0 to use the fixed multiplier
+		// above. With a target set, framegen generates as many frames as it needs to hold that
+		// rate as the game's own frame rate moves, instead of always multiplying by the same
+		// number -- which is what makes the output steady when the game's is not.
+		cfg::uint<0, 480> frame_generation_target_rate{ this, "Frame Generation Target Rate", 0, true };
+
+		// Where the user's own Lossless Scaling install lives. Nothing ships the shaders -- they
+		// are THS's property -- so the interpolation shaders are read out of a legitimately
+		// purchased copy. Kept here so the shader cache can be rebuilt without asking again.
+		cfg::string frame_generation_dll_path{ this, "Frame Generation Lossless Path", "", true };
+#endif
+#if defined(__ANDROID__) || (defined(__APPLE__) && TARGET_OS_IPHONE)
+		// ARMSX3: absolute path to a RetroArch .slangp preset, used when
+		// Output Scaling Mode is "Shader chain (librashader)". Empty = no chain,
+		// which falls back to a plain blit rather than failing to present.
+		cfg::string shader_preset_path{ this, "Shader Preset Path", "", true };
+		// ARMSX3: the share of full size the shader chain runs at, in percent. Below 100 the game's
+		// picture is shrunk by it going in and the chain draws into an image that much smaller than
+		// the screen, which is then scaled up. Every pass costs what its pixels cost, so at 67 a
+		// heavy preset draws about 0.44 of what it did.
+		cfg::uint<25, 100> shader_preset_scale{ this, "Shader Preset Resolution", 67, true };
+#endif
 		cfg::_bool record_with_overlays{ this, "Record With Overlays", true, true };
 		cfg::_bool disable_hardware_blending{ this, "Disable Hardware Blending", false, true };
 		// The other direction. "Disable Hardware Blending" forces the shader path on; this forces
@@ -233,12 +295,30 @@ struct cfg_root : cfg::node
 		{
 			node_vk(cfg::node* _this) : cfg::node(_this, "Vulkan") {}
 
-			cfg::string adapter{ this, "Adapter" };
+			cfg::string adapter{ this, "Adapter", "", true };
 			cfg::_enum<vk_exclusive_fs_mode> exclusive_fullscreen_mode{ this, "Exclusive Fullscreen Mode", vk_exclusive_fs_mode::unspecified};
 			cfg::_bool asynchronous_texture_streaming{ this, "Asynchronous Texture Streaming", false };
+			// ARMSX3: Vulkan only, read once per boot (Emu/RSX/VK/vk_vspec.h). Off by default; the config
+			// database turns it on per title.
+			cfg::_bool vertex_fetch_specialization{ this, "Vertex Fetch Specialization", false };
 			cfg::_enum<vk_gpu_scheduler_mode> asynchronous_scheduler{ this, "Asynchronous Queue Scheduler", vk_gpu_scheduler_mode::safe };
 			cfg::uint<256, 65536> vram_allocation_limit{ this, "VRAM allocation limit (MB)", 65536, false };
+			// ARMSX3: 0 = off. Once this many draws are recorded in the open primary command buffer
+			// and the GPU has finished the previous submit, submit it early instead of leaving the GPU
+			// idle until the next flush point. Values 1-255 count as 256. Read when the renderer starts.
+			cfg::uint<0, 65535> early_submit_draw_threshold{ this, "Early Submit Draw Threshold", 0 };
+#ifdef __ANDROID__
+			// ARMSX3: left on. Android has no Re-BAR; the name only fits desktop cards. RPCS3 counts any
+			// device-local, host-visible, coherent memory type as "BAR", and on a phone that is plain
+			// RAM (our logs: "Detected 15995 MB of BAR memory"). So here this only picks the memory type
+			// of the upload rings: on, the first coherent type; off, the CPU-cached coherent one where
+			// the driver has it. Every build so far ran with it on and older installs keep it on in
+			// config.yml, so following upstream's new default would split users by install date.
+			// A/B it on a device before changing it.
 			cfg::_bool use_rebar_upload_heap{ this, "Use Re-BAR for GPU uploads", true, false };
+#else
+			cfg::_bool use_rebar_upload_heap{ this, "Use Re-BAR for GPU uploads", false, false };
+#endif
 
 		} vk{ this };
 
@@ -265,6 +345,10 @@ struct cfg_root : cfg::node
 			cfg::_bool center_y{ this, "Center Vertically", false, true };
 			cfg::uint<0, 100> opacity{ this, "Opacity (%)", 97, true };
 			cfg::_bool use_window_space{this, "Use Window Space", false, true};
+			cfg::string color_body{ this, "Body Color (hex)", "#FFE138FF", true };
+			cfg::string background_body{ this, "Body Background (hex)", "#002339FF", true };
+			cfg::string color_title{ this, "Title Color (hex)", "#F26C24FF", true };
+			cfg::string background_title{ this, "Title Background (hex)", "#00000000", true };
 
 		} perf_overlay{ this };
 
@@ -302,6 +386,8 @@ struct cfg_root : cfg::node
 
 		cfg::_enum<audio_renderer> renderer{ this, "Renderer", audio_renderer::cubeb, true };
 		cfg::_enum<audio_provider> provider{ this, "Audio Provider", audio_provider::cell_audio, false };
+		cfg::string cubeb_backend{ this, "Cubeb Backend", "" };
+		cfg::_bool recording_compatible{ this, "Recording Compatible", false, true };
 		cfg::_enum<audio_avport> rsxaudio_port{ this, "RSXAudio Avport", audio_avport::hdmi_0, true };
 		cfg::_bool dump_to_file{ this, "Dump to file", false, true };
 		cfg::_bool convert_to_s16{ this, "Convert to 16 bit", false, true };
@@ -419,6 +505,7 @@ struct cfg_root : cfg::node
 		cfg::_bool show_rpcn_popups{ this, "Show RPCN popups", true, true };
 		cfg::_bool show_shader_compilation_hint{ this, "Show shader compilation hint", false, true };
 		cfg::_bool show_ppu_compilation_hint{ this, "Show PPU compilation hint", true, true };
+		cfg::_bool show_spu_compilation_hint{ this, "Show SPU compilation hint", true, true };
 		cfg::_bool show_autosave_autoload_hint{ this, "Show autosave/autoload hint", false, true };
 		cfg::_bool show_pressure_intensity_toggle_hint{ this, "Show pressure intensity toggle hint", true, true };
 		cfg::_bool show_analog_limiter_toggle_hint{ this, "Show analog limiter toggle hint", true, true };

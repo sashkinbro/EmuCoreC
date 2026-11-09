@@ -1787,4 +1787,51 @@
     <string name="settings_gamepad_action_right_stick_down">Prawy drążek w dół</string>
     <string name="settings_gamepad_action_right_stick_left">Prawy drążek w lewo</string>
     <string name="settings_gamepad_action_right_stick_right">Prawy drążek w prawo</string>
+
+    <string name="ps3_core_pending_restart">Zapisane zmiany zostaną zastosowane po ponownym uruchomieniu gry.</string>
+    <string name="ps3_core_apply_restart">Zastosuj i uruchom ponownie</string>
+
+    <string name="core_label_snapdragon_game_super_resolution">Snapdragon Game Super Resolution</string>
+    <string name="core_label_snapdragon_game_super_resolution_edge_direction">Snapdragon Game Super Resolution (Kierunek krawędzi)</string>
+
+    <string name="core_label_oboe">Oboe</string>
+    <string name="core_label_x2">x2</string>
+    <string name="core_label_x3">x3</string>
+    <string name="core_label_x4">x4</string>
+
+    <!-- Current Android renderer, audio and presentation settings. -->
+    <string name="core_label_frame_generation" formatted="false">Generowanie klatek</string>
+    <string name="core_help_video_frame_generation" formatted="false">Wstawia wygenerowane klatki między klatkami gry. Używa shaderów z własnego pliku Lossless Scaling; zwiększa obciążenie GPU i opóźnienie.</string>
+    <string name="core_label_frame_generation_performance_mode" formatted="false">Tryb wydajności</string>
+    <string name="core_help_video_frame_generation_performance_mode" formatted="false">Używa lżejszych shaderów. Po zmianie uruchom generowanie klatek ponownie.</string>
+    <string name="core_label_frame_generation_flow_scale" formatted="false">Szczegółowość ruchu (%)</string>
+    <string name="core_help_video_frame_generation_flow_scale" formatted="false">Rozdzielczość analizy ruchu w procentach. Niższe wartości są szybsze i mniej ostre. Uruchom generowanie ponownie, aby zastosować.</string>
+    <string name="core_label_frame_generation_target_rate" formatted="false">Docelowa częstotliwość (Hz)</string>
+    <string name="core_help_video_frame_generation_target_rate" formatted="false">Docelowa częstotliwość wyjścia w Hz. 0 używa wybranego stałego mnożnika.</string>
+    <string name="core_label_frame_generation_lossless_path" formatted="false">Plik Lossless Scaling</string>
+    <string name="core_help_video_frame_generation_lossless_path" formatted="false">Pełna ścieżka do własnej biblioteki DLL Lossless Scaling. Pamięć shaderów jest z niej budowana w razie potrzeby.</string>
+    <string name="core_label_cubeb_backend" formatted="false">Silnik audio Cubeb</string>
+    <string name="core_help_audio_cubeb_backend" formatted="false">Ścieżka audio Cubeb: pusta oznacza OpenSL ES na Androidzie; można wpisać aaudio lub opensl. Wymaga restartu.</string>
+    <string name="core_label_recording_compatible" formatted="false">Dźwięk zgodny z nagrywaniem</string>
+    <string name="core_help_audio_recording_compatible" formatted="false">Pozwala nagrywać dźwięk Oboe przez mikser systemowy podczas nagrywania ekranu. Może zwiększyć opóźnienie.</string>
+    <string name="core_label_sgsr_edge_sharpness" formatted="false">Ostrość krawędzi SGSR</string>
+    <string name="core_help_video_sgsr_edge_sharpness" formatted="false">Ostrość krawędzi podczas skalowania SGSR. Wyższe wartości bardziej wyostrzają krawędzie.</string>
+    <string name="core_label_early_submit_draw_threshold" formatted="false">Próg rysowania dla wczesnego wysyłania</string>
+    <string name="core_help_video_vulkan_early_submit_draw_threshold" formatted="false">Wysyła polecenia GPU po tej liczbie operacji rysowania. 0 wyłącza wczesne wysyłanie. Wymaga restartu.</string>
+    <string name="core_label_vertex_fetch_specialization" formatted="false">Specjalizacja pobierania wierzchołków</string>
+    <string name="core_help_video_vulkan_vertex_fetch_specialization" formatted="false">Specjalizuje odczyt wierzchołków dla tej gry. Może poprawić wydajność GPU. Wymaga restartu.</string>
+    <string name="core_label_disable_swap_chain_pre_rotation" formatted="false">Wyłącz wstępny obrót Swap Chain</string>
+    <string name="core_help_video_disable_swap_chain_pre_rotation" formatted="false">Vulkan: pozostawia obracanie obrazu na ekranach zamontowanych bokiem systemowi, jak we wcześniejszych wersjach. Tylko do rozwiązywania problemów; na takich ekranach kosztuje czas GPU.</string>
+    <string name="core_label_shader_preset_resolution" formatted="false">Rozdzielczość shadera</string>
+    <string name="core_help_video_shader_preset_resolution" formatted="false">Uruchamia shader w niższej rozdzielczości, a potem skaluje jego obraz do ekranu. Niższa jest dużo szybsza przy ciężkich ustawieniach i wygląda nieco łagodniej.</string>
+    <string name="core_label_cardboard_vr" formatted="false">Cardboard VR</string>
+    <string name="core_help_video_cardboard_vr" formatted="false">Wyświetla grę dwa razy, obok siebie, jeden obraz dla każdego oka, dla telefonu w goglach VR typu Cardboard. Trzymaj telefon poziomo. Gry ze stereoskopowym 3D dają każdemu oku osobny widok, gdy na ekranie Wszystkie ustawienia rdzenia włączone jest 3D Display Enabled, a rozdzielczość PS3 to 1280x720. Shadery RetroArch i SGSR są w tym trybie pomijane; FSR nadal działa.</string>
+    <string name="core_label_vr_picture_size" formatted="false">Rozmiar obrazu VR</string>
+    <string name="core_help_video_vr_picture_size" formatted="false">Jaką część swojej połowy ekranu wypełnia każdy obraz.</string>
+    <string name="core_label_vr_eye_spacing" formatted="false">Rozstaw oczu VR</string>
+    <string name="core_help_video_vr_eye_spacing" formatted="false">Wyższe wartości oddalają oba obrazy od siebie, niższe je przybliżają, aby wyrównać je z soczewkami gogli.</string>
+    <string name="core_label_vr_height" formatted="false">Wysokość VR</string>
+    <string name="core_help_video_vr_height" formatted="false">Wyższe wartości przesuwają oba obrazy w górę, niższe w dół, aby wyrównać je z soczewkami gogli.</string>
+    <string name="core_label_show_spu_compilation_hint" formatted="false">Pokaż powiadomienie o kompilacji SPU</string>
+    <string name="core_help_miscellaneous_show_spu_compilation_hint" formatted="false">Wyświetla wskazówkę \'Kompilowanie modułów SPU\' za pomocą natywnej nakładki.</string>
 </resources>

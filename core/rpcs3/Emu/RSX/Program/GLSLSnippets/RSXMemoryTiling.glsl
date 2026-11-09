@@ -339,7 +339,7 @@ void main()
 	const uint num_iterations = (image_bpp < 4) ? (4 / image_bpp) : 1;
 	const uint row = gl_GlobalInvocationID.y;
 	const uint col0 = gl_GlobalInvocationID.x;
-	
+
 	for (uint col = col0; col < (col0 + num_iterations); ++col)
 	{
 		if (row >= image_height || col0 >= image_width)

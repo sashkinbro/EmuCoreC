@@ -3,7 +3,7 @@ R"(
 /**
  * Required register definitions from ROP config
  struct {
- 	vec4 blend_constants;    // fp32x4
+	vec4 blend_constants;    // fp32x4
 	uint blend_eqn;          // Packed RGB in lower 16 bits, A in upper 16 bits
 	uint blend_sfactors;     // Ditto
 	uint blend_dfactors;     // Ditto

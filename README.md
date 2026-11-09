@@ -86,13 +86,16 @@ app/src/main/jniLibs/arm64-v8a/libemucorec-core.so
 
 If the core sources are not present, Gradle skips the local build and uses the staged library as-is.
 
-To update the core from upstream, merge the RPCS3 repository:
+The emulator tree is relocated under `core/`, and the Android fork has its own
+native changes. Fetch both sources, then reconcile their changes against the
+recorded integration snapshot:
 
 ```powershell
-git remote add upstream https://github.com/RPCS3/rpcs3.git
-git fetch upstream
-git merge upstream/master
+git fetch --no-recurse-submodules upstream
+git fetch --no-recurse-submodules armsx3
 ```
+
+Integrated source snapshots: RPCS3 `47599599a4` and ARMSX3 `284b8c06b2`.
 
 ### App builds
 
@@ -128,6 +131,7 @@ The content picker accepts direct PS3 files and complete ZIP/RAR volume sets. Ar
 EmuCoreC is grateful to the upstream projects:
 
 - [RPCS3](https://github.com/RPCS3/rpcs3) — the original open-source PlayStation 3 emulator on which the core is based. Thank you to every RPCS3 contributor for the years of emulator research and development that make this application possible.
+- [ARMSX3](https://github.com/ARMSX2/ARMSX3) — Android and ARM64 runtime, graphics, performance and game compatibility improvements manually adapted into EmuCoreC.
 - [libadrenotools](https://github.com/bylaws/libadrenotools) — custom Adreno GPU driver loading support.
 - [Zip4j](https://github.com/srikanth-lingala/zip4j) — ZIP and split-ZIP decoding.
 - [Junrar](https://github.com/junrar/junrar) — RAR and multi-volume RAR decoding under its own UnRAR license.

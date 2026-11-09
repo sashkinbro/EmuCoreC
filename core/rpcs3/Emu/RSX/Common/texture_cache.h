@@ -2,9 +2,6 @@
 
 #include "Emu/RSX/Common/simple_array.hpp"
 #include "Emu/RSX/Core/RSXContext.h"
-#ifdef __ANDROID__
-#include "Emu/RSX/RSXOffload.h"
-#endif
 #include "Emu/RSX/RSXThread.h"
 #include "Emu/RSX/Utils/algorithm.hpp"
 
@@ -14,6 +11,8 @@
 #include "texture_cache_blit_helpers.h"
 
 #include <unordered_map>
+#include <optional>
+#include "Emu/RSX/RSXOffload.h"
 
 #define RSX_GCM_FORMAT_IGNORED 0
 
@@ -649,7 +648,6 @@ namespace rsx
 
 
 	protected:
-
 		/**
 		 * Variable declarations
 		 */
@@ -692,9 +690,6 @@ namespace rsx
 		static const bool invalidation_ignore_unsynchronized = true; // If true, unsynchronized sections don't get forcefully flushed unless they overlap the fault range
 		static const bool invalidation_keep_ro_during_read = true; // If true, RO sections are not invalidated during read faults
 
-
-
-
 		/**
 		 * Virtual Methods
 		 */
@@ -717,6 +712,8 @@ namespace rsx
 		virtual void cleanup_after_dma_transfers(commandbuffer_type&) = 0;
 
 	public:
+		void set_context(rsx::context* ctx) { m_ctx = ctx; }
+
 		virtual void destroy() = 0;
 		virtual bool is_depth_texture(u32, u32) = 0;
 		virtual void on_section_destroyed(section_storage_type& /*section*/)
@@ -724,6 +721,9 @@ namespace rsx
 
 
 	protected:
+		// Owning context. Immutable once set.
+		rsx::context* m_ctx = nullptr;
+
 		/**
 		 * Helpers
 		 */
@@ -816,7 +816,7 @@ namespace rsx
 				else if (surface->get_memory_read_flags() == rsx::memory_read_flags::flush_always)
 				{
 					// This region is set to always read from itself (unavoidable hard sync)
-					const auto ROP_timestamp = rsx::get_current_renderer()->ROP_sync_timestamp;
+					const auto ROP_timestamp = m_ctx->ROP_sync_timestamp;
 					if (ROP_timestamp > surface->get_sync_timestamp())
 					{
 						sections_to_transfer.push_back(surface);
@@ -2576,7 +2576,27 @@ namespace rsx
 
 			auto fast_fbo_check = [&]() -> sampled_image_descriptor
 			{
+#if defined(__APPLE__) || defined(__ANDROID__)
+				// One draw can write overlapping color and depth surfaces with the same tag, so prefer the requested aspect
+				const auto* chosen = &overlapping_fbos.back();
+				if (const bool want_depth = helpers::is_gcm_depth_format(attr.gcm_format);
+					!chosen->is_clipped && chosen->is_depth != want_depth)
+				{
+					const u64 newest_tag = chosen->surface->last_use_tag;
+					for (usz i = overlapping_fbos.size(); i-- > 0 && overlapping_fbos[i].surface->last_use_tag == newest_tag;)
+					{
+						if (!overlapping_fbos[i].is_clipped && overlapping_fbos[i].is_depth == want_depth)
+						{
+							chosen = &overlapping_fbos[i];
+							break;
+						}
+					}
+				}
+
+				const auto& last = *chosen;
+#else
 				const auto& last = overlapping_fbos.back();
+#endif
 
 				if (!last.is_clipped) //<- A non-clipped hit fully contains the requested box. We're good to go with the framebuffer processing.
 				{
@@ -3085,7 +3105,7 @@ namespace rsx
 
 			image_section_attributes_t attributes{};
 			texture_cache_search_options options{};
-			attributes.address = rsx::get_address(tex.offset(), tex.location());
+			attributes.address = rsx::get_address(m_ctx, tex.offset(), tex.location());
 			attributes.gcm_format = tex.format() & ~(CELL_GCM_TEXTURE_LN | CELL_GCM_TEXTURE_UN);
 			attributes.bpp = get_format_block_size_in_bytes(attributes.gcm_format);
 			attributes.width = tex.width();
@@ -3182,6 +3202,11 @@ namespace rsx
 				return {};
 			}
 
+#if defined(__APPLE__) || defined(__ANDROID__)
+			// Vulkan allows at most floor(log2(max(w, h))) + 1 levels, and a narrowed extent can hold fewer
+			attributes.mipmaps = std::min<u32>(attributes.mipmaps, floor_log2(std::max<u32>(attributes.width, attributes.height)) + 1);
+
+#endif
 			if (options.is_compressed_format)
 			{
 				// Compressed textures cannot be 1D in some APIs
@@ -3294,6 +3319,17 @@ namespace rsx
 					}
 				}
 
+#if defined(__APPLE__) || defined(__ANDROID__)
+				// Drop the levels the final extent cannot hold before the list becomes an image
+				const u32 final_w = use_upscaling ? sections.front().dst_w : attributes.width;
+				const u32 final_h = use_upscaling ? sections.front().dst_h : attributes.height;
+				const u32 max_levels = floor_log2(std::max(final_w, final_h)) + 1;
+				if (sections.size() > max_levels)
+				{
+					sections.resize(max_levels);
+				}
+
+#endif
 				if (sections.size() == 1) [[unlikely]]
 				{
 					return result;
@@ -3331,7 +3367,7 @@ namespace rsx
 			// Do direct upload from CPU as the last resort
 			m_texture_upload_misses_this_frame++;
 
-			const auto subresources_layout = get_subresources_layout(tex);
+			const auto subresources_layout = get_subresources_layout(m_ctx, tex);
 			const auto format_class = classify_format(attributes.gcm_format);
 
 			if (!tex_size)
@@ -3340,10 +3376,6 @@ namespace rsx
 			}
 
 #ifdef __ANDROID__
-			// CPU conversion must not enter the RSX memory-fault handler while the
-			// texture-cache lock is held: the handler invalidates this cache and
-			// would recursively wait on the same lock. Resolve protected guest pages
-			// first, then reacquire the cache lock and continue the normal invalidation.
 			lock.reset();
 			prepare_guest_read(attributes.address, tex_size);
 			lock.emplace(m_cache_mutex);
@@ -3357,8 +3389,14 @@ namespace rsx
 			invalidate_range_impl_base(cmd, tex_range, invalidation_cause::read, {}, std::forward<Args>(extras)...);
 
 			// Upload from CPU. Note that sRGB conversion is handled in the FS
+#if defined(__APPLE__) || defined(__ANDROID__)
+			// The level count is the one capped after validation
+			auto uploaded = upload_image_from_cpu(cmd, tex_range, attributes.width, attributes.height, attributes.depth, attributes.mipmaps, attributes.pitch, attributes.gcm_format,
+				texture_upload_context::shader_read, subresources_layout, extended_dimension, attributes.swizzled);
+#else
 			auto uploaded = upload_image_from_cpu(cmd, tex_range, attributes.width, attributes.height, attributes.depth, tex.get_exact_mipmap_count(), attributes.pitch, attributes.gcm_format,
 				texture_upload_context::shader_read, subresources_layout, extended_dimension, attributes.swizzled);
+#endif
 
 			return
 			{
@@ -3532,6 +3570,7 @@ namespace rsx
 				}
 
 				const auto props = texture_cache_helpers::get_optimal_blit_target_properties(
+					m_ctx,
 					src_is_render_target,
 					dst_range,
 					dst.pitch,

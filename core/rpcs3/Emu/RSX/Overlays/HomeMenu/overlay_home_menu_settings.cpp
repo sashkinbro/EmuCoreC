@@ -152,6 +152,12 @@ namespace rsx
 		home_menu_settings_video::home_menu_settings_video(s16 x, s16 y, u16 width, u16 height, bool use_separators, home_menu_page* parent)
 			: home_menu_settings_page(x, y, width, height, use_separators, parent, get_localized_string(localized_string_id::HOME_MENU_SETTINGS_VIDEO))
 		{
+#ifndef __ANDROID__
+			// ARMSX3: the app's own menus switch the renderer, and save it with the game's settings.
+			// Written here it would change g_cfg behind them, and the next boot would undo it.
+			add_dropdown(&g_cfg.video.renderer, localized_string_id::HOME_MENU_SETTINGS_VIDEO_RENDERER);
+#endif
+
 			add_unsigned_slider(&g_cfg.video.resolution_scale_percent, localized_string_id::HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_PERCENT, "%", 25);
 			add_unsigned_slider(&g_cfg.video.min_scalable_dimension, localized_string_id::HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_THRESHOLD, "px", 1);
 
@@ -227,6 +233,7 @@ namespace rsx
 			add_checkbox(&g_cfg.misc.show_rpcn_popups, localized_string_id::HOME_MENU_SETTINGS_OVERLAYS_SHOW_RPCN_POPUPS);
 			add_checkbox(&g_cfg.misc.show_shader_compilation_hint, localized_string_id::HOME_MENU_SETTINGS_OVERLAYS_SHOW_SHADER_COMPILATION_HINT);
 			add_checkbox(&g_cfg.misc.show_ppu_compilation_hint, localized_string_id::HOME_MENU_SETTINGS_OVERLAYS_SHOW_PPU_COMPILATION_HINT);
+			add_checkbox(&g_cfg.misc.show_spu_compilation_hint, localized_string_id::HOME_MENU_SETTINGS_OVERLAYS_SHOW_SPU_COMPILATION_HINT);
 			add_checkbox(&g_cfg.misc.show_autosave_autoload_hint, localized_string_id::HOME_MENU_SETTINGS_OVERLAYS_SHOW_AUTO_SAVE_LOAD_HINT);
 			add_checkbox(&g_cfg.misc.show_pressure_intensity_toggle_hint, localized_string_id::HOME_MENU_SETTINGS_OVERLAYS_SHOW_PRESSURE_INTENSITY_TOGGLE_HINT);
 			add_checkbox(&g_cfg.misc.show_analog_limiter_toggle_hint, localized_string_id::HOME_MENU_SETTINGS_OVERLAYS_SHOW_ANALOG_LIMITER_TOGGLE_HINT);
@@ -241,7 +248,6 @@ namespace rsx
 			: home_menu_settings_page(x, y, width, height, use_separators, parent, get_localized_string(localized_string_id::HOME_MENU_SETTINGS_PERFORMANCE_OVERLAY))
 		{
 			add_checkbox(&g_cfg.video.perf_overlay.enabled, localized_string_id::HOME_MENU_SETTINGS_PERFORMANCE_OVERLAY_ENABLE);
-			add_checkbox(&g_cfg.video.perf_overlay.show_header, localized_string_id::HOME_MENU_SETTINGS_PERFORMANCE_OVERLAY_SHOW_HEADER);
 			add_checkbox(&g_cfg.video.perf_overlay.framerate_graph_enabled, localized_string_id::HOME_MENU_SETTINGS_PERFORMANCE_OVERLAY_ENABLE_FRAMERATE_GRAPH);
 			add_checkbox(&g_cfg.video.perf_overlay.frametime_graph_enabled, localized_string_id::HOME_MENU_SETTINGS_PERFORMANCE_OVERLAY_ENABLE_FRAMETIME_GRAPH);
 

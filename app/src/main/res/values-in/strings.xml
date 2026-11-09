@@ -1779,4 +1779,51 @@
     <string name="settings_gamepad_action_right_stick_down">Stik kanan bawah</string>
     <string name="settings_gamepad_action_right_stick_left">Stik kanan kiri</string>
     <string name="settings_gamepad_action_right_stick_right">Stik kanan kanan</string>
+
+    <string name="ps3_core_pending_restart">Perubahan tersimpan akan diterapkan saat game dimulai ulang.</string>
+    <string name="ps3_core_apply_restart">Terapkan dan mulai ulang</string>
+
+    <string name="core_label_snapdragon_game_super_resolution">Snapdragon Game Super Resolution</string>
+    <string name="core_label_snapdragon_game_super_resolution_edge_direction">Snapdragon Game Super Resolution (Arah tepi)</string>
+
+    <string name="core_label_oboe">Oboe</string>
+    <string name="core_label_x2">x2</string>
+    <string name="core_label_x3">x3</string>
+    <string name="core_label_x4">x4</string>
+
+    <!-- Current Android renderer, audio and presentation settings. -->
+    <string name="core_label_frame_generation" formatted="false">Pembuatan frame</string>
+    <string name="core_help_video_frame_generation" formatted="false">Menyisipkan frame buatan di antara frame game. Memakai shader dari berkas Lossless Scaling milik Anda; menambah beban GPU dan latensi.</string>
+    <string name="core_label_frame_generation_performance_mode" formatted="false">Mode performa</string>
+    <string name="core_help_video_frame_generation_performance_mode" formatted="false">Memakai shader yang lebih ringan. Mulai ulang pembuatan frame setelah mengubahnya.</string>
+    <string name="core_label_frame_generation_flow_scale" formatted="false">Detail gerakan (%)</string>
+    <string name="core_help_video_frame_generation_flow_scale" formatted="false">Resolusi analisis gerakan dalam persen. Nilai rendah lebih cepat dan lembut. Mulai ulang pembuatan frame untuk menerapkan.</string>
+    <string name="core_label_frame_generation_target_rate" formatted="false">Laju penyegaran target (Hz)</string>
+    <string name="core_help_video_frame_generation_target_rate" formatted="false">Laju keluaran target dalam Hz. 0 memakai pengali tetap yang dipilih.</string>
+    <string name="core_label_frame_generation_lossless_path" formatted="false">Berkas Lossless Scaling</string>
+    <string name="core_help_video_frame_generation_lossless_path" formatted="false">Jalur lengkap DLL Lossless Scaling milik Anda. Cache shader dibuat dari berkas ini bila diperlukan.</string>
+    <string name="core_label_cubeb_backend" formatted="false">Backend Cubeb</string>
+    <string name="core_help_audio_cubeb_backend" formatted="false">Jalur audio Cubeb: kosong untuk OpenSL ES di Android, atau isi aaudio atau opensl. Perlu mulai ulang.</string>
+    <string name="core_label_recording_compatible" formatted="false">Audio yang mendukung perekaman</string>
+    <string name="core_help_audio_recording_compatible" formatted="false">Memungkinkan perekam layar menangkap audio Oboe melalui mixer sistem. Dapat menambah latensi.</string>
+    <string name="core_label_sgsr_edge_sharpness" formatted="false">Ketajaman tepi SGSR</string>
+    <string name="core_help_video_sgsr_edge_sharpness" formatted="false">Ketajaman tepi pada penskalaan SGSR. Nilai tinggi memperjelas tepi.</string>
+    <string name="core_label_early_submit_draw_threshold" formatted="false">Ambang gambar untuk pengiriman awal</string>
+    <string name="core_help_video_vulkan_early_submit_draw_threshold" formatted="false">Mengirim perintah GPU setelah sejumlah gambar ini. 0 mematikan pengiriman awal. Perlu mulai ulang.</string>
+    <string name="core_label_vertex_fetch_specialization" formatted="false">Spesialisasi pengambilan vertex</string>
+    <string name="core_help_video_vulkan_vertex_fetch_specialization" formatted="false">Mengkhususkan pembacaan vertex untuk game ini. Dapat meningkatkan performa GPU. Perlu mulai ulang.</string>
+    <string name="core_label_disable_swap_chain_pre_rotation" formatted="false">Nonaktifkan Pra-Rotasi Swap Chain</string>
+    <string name="core_help_video_disable_swap_chain_pre_rotation" formatted="false">Vulkan: menyerahkan pemutaran gambar untuk layar yang terpasang menyamping kepada sistem, seperti pada versi sebelumnya. Hanya untuk pemecahan masalah; memakan waktu GPU pada layar tersebut.</string>
+    <string name="core_label_shader_preset_resolution" formatted="false">Resolusi Shader</string>
+    <string name="core_help_video_shader_preset_resolution" formatted="false">Menjalankan shader pada resolusi lebih rendah, lalu memperbesar gambarnya ke layar. Lebih rendah jauh lebih cepat untuk preset berat dan sedikit lebih lembut.</string>
+    <string name="core_label_cardboard_vr" formatted="false">Cardboard VR</string>
+    <string name="core_help_video_cardboard_vr" formatted="false">Menampilkan game dua kali, berdampingan, satu gambar untuk setiap mata, untuk ponsel di dalam viewer VR bergaya Cardboard. Pegang ponsel dalam posisi lanskap. Game dengan 3D stereo memberi setiap mata tampilannya sendiri saat 3D Display Enabled aktif di Semua Pengaturan Inti dan resolusi PS3 adalah 1280x720. Shader RetroArch dan SGSR dilewati selama mode ini aktif; FSR tetap berfungsi.</string>
+    <string name="core_label_vr_picture_size" formatted="false">Ukuran Gambar VR</string>
+    <string name="core_help_video_vr_picture_size" formatted="false">Seberapa penuh setiap gambar mengisi separuh layarnya.</string>
+    <string name="core_label_vr_eye_spacing" formatted="false">Jarak Mata VR</string>
+    <string name="core_help_video_vr_eye_spacing" formatted="false">Nilai lebih tinggi menjauhkan kedua gambar, nilai lebih rendah mendekatkannya, agar sejajar dengan lensa viewer.</string>
+    <string name="core_label_vr_height" formatted="false">Ketinggian VR</string>
+    <string name="core_help_video_vr_height" formatted="false">Nilai lebih tinggi menaikkan kedua gambar, nilai lebih rendah menurunkannya, agar sejajar dengan lensa viewer.</string>
+    <string name="core_label_show_spu_compilation_hint" formatted="false">Tampilkan petunjuk kompilasi SPU</string>
+    <string name="core_help_miscellaneous_show_spu_compilation_hint" formatted="false">Menampilkan petunjuk \'Mengkompilasi modul SPU\' menggunakan overlay asli.</string>
 </resources>

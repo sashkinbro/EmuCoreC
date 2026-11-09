@@ -4,6 +4,13 @@ if(WITH_LLVM)
 
 	if(BUILD_LLVM)
 		message(STATUS "LLVM will be built from the submodule.")
+		if(ANDROID AND COMPILER_ARM)
+			include("${CMAKE_SOURCE_DIR}/buildfiles/cmake/ApplyArm64GhcPatch.cmake")
+			emucorec_apply_arm64_ghc_patch(
+				"${CMAKE_CURRENT_SOURCE_DIR}/llvm"
+				"${CMAKE_CURRENT_SOURCE_DIR}/armsx3-aarch64-ghc-emergency-spill.patch"
+			)
+		endif()
 
 		if (ANDROID)
 			if (COMPILER_ARM)

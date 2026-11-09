@@ -130,11 +130,7 @@ namespace gl
 					rhs.get_target() == texture::target::texture2DMS);
 
 				m_parent.m_resource_bindings[m_id] = rhs.id();
-			#ifdef RSX_GLES
-				glNamedFramebufferTexture2DCompat(m_parent.id(), m_id, static_cast<GLenum>(rhs.get_target()), rhs.id(), level);
-			#else
 				DSA_CALL2(NamedFramebufferTexture, m_parent.id(), m_id, rhs.id(), level);
-			#endif
 			}
 
 			// Attach one slice of a layered image. Cubemap faces are addressed as array layers.
@@ -158,13 +154,7 @@ namespace gl
 			void operator = (const GLuint rhs)
 			{
 				m_parent.m_resource_bindings[m_id] = rhs;
-			#ifdef RSX_GLES
-				// Raw attachment names in this renderer refer to flat 2D images.
-				// GLES requires their target to be specified explicitly.
-				glNamedFramebufferTexture2DCompat(m_parent.id(), m_id, GL_TEXTURE_2D, rhs, 0);
-			#else
 				DSA_CALL2(NamedFramebufferTexture, m_parent.id(), m_id, rhs, 0);
-			#endif
 			}
 		};
 

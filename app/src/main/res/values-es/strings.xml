@@ -2027,4 +2027,51 @@ Esta configuración solo se aplica cuando SPU Decoder está configurado en Diná
     <string name="settings_gamepad_action_right_stick_down">Stick derecho abajo</string>
     <string name="settings_gamepad_action_right_stick_left">Stick derecho izquierda</string>
     <string name="settings_gamepad_action_right_stick_right">Stick derecho derecha</string>
+
+    <string name="ps3_core_pending_restart">Los cambios guardados se aplicarán al reiniciar el juego.</string>
+    <string name="ps3_core_apply_restart">Aplicar y reiniciar</string>
+
+    <string name="core_label_snapdragon_game_super_resolution">Snapdragon Game Super Resolution</string>
+    <string name="core_label_snapdragon_game_super_resolution_edge_direction">Snapdragon Game Super Resolution (Dirección de bordes)</string>
+
+    <string name="core_label_oboe">Oboe</string>
+    <string name="core_label_x2">x2</string>
+    <string name="core_label_x3">x3</string>
+    <string name="core_label_x4">x4</string>
+
+    <!-- Current Android renderer, audio and presentation settings. -->
+    <string name="core_label_frame_generation" formatted="false">Generación de fotogramas</string>
+    <string name="core_help_video_frame_generation" formatted="false">Inserta fotogramas generados entre los del juego. Usa sombreadores de tu archivo de Lossless Scaling; aumenta el trabajo de la GPU y la latencia.</string>
+    <string name="core_label_frame_generation_performance_mode" formatted="false">Modo de rendimiento</string>
+    <string name="core_help_video_frame_generation_performance_mode" formatted="false">Usa sombreadores más ligeros. Reinicia la generación de fotogramas después de cambiarlo.</string>
+    <string name="core_label_frame_generation_flow_scale" formatted="false">Detalle de movimiento (%)</string>
+    <string name="core_help_video_frame_generation_flow_scale" formatted="false">Resolución del análisis de movimiento en porcentaje. Los valores bajos son más rápidos y suaves. Reinicia la generación para aplicar.</string>
+    <string name="core_label_frame_generation_target_rate" formatted="false">Frecuencia objetivo (Hz)</string>
+    <string name="core_help_video_frame_generation_target_rate" formatted="false">Frecuencia de salida objetivo en Hz. 0 usa el multiplicador fijo seleccionado.</string>
+    <string name="core_label_frame_generation_lossless_path" formatted="false">Archivo de Lossless Scaling</string>
+    <string name="core_help_video_frame_generation_lossless_path" formatted="false">Ruta absoluta a tu DLL de Lossless Scaling. La caché de sombreadores se crea desde ese archivo cuando hace falta.</string>
+    <string name="core_label_cubeb_backend" formatted="false">Motor de audio Cubeb</string>
+    <string name="core_help_audio_cubeb_backend" formatted="false">Ruta de audio Cubeb: déjala vacía para OpenSL ES en Android, o escribe aaudio u opensl. Requiere reiniciar.</string>
+    <string name="core_label_recording_compatible" formatted="false">Audio compatible con grabación</string>
+    <string name="core_help_audio_recording_compatible" formatted="false">Permite capturar audio Oboe mediante el mezclador del sistema al grabar la pantalla. Puede aumentar la latencia.</string>
+    <string name="core_label_sgsr_edge_sharpness" formatted="false">Nitidez de bordes SGSR</string>
+    <string name="core_help_video_sgsr_edge_sharpness" formatted="false">Nitidez de bordes del escalado SGSR. Los valores altos resaltan más los bordes.</string>
+    <string name="core_label_early_submit_draw_threshold" formatted="false">Umbral de dibujos para envío anticipado</string>
+    <string name="core_help_video_vulkan_early_submit_draw_threshold" formatted="false">Envía órdenes de GPU después de este número de dibujos. 0 desactiva el envío anticipado. Requiere reiniciar.</string>
+    <string name="core_label_vertex_fetch_specialization" formatted="false">Especialización de lectura de vértices</string>
+    <string name="core_help_video_vulkan_vertex_fetch_specialization" formatted="false">Especializa la lectura de vértices para este juego. Puede mejorar el rendimiento de la GPU. Requiere reiniciar.</string>
+    <string name="core_label_disable_swap_chain_pre_rotation" formatted="false">Desactivar la prerrotación de la Swap Chain</string>
+    <string name="core_help_video_disable_swap_chain_pre_rotation" formatted="false">Vulkan: deja al sistema el giro de la imagen en pantallas montadas de lado, como en versiones anteriores. Solo para solucionar problemas; consume tiempo de GPU en esas pantallas.</string>
+    <string name="core_label_shader_preset_resolution" formatted="false">Resolución del shader</string>
+    <string name="core_help_video_shader_preset_resolution" formatted="false">Ejecuta el shader a menor resolución y luego escala su imagen a la pantalla. Más bajo es mucho más rápido con preajustes pesados y se ve algo más suave.</string>
+    <string name="core_label_cardboard_vr" formatted="false">Cardboard VR</string>
+    <string name="core_help_video_cardboard_vr" formatted="false">Muestra el juego dos veces, una imagen junto a otra, una para cada ojo, para un teléfono dentro de un visor de realidad virtual tipo Cardboard. Sostén el teléfono en horizontal. Los juegos con 3D estereoscópico dan a cada ojo su propia vista cuando 3D Display Enabled está activado en Toda la configuración del núcleo y la resolución de PS3 es 1280x720. Los shaders de RetroArch y SGSR se omiten mientras esto está activado; FSR sigue funcionando.</string>
+    <string name="core_label_vr_picture_size" formatted="false">Tamaño de imagen VR</string>
+    <string name="core_help_video_vr_picture_size" formatted="false">Cuánto de su mitad de la pantalla ocupa cada imagen.</string>
+    <string name="core_label_vr_eye_spacing" formatted="false">Separación de ojos VR</string>
+    <string name="core_help_video_vr_eye_spacing" formatted="false">Los valores más altos separan las dos imágenes y los más bajos las acercan, para alinearlas con las lentes del visor.</string>
+    <string name="core_label_vr_height" formatted="false">Altura VR</string>
+    <string name="core_help_video_vr_height" formatted="false">Los valores más altos suben ambas imágenes y los más bajos las bajan, para alinearlas con las lentes del visor.</string>
+    <string name="core_label_show_spu_compilation_hint" formatted="false">Mostrar sugerencia de compilación de SPU</string>
+    <string name="core_help_miscellaneous_show_spu_compilation_hint" formatted="false">Muestra la sugerencia \'Compilar módulos SPU\' usando la superposición nativa.</string>
 </resources>

@@ -1177,6 +1177,42 @@ namespace rsx
 			return compiled_resources;
 		}
 
+		namespace thermals
+		{
+			atomic_t<f32> g_cpu{none};
+			atomic_t<f32> g_gpu{none};
+			atomic_t<f32> g_battery{none};
+			atomic_t<bool> g_show{false};
+
+			std::string status_text()
+			{
+				if (!g_show)
+				{
+					return {};
+				}
+
+				std::string out;
+
+				// Whole degrees. A tenth is noise on a sysfs zone that updates every couple of
+				// seconds, and this is read at a glance.
+				const auto add = [&out](const char* label, f32 c)
+				{
+					if (c <= none)
+					{
+						return;
+					}
+
+					fmt::append(out, "%s%s %d\u00b0C", out.empty() ? "" : "  ", label, static_cast<int>(c));
+				};
+
+				add("CPU", g_cpu);
+				add("GPU", g_gpu);
+				add("BAT", g_battery);
+
+				return out;
+			}
+		}
+
 		extern void reset_performance_overlay()
 		{
 			if (!g_cfg.misc.use_native_interface)

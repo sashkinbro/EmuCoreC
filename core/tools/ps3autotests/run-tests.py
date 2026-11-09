@@ -1,0 +1,311 @@
+#!/usr/bin/env python3
+"""Run RPCS3/ps3autotests against ARMSX3 on a connected device and diff the output.
+
+Each test in that repository is a PS3 program plus a .expected file holding the TTY output a
+real PS3 produced. So a test is: boot the ELF, capture what it printed, compare. A difference
+names an instruction and the exact operands that behave differently here than on hardware,
+which is the part that guesswork cannot supply -- see --summary, which groups differences by
+mnemonic and turns 80k lines of hex into "fma: 1847 wrong, everything else: clean".
+
+Usage:
+  run-tests.py --list
+  run-tests.py cpu/spu_fpu
+  run-tests.py cpu/spu_fpu cpu/spu_alu --out results/
+  run-tests.py --all-spu
+
+Notes:
+  - The app is force-stopped between tests, and each test is booted through the VIEW intent the
+    manifest already accepts. That means this DRIVES the device: do not run it while someone is
+    using the app for something else.
+  - TTY.log cannot be truncated from adb (shell may read it but not write it), and it lives under
+    the app's data root, which can be moved to an SD card. The harness looks for it; see
+    find_live_tty. The harness notes its size first, then watches: the app resets the log when it
+    boots, so a size DROP means the whole file belongs to this test. Assuming the pre-launch size
+    was a prefix silently produced a 29k-of-108k-line capture that read as a huge test failure.
+  - A test is considered finished when TTY.log stops growing for --idle seconds. There is no
+    completion marker in the protocol, and some tests print for a long time.
+"""
+
+import argparse
+import os
+import subprocess
+import sys
+import time
+from collections import Counter
+
+PKG = "com.armsx3"
+ACTIVITY = f"{PKG}/com.armsx2.Main"
+# Every place TTY.log can live. The emulator writes it under the app's data root, and the user can
+# move that root (to an SD card, for one). A fixed Android/data path kept reading an empty file
+# while the real log filled up on the card, so every suite that prints to the console came back
+# NO OUTPUT and six suites were never compared at all.
+TTY_CANDIDATES = [
+    "/storage/*/ARMSX3/cache/TTY.log",
+    "/sdcard/ARMSX3/cache/TTY.log",
+    f"/sdcard/Android/data/{PKG}/files/cache/TTY.log",
+]
+DEVICE_DIR = "/sdcard/ARMSX3-autotests"
+
+REPO_DEFAULT = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "ps3autotests"
+)
+
+
+def adb(*args, binary=False, check=True):
+    """Run adb and return stdout. exec-out is used for file reads so nothing mangles bytes."""
+    proc = subprocess.run(
+        ["adb", *args], capture_output=True, check=False
+    )
+    if check and proc.returncode != 0:
+        sys.exit(f"adb {' '.join(args)} failed: {proc.stderr.decode(errors='replace').strip()}")
+    return proc.stdout if binary else proc.stdout.decode(errors="replace")
+
+
+def tty_size(path):
+    # stat, not "wc -c < path": a missing file makes the shell itself print the error, which the
+    # 2>/dev/null on wc never sees, and exec-out hands that text back where a number belongs.
+    out = adb("exec-out", f"stat -c %s {path} 2>/dev/null || echo 0").strip()
+    return int(out.split()[0]) if out.split() and out.split()[0].isdigit() else 0
+
+
+def tty_candidates():
+    """(mtime, size, path) for every TTY.log that exists right now, newest first."""
+    out = adb("exec-out", "stat -c '%Y %s %n' " + " ".join(TTY_CANDIDATES) + " 2>/dev/null", check=False)
+    found = []
+    for line in out.splitlines():
+        parts = line.split(" ", 2)
+        if len(parts) == 3 and parts[0].isdigit() and parts[1].isdigit():
+            found.append((int(parts[0]), int(parts[1]), parts[2]))
+    return sorted(found, reverse=True)
+
+
+def find_live_tty(snapshot, wait):
+    """The TTY.log this launch writes to, and the offset its output starts at.
+
+    Emu::Init opens TTY.log with fs::rewrite once per process, so after a force-stop the live log
+    is whichever candidate changes (or appears) once the app starts, and a changed file starts at
+    offset 0. Do not hand back the old size: a suite that prints straight away (ppu_vpu, from a
+    warm PPU cache) grows past it before the first poll, the size drop is never seen, and the
+    capture silently loses its first 32k lines. If nothing changes in time, fall back to the
+    newest candidate at its old size, which is where the last launch wrote.
+    """
+    before = {path: (mtime, size) for mtime, size, path in snapshot}
+    deadline = time.time() + wait
+    while time.time() < deadline:
+        for mtime, _size, path in tty_candidates():
+            if path not in before or mtime > before[path][0]:
+                return path, 0
+        time.sleep(1)
+    if snapshot:
+        return snapshot[0][2], snapshot[0][1]
+    return TTY_CANDIDATES[-1], 0
+
+
+def discover(tests_root):
+    """Every test directory holding both an .expected and a bootable ELF."""
+    found = []
+    for dirpath, _dirnames, filenames in os.walk(tests_root):
+        expected = [f for f in filenames if f.endswith(".expected")]
+        if not expected:
+            continue
+        # A .ppu.elf is the loader even for SPU tests: it uploads the .spu.elf and prints what
+        # comes back, so booting the SPU ELF directly would skip the half that reports results.
+        elf = next((f for f in filenames if f.endswith(".ppu.elf")), None)
+        elf = elf or next((f for f in filenames if f.endswith(".elf")), None)
+        if not elf:
+            continue
+        found.append(
+            (os.path.relpath(dirpath, tests_root), dirpath, elf, os.path.join(dirpath, expected[0]))
+        )
+    return sorted(found)
+
+
+def normalise(text):
+    """Line endings and trailing blanks only. Nothing else -- the point is to compare hex."""
+    return [ln.rstrip() for ln in text.replace("\r\n", "\n").replace("\r", "\n").split("\n") if ln.strip()]
+
+
+def mnemonic(line):
+    """Leading token of a test line, e.g. 'fma' from 'fma ([00],[01],[02]) -> ...'.
+
+    Not every test prints instruction-shaped lines: the lv2 suites print prose, and a line may
+    open with '(' or have nothing before it at all, which crashed this on an empty split.
+    """
+    head = line.split("(", 1)[0].strip() if "(" in line else ""
+    parts = head.split()
+    return parts[0] if parts else "<other>"
+
+
+def run_one(name, dirpath, elf, expected_path, args):
+    print(f"\n=== {name} ===", flush=True)
+
+    remote_dir = f"{DEVICE_DIR}/{os.path.basename(dirpath)}"
+    adb("shell", f"mkdir -p {remote_dir}")
+    # Whole directory: SPU tests load a sibling .spu.elf by relative path.
+    for f in sorted(os.listdir(dirpath)):
+        full = os.path.join(dirpath, f)
+        if os.path.isfile(full) and not f.endswith(".expected"):
+            adb("push", "-q", full, f"{remote_dir}/{f}")
+
+    adb("shell", f"am force-stop {PKG}", check=False)
+    time.sleep(1.5)
+
+    # A suite that writes a file leaves an output.txt behind, and reading last run's file as this
+    # run's result would report an old build's numbers without a word. Clear it first.
+    adb("shell", f"rm -f {remote_dir}/output.txt", check=False)
+
+    snapshot = tty_candidates()
+    adb(
+        "shell",
+        f"am start -a android.intent.action.VIEW -d file://{remote_dir}/{elf} -n {ACTIVITY}",
+        check=False,
+    )
+    tty, before = find_live_tty(snapshot, min(args.boot_wait, 30))
+    print(f"  TTY: {tty}", flush=True)
+
+    # Grown-then-quiet, because there is no end-of-test marker to wait for.
+    #
+    # The offset is decided by watching, not assumed: the app TRUNCATES TTY.log when it boots, so
+    # a previous test's output is not a prefix of this one's. Slicing at the pre-launch size then
+    # reads from the middle of a fresh file -- which produced a torn first line and 29k of 108k
+    # lines, silently, and looked like a spectacular test failure rather than a harness bug. If the
+    # size is ever seen below where it started, the log was reset and the whole file is ours.
+    #
+    # output.txt counts as output too. A suite that writes the file leaves TTY empty, and when only
+    # TTY was watched such a suite sat out the whole --boot-wait after it had already finished.
+    start = time.time()
+    last_progress, last_change = 0, time.time()
+    offset = before
+    while True:
+        time.sleep(2)
+        size = tty_size(tty)
+        if size < offset:
+            offset = 0
+        progress = max(size - offset, 0) + tty_size(f"{remote_dir}/output.txt")
+        if progress != last_progress:
+            last_progress, last_change = progress, time.time()
+            print(f"  ... {progress} bytes", end="\r", flush=True)
+        elapsed_quiet = time.time() - last_change
+        if progress > 0 and elapsed_quiet >= args.idle:
+            break
+        if time.time() - start > args.timeout:
+            print(f"  timed out after {args.timeout}s", flush=True)
+            break
+        if progress == 0 and time.time() - start > args.boot_wait:
+            print(f"  no output after {args.boot_wait}s -- did it boot?", flush=True)
+            break
+
+    raw = adb("exec-out", f"cat {tty}", binary=True)
+    adb("shell", f"am force-stop {PKG}", check=False)
+
+    got = normalise(raw[offset:].decode("utf-8", errors="replace"))
+
+    # Two output conventions, and only one of them is TTY.
+    #
+    # The SPU suites reach TTY through spu_printf and the lv2 ones print to it directly, but the
+    # PPU suites fopen "/app_home/output.txt" and write there -- /app_home being the directory the
+    # test was launched from, i.e. the one pushed above. Six PPU tests were reported as "NO OUTPUT"
+    # for a whole run while their results sat on the device. The file is cleared before launch, so
+    # if it exists now this run wrote it, and it wins over anything the suite also printed.
+    from_file = adb("exec-out", f"cat {remote_dir}/output.txt 2>/dev/null", binary=True)
+    if from_file:
+        print(f"  (output.txt, {len(from_file)} bytes, this suite writes a file, not TTY)")
+        got = normalise(from_file.decode("utf-8", errors="replace"))
+    with open(expected_path, "r", encoding="utf-8", errors="replace") as fh:
+        want = normalise(fh.read())
+
+    os.makedirs(args.out, exist_ok=True)
+    stem = name.replace("/", "_")
+    with open(os.path.join(args.out, f"{stem}.actual"), "w", encoding="utf-8") as fh:
+        fh.write("\n".join(got) + "\n")
+
+    return compare(name, got, want, args, stem)
+
+
+def compare(name, got, want, args, stem):
+    if not got:
+        print("  NO OUTPUT -- test did not run (or printed nothing)")
+        return False
+
+    # Positional compare: these tests are deterministic and ordered, so line N vs line N is
+    # meaningful and far more useful than a fuzzy diff -- it keeps the operands aligned.
+    diffs = []
+    for i in range(min(len(got), len(want))):
+        if got[i] != want[i]:
+            diffs.append((i + 1, want[i], got[i]))
+
+    missing = len(want) - len(got)
+    print(f"  lines: {len(got)} captured / {len(want)} expected"
+          + (f"  ({missing:+d})" if missing else ""))
+
+    if not diffs and not missing:
+        print("  PASS")
+        return True
+
+    print(f"  FAIL: {len(diffs)} differing lines")
+
+    by_mnem = Counter(mnemonic(w) for _, w, _ in diffs)
+    total = Counter(mnemonic(w) for w in want)
+    print("  by instruction:")
+    for mn, count in by_mnem.most_common(args.summary):
+        print(f"    {mn:<10} {count:>7} wrong of {total[mn]:>7}")
+
+    with open(os.path.join(args.out, f"{stem}.diff"), "w", encoding="utf-8") as fh:
+        for ln, w, g in diffs:
+            fh.write(f"line {ln}\n  expected: {w}\n  actual  : {g}\n")
+    print(f"  first differences:")
+    for ln, w, g in diffs[:5]:
+        print(f"    line {ln}\n      expected: {w}\n      actual  : {g}")
+    print(f"  full diff: {os.path.join(args.out, f'{stem}.diff')}")
+    return False
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("tests", nargs="*", help="test paths relative to tests/, e.g. cpu/spu_fpu")
+    ap.add_argument("--repo", default=REPO_DEFAULT, help="ps3autotests checkout")
+    ap.add_argument("--out", default="autotest-results", help="where to write .actual/.diff")
+    ap.add_argument("--list", action="store_true", help="list runnable tests and exit")
+    ap.add_argument("--all-spu", action="store_true", help="every cpu/spu_* test")
+    ap.add_argument("--idle", type=float, default=8.0, help="seconds of TTY silence = finished")
+    ap.add_argument("--boot-wait", type=float, default=90.0, help="seconds to wait for first output")
+    ap.add_argument("--timeout", type=float, default=900.0, help="hard cap per test")
+    ap.add_argument("--summary", type=int, default=25, help="instructions to show in the summary")
+    args = ap.parse_args()
+
+    tests_root = os.path.join(os.path.abspath(args.repo), "tests")
+    if not os.path.isdir(tests_root):
+        sys.exit(f"no tests/ under {args.repo} -- clone https://github.com/RPCS3/ps3autotests")
+
+    available = discover(tests_root)
+
+    if args.list:
+        for name, _d, elf, exp in available:
+            print(f"{name:<40} {elf:<28} expected={os.path.getsize(exp) // 1024}K")
+        return
+
+    if args.all_spu:
+        wanted = [t for t in available if os.path.basename(t[0]).startswith("spu_")]
+    elif args.tests:
+        wanted = [t for t in available if t[0] in args.tests]
+        unknown = set(args.tests) - {t[0] for t in wanted}
+        if unknown:
+            sys.exit(f"unknown test(s): {', '.join(sorted(unknown))}  (try --list)")
+    else:
+        sys.exit("name at least one test, or --all-spu, or --list")
+
+    if not adb("devices").strip().splitlines()[1:]:
+        sys.exit("no device connected")
+
+    results = {}
+    for name, dirpath, elf, expected in wanted:
+        results[name] = run_one(name, dirpath, elf, expected, args)
+
+    print("\n=== summary ===")
+    for name, ok in results.items():
+        print(f"  {'PASS' if ok else 'FAIL'}  {name}")
+    sys.exit(0 if all(results.values()) else 1)
+
+
+if __name__ == "__main__":
+    main()

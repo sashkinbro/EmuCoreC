@@ -83,6 +83,13 @@ namespace vk
 		}
 		g_overlay_passes.clear();
 
+		// Pairs with descriptors::init() in initialize_pipe_compatibility_queries.
+		//
+		// This clears dispatch_manager's registry of live descriptor_set pointers. It had no caller
+		// at all, so the list survived teardown holding pointers to sets whose owners were gone --
+		// harmless only for as long as nothing walked it on the next boot.
+		vk::descriptors::destroy();
+
 		// This must be the last item destroyed
 		vk::get_resource_manager()->destroy();
 
@@ -103,7 +110,33 @@ namespace vk
 		g_drv_sanitize_fp_values = false;
 		g_drv_disable_fence_reset = false;
 		g_drv_strict_query_scopes = !!g_cfg.video.strict_rendering_mode;
-		g_drv_emulate_cond_render = (g_cfg.video.relaxed_zcull_sync && !g_render_device->get_conditional_render_support());
+		// Emulated predication is for hardware that never had the extension. Where we turned it
+		// off ourselves as a driver workaround, it must stay off: the two are the same code
+		// path, and turning the extension off makes begin_conditional_rendering return before it
+		// builds m_cond_render_buffer, while the vertex shader keeps reading that buffer at
+		// offset 0. It finds a zeroed scratch buffer, predicates every draw away, and the game
+		// renders black with audio and overlays still running. The all-ones word that disables
+		// predication lives at offset 4 and is never reached, because the fallback leaves
+		// hw_cond_active set.
+		//
+		// Off means occlusion results stop culling draws, which is the trade the workaround
+		// already documents: more GPU work, and a session that survives.
+		// Straight off the GPU: the cached g_driver_vendor is not assigned until further down
+		// this function, so get_driver_vendor() would still hold the previous device's value.
+		const auto cond_render_vendor = g_render_device->gpu().get_driver_vendor();
+		const bool cond_render_blocked_by_driver =
+			cond_render_vendor == vk::driver_vendor::ADRENO ||
+#ifdef __APPLE__
+			cond_render_vendor == vk::driver_vendor::TURNIP ||
+			// MoltenVK never builds the predicate buffer, so emulating it would discard every draw
+			cond_render_vendor == vk::driver_vendor::MVK;
+#else
+			cond_render_vendor == vk::driver_vendor::TURNIP;
+#endif
+
+		g_drv_emulate_cond_render = (g_cfg.video.relaxed_zcull_sync &&
+			!g_render_device->get_conditional_render_support() &&
+			!cond_render_blocked_by_driver);
 		g_num_processed_frames = 0;
 		g_num_total_frames = 0;
 		g_heap_compatible_buffer_types = 0;
@@ -161,26 +194,40 @@ namespace vk
 		case driver_vendor::ARM_MALI:
 			// Needs more testing
 			break;
-		case driver_vendor::QUALCOMM:
-			// Needs more testing
-			break;
+		case driver_vendor::ADRENO:
 		case driver_vendor::TURNIP:
-			// GPU hangs in some titles due to waiting for a query result
-			g_drv_strict_query_scopes = true;
-			// Adreno 830 can hang on hardware primitive restart in LittleBigPlanet.
+			// Adreno is the bulk of the Android install base. No FP sanitising:
+			// unlike NVIDIA it is not NaN-poisoning prone, and the pass is not
+			// free on a tiler.
+			//
+			// No strict query scopes either, and keep it that way when merging upstream.
+			// Upstream forces them on Turnip (fdffb7d5f, #19561) for a query-result hang in
+			// wipEout HD and Burnout on Linux. They end the render pass around every occlusion
+			// query, a tile store each on a tiler, and nothing on Android hangs without them.
+			// A Turnip hang report gets Strict Rendering Mode first, then a per-game switch.
+			//
+			// The Adreno 830 hangs on hardware primitive restart. LittleBigPlanet's water at the
+			// first level's water wheel (#201) is one triangle strip with restarts, and the GPU
+			// stopped on it every run with the vertex output stage busy. Rewriting the restarts as
+			// degenerate triangles (the older AMD GCN path) is the one change that made it pass;
+			// dropping point size and sanitising positions were tested alongside and are not
+			// needed. 840 users never hit it, so only the 830 pays for the extra index pass.
+			// ARMSX3_HW_RESTART=1 keeps hardware restart, to recheck on newer drivers.
 			if (gpu_name.find("Adreno (TM) 830") != umax)
 			{
 				const char* const env = std::getenv("ARMSX3_HW_RESTART");
 				g_drv_no_primitive_restart = !(env && env[0] == '1');
-				rsx_log.notice("Adreno 830: primitive restart %s", g_drv_no_primitive_restart ? "emulated" : "on hardware");
+				rsx_log.notice("Adreno 830: primitive restart %s", g_drv_no_primitive_restart ?
+					"emulated with degenerate triangles (GPU hang on hardware restart)" : "on hardware (ARMSX3_HW_RESTART=1)");
 			}
 			break;
 		case driver_vendor::POWERVR:
 		case driver_vendor::XCLIPSE:
 		case driver_vendor::BROADCOM:
 		case driver_vendor::VERISILICON:
-			// Recognized mobile Vulkan drivers. Device feature checks apply
-			// their capability-specific workarounds during device creation.
+			// Detected but untested by us. Nothing special applied -- saying so
+			// beats a warning that reads like a fault.
+			rsx_log.notice("Mobile GPU with limited testing: %s", gpu_name);
 			break;
 		default:
 			rsx_log.warning("Unsupported device: %s", gpu_name);
@@ -311,6 +358,8 @@ namespace vk
 		clear_status_interrupt(runtime_state::uninterruptible);
 	}
 
+	// Thread-local: only the RSX thread allocates through this path, and the flag must not
+	// leak to any other thread that happens to hit memory pressure at the same moment.
 	static thread_local bool g_last_ditch_eviction = false;
 
 	bool is_last_ditch_eviction()
@@ -330,7 +379,7 @@ namespace vk
 
 	bool reclaim_ring_memory()
 	{
-		auto renderer = dynamic_cast<VKGSRender*>(rsx::get_current_renderer());
+		auto renderer = dynamic_cast<VKGSRender*>(rsx::get_current_render_backend());
 
 		if (!renderer || is_uninterruptible())
 		{
@@ -366,7 +415,7 @@ namespace vk
 
 	void do_query_cleanup(vk::command_buffer& cmd)
 	{
-		auto renderer = dynamic_cast<VKGSRender*>(rsx::get_current_renderer());
+		auto renderer = dynamic_cast<VKGSRender*>(rsx::get_current_render_backend());
 		ensure(renderer);
 
 		renderer->emergency_query_cleanup(&cmd);
@@ -374,7 +423,7 @@ namespace vk
 
 	void on_descriptor_pool_fragmentation(bool is_fatal)
 	{
-		if (auto vkthr = dynamic_cast<VKGSRender*>(rsx::get_current_renderer()))
+		if (auto vkthr = dynamic_cast<VKGSRender*>(rsx::get_current_render_backend()))
 		{
 			vkthr->on_descriptor_pool_fragmentation(is_fatal);
 		}

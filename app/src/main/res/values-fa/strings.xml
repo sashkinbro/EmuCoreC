@@ -1781,4 +1781,51 @@
     <string name="settings_gamepad_action_right_stick_down">استیک راست پایین</string>
     <string name="settings_gamepad_action_right_stick_left">استیک راست چپ</string>
     <string name="settings_gamepad_action_right_stick_right">استیک راست راست</string>
+
+    <string name="ps3_core_pending_restart">تغییرات ذخیره‌شده پس از راه‌اندازی مجدد بازی اعمال می‌شوند.</string>
+    <string name="ps3_core_apply_restart">اعمال و راه‌اندازی مجدد</string>
+
+    <string name="core_label_snapdragon_game_super_resolution">Snapdragon Game Super Resolution</string>
+    <string name="core_label_snapdragon_game_super_resolution_edge_direction">Snapdragon Game Super Resolution (جهت لبه)</string>
+
+    <string name="core_label_oboe">Oboe</string>
+    <string name="core_label_x2">x2</string>
+    <string name="core_label_x3">x3</string>
+    <string name="core_label_x4">x4</string>
+
+    <!-- Current Android renderer, audio and presentation settings. -->
+    <string name="core_label_frame_generation" formatted="false">تولید فریم</string>
+    <string name="core_help_video_frame_generation" formatted="false">فریم‌های تولیدشده را بین فریم‌های بازی قرار می‌دهد. از سایه‌زن‌های فایل Lossless Scaling شما استفاده می‌کند و بار GPU و تأخیر را افزایش می‌دهد.</string>
+    <string name="core_label_frame_generation_performance_mode" formatted="false">حالت کارایی</string>
+    <string name="core_help_video_frame_generation_performance_mode" formatted="false">از سایه‌زن‌های سبک‌تر استفاده می‌کند. پس از تغییر، تولید فریم را دوباره راه‌اندازی کنید.</string>
+    <string name="core_label_frame_generation_flow_scale" formatted="false">جزئیات حرکت (%)</string>
+    <string name="core_help_video_frame_generation_flow_scale" formatted="false">وضوح تحلیل حرکت برحسب درصد. مقادیر کمتر سریع‌تر و نرم‌تر هستند. تولید فریم را دوباره راه‌اندازی کنید.</string>
+    <string name="core_label_frame_generation_target_rate" formatted="false">نرخ نوسازی هدف (Hz)</string>
+    <string name="core_help_video_frame_generation_target_rate" formatted="false">نرخ خروجی هدف برحسب هرتز. 0 از ضریب ثابت انتخاب‌شده استفاده می‌کند.</string>
+    <string name="core_label_frame_generation_lossless_path" formatted="false">فایل Lossless Scaling</string>
+    <string name="core_help_video_frame_generation_lossless_path" formatted="false">مسیر کامل فایل DLL نسخه Lossless Scaling شما. حافظه سایه‌زن‌ها در صورت نیاز از آن ساخته می‌شود.</string>
+    <string name="core_label_cubeb_backend" formatted="false">سامانه صوتی Cubeb</string>
+    <string name="core_help_audio_cubeb_backend" formatted="false">مسیر صوتی Cubeb: برای OpenSL ES در Android خالی بگذارید یا aaudio یا opensl وارد کنید. نیازمند راه‌اندازی مجدد است.</string>
+    <string name="core_label_recording_compatible" formatted="false">صدای سازگار با ضبط</string>
+    <string name="core_help_audio_recording_compatible" formatted="false">ضبط صدای Oboe از طریق میکسر سیستم را برای ضبط صفحه ممکن می‌کند. ممکن است تأخیر بیشتر شود.</string>
+    <string name="core_label_sgsr_edge_sharpness" formatted="false">وضوح لبه SGSR</string>
+    <string name="core_help_video_sgsr_edge_sharpness" formatted="false">وضوح لبه در بزرگ‌نمایی SGSR. مقادیر بیشتر لبه‌ها را واضح‌تر می‌کنند.</string>
+    <string name="core_label_early_submit_draw_threshold" formatted="false">آستانه ترسیم برای ارسال زودهنگام</string>
+    <string name="core_help_video_vulkan_early_submit_draw_threshold" formatted="false">پس از این تعداد ترسیم، فرمان‌های GPU ارسال می‌شوند. 0 ارسال زودهنگام را غیرفعال می‌کند. نیازمند راه‌اندازی مجدد است.</string>
+    <string name="core_label_vertex_fetch_specialization" formatted="false">تخصصی‌سازی دریافت رأس‌ها</string>
+    <string name="core_help_video_vulkan_vertex_fetch_specialization" formatted="false">خواندن رأس‌ها را برای این بازی تخصصی می‌کند. ممکن است کارایی GPU بهتر شود. نیازمند راه‌اندازی مجدد است.</string>
+    <string name="core_label_disable_swap_chain_pre_rotation" formatted="false">غیرفعال کردن پیش‌چرخش Swap Chain</string>
+    <string name="core_help_video_disable_swap_chain_pre_rotation" formatted="false">Vulkan: چرخاندن تصویر در صفحه‌نمایش‌هایی که از پهلو نصب شده‌اند را مانند نسخه‌های قبلی به سیستم می‌سپارد. فقط برای عیب‌یابی؛ روی این صفحه‌نمایش‌ها زمان GPU مصرف می‌کند.</string>
+    <string name="core_label_shader_preset_resolution" formatted="false">وضوح سایه‌زن</string>
+    <string name="core_help_video_shader_preset_resolution" formatted="false">سایه‌زن را با وضوح کمتر اجرا می‌کند و سپس تصویرش را تا اندازه صفحه بزرگ می‌کند. مقدار کمتر با پیش‌تنظیم‌های سنگین بسیار سریع‌تر است و کمی نرم‌تر دیده می‌شود.</string>
+    <string name="core_label_cardboard_vr" formatted="false">Cardboard VR</string>
+    <string name="core_help_video_cardboard_vr" formatted="false">بازی را دو بار، کنار هم، یک تصویر برای هر چشم نشان می‌دهد، برای گوشی داخل هدست واقعیت مجازی از نوع Cardboard. گوشی را افقی نگه دارید. بازی‌های دارای سه‌بعدی استریوسکوپی به هر چشم نمای جداگانه می‌دهند، وقتی 3D Display Enabled در تمام تنظیمات هسته روشن باشد و وضوح PS3 روی 1280x720 باشد. سایه‌زن‌های RetroArch و SGSR در این حالت اجرا نمی‌شوند؛ FSR همچنان کار می‌کند.</string>
+    <string name="core_label_vr_picture_size" formatted="false">اندازه تصویر VR</string>
+    <string name="core_help_video_vr_picture_size" formatted="false">اینکه هر تصویر چه مقدار از نیمه صفحه خود را پر می‌کند.</string>
+    <string name="core_label_vr_eye_spacing" formatted="false">فاصله چشم‌ها در VR</string>
+    <string name="core_help_video_vr_eye_spacing" formatted="false">مقادیر بالاتر دو تصویر را از هم دور و مقادیر پایین‌تر آن‌ها را به هم نزدیک می‌کنند، تا با عدسی‌های هدست هم‌تراز شوند.</string>
+    <string name="core_label_vr_height" formatted="false">ارتفاع VR</string>
+    <string name="core_help_video_vr_height" formatted="false">مقادیر بالاتر هر دو تصویر را بالا و مقادیر پایین‌تر آن‌ها را پایین می‌برند، تا با عدسی‌های هدست هم‌تراز شوند.</string>
+    <string name="core_label_show_spu_compilation_hint" formatted="false">نمایش پیام کامپایل SPU</string>
+    <string name="core_help_miscellaneous_show_spu_compilation_hint" formatted="false">راهنمایی «کامپایل کردن ماژول‌های SPU» را با استفاده از لایه اصلی نشان می‌دهد.</string>
 </resources>

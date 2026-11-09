@@ -480,7 +480,7 @@ extern f64 get_cpu_program_usage_percent(u64 hash)
 		{
 			u64 total = 0;
 
-			for (auto [name, count] : prof->all_spu_threads_info.freq)
+			for (const auto& [name, count] : prof->all_spu_threads_info.freq)
 			{
 				if ((name & -65536) == hash)
 				{
@@ -1270,8 +1270,8 @@ u32 cpu_thread::get_pc() const
 	}
 	case thread_class::rsx:
 	{
-		const auto& ctrl = static_cast<const rsx::thread*>(this)->fifo_ctrl;
-		return ctrl ? ctrl->get_pos() : umax;
+		const auto ctrl = static_cast<const rsx::thread*>(this)->ctrl;
+		return ctrl ? ctrl->get.load() : umax;
 	}
 	default: break;
 	}
@@ -1408,7 +1408,11 @@ bool cpu_thread::suspend_work::push(cpu_thread* _this) noexcept
 	if (!next)
 	{
 		// Monitor the performance only of the actual suspend processing owner
+#ifdef __APPLE__
+		perf_meter<"SUSPEND"_u64> perf0(nullptr);
+#else
 		perf_meter<"SUSPEND"_u64> perf0;
+#endif
 
 		// First thread to push the work to the workload list pauses all threads and processes it
 		std::lock_guard lock(s_cpu_lock);

@@ -1,4 +1,7 @@
 #include "VKCompute.h"
+#include <cstdlib>
+#include <cstring>
+#include "Emu/RSX/rsx_profiler.h"
 #include "VKHelpers.h"
 #include "VKRenderPass.h"
 #include "vkutils/buffer_object.h"
@@ -54,11 +57,35 @@ namespace vk
 				optimal_kernel_size = 1;
 				optimal_group_size = 128;
 				break;
+			case vk::driver_vendor::ADRENO:
+			case vk::driver_vendor::TURNIP:
+				// Splitting Adreno out from the rest of mobile is sashkinbro's (EmuCoreC
+				// b9f0f3631). The comment this replaces held everything at 32 on the belief
+				// that Mali was also 64-wide, which is wrong -- his split was the better call.
+				//
+				// Qualcomm runs 64-wide waves, and a workgroup narrower than the wave does
+				// not pack together with its neighbours -- it takes a whole wave and masks
+				// the surplus lanes off. So 32 does not mean "smaller groups" here, it means
+				// half of every wave sits idle on every dispatch. Widening costs nothing to
+				// weigh against that: these kernels carry no shared memory and no barriers,
+				// so group size is a scheduling hint and nothing else. ARMSX3_CS_GROUP_SIZE
+				// overrides it if some part turns out to disagree.
+				unroll_loops = true;
+				optimal_kernel_size = 1;
+				optimal_group_size = 64;
+				break;
 			case vk::driver_vendor::LAVAPIPE:
 			case vk::driver_vendor::V3DV:
 			case vk::driver_vendor::PANVK:
 			case vk::driver_vendor::ARM_MALI:
-				// TODO: Actually bench this. Using 32 for now to match other common configurations.
+			case vk::driver_vendor::POWERVR:
+			case vk::driver_vendor::XCLIPSE:
+			case vk::driver_vendor::BROADCOM:
+			case vk::driver_vendor::VERISILICON:
+				// The rest of mobile, which does NOT inherit the Adreno reasoning above.
+				// Mali warps are 16 lanes on Valhall and 4-8 on Bifrost, so 32 already spans
+				// several of them and there is no half-empty wave to reclaim; Xclipse is
+				// RDNA-derived and prefers wave32 for compute. Falls through to 32.
 			case vk::driver_vendor::DOZEN:
 				// Actual optimal size depends on the D3D device. Use 32 since it should work well on both AMD and NVIDIA
 			case vk::driver_vendor::NVIDIA:
@@ -75,33 +102,38 @@ namespace vk
 				optimal_kernel_size = 1;
 				optimal_group_size = 64;
 				break;
-			case vk::driver_vendor::POWERVR:
-			case vk::driver_vendor::XCLIPSE:
-			case vk::driver_vendor::BROADCOM:
-			case vk::driver_vendor::VERISILICON:
-				// Conservative mobile default. A size of one made all buffer
-				// conversion compute jobs needlessly serial on these drivers.
-				unroll_loops = true;
-				optimal_kernel_size = 1;
-				optimal_group_size = 32;
-				break;
 			case vk::driver_vendor::MVK:
 			case vk::driver_vendor::HONEYKRISP:
 				unroll_loops = true;
 				optimal_kernel_size = 1;
 				optimal_group_size = 256;
 				break;
-			case vk::driver_vendor::QUALCOMM:
-			case vk::driver_vendor::TURNIP:
-				// Wavefronts are multiples of 64. (Some generations also support wave128)
-				unroll_loops = true;
-				optimal_kernel_size = 1;
-				optimal_group_size = 64;
-				break;
 			}
 
 			const auto& gpu = vk::g_render_device->gpu();
 			max_invocations_x = gpu.get_limits().maxComputeWorkGroupCount[0];
+
+			// Every group size above is a per-vendor guess, and the mobile one has never been
+			// measured on a phone. This override exists so the candidates can be compared on a
+			// single build -- set ARMSX3_CS_GROUP_SIZE in driver_env.txt -- rather than
+			// shipping another guess. Powers of two only, and never past what the device
+			// accepts: an over-large local_size_x fails shader compilation, not validation.
+			if (const char* const env = std::getenv("ARMSX3_CS_GROUP_SIZE"))
+			{
+				const auto& limits = gpu.get_limits();
+				const u32 ceiling = std::min(limits.maxComputeWorkGroupSize[0], limits.maxComputeWorkGroupInvocations);
+				const u64 requested = std::strtoull(env, nullptr, 10);
+
+				if (requested >= 1 && requested <= ceiling && (requested & (requested - 1)) == 0)
+				{
+					rsx_log.warning("cs: work group size overridden %u -> %u by ARMSX3_CS_GROUP_SIZE.", optimal_group_size, static_cast<u32>(requested));
+					optimal_group_size = static_cast<u32>(requested);
+				}
+				else
+				{
+					rsx_log.error("cs: ARMSX3_CS_GROUP_SIZE='%s' ignored; expected a power of two in [1, %u].", env, ceiling);
+				}
+			}
 
 			initialized = true;
 		}
@@ -141,32 +173,75 @@ namespace vk
 			m_program = compiler->compile(create_info, vk::pipe_compiler::COMPILE_INLINE, {}, get_inputs());
 		}
 
-		if (!m_program)
-		{
-			// The driver rejected this pipeline (see program::link). Skipping
-			// the dispatch is preferable to crashing the whole emulator.
-			return;
-		}
-
 		bind_resources(cmd);
 		m_program->bind(cmd, VK_PIPELINE_BIND_POINT_COMPUTE);
 	}
 
+	// Every dispatch here is a graphics->compute engine switch, and on Adreno 830 that path is
+	// where a reproducible GPU hang lived. Decoded RBBM registers from the kgsl snapshot put the
+	// wedge at unslice PC (which owns the gfx<->compute transition) and unslice HLSQ (the wave
+	// context allocator), with UCHE, VPC, VSC, CMP, DCMP and VBIF_GX idle and zero page faults --
+	// a launched grid that never retires, not a memory stall. The CP parks on whatever drain point
+	// it reaches next, which differs between captures while the registers stay byte-identical, so
+	// the park point is not the fault site.
+	//
+	// The fix was to stop generating the transition on the hot path rather than to tune it: see
+	// vk::gfx_shuffle_32_16, which does the same byteswap from a fragment shader. The counters and
+	// ARMSX3_SKIP_COMPUTE below exist so the next occurrence can be attributed to a specific
+	// kernel in one run instead of guessed at -- guessing cost several rounds here.
 	void compute_task::run(const vk::command_buffer& cmd, u32 invocations_x, u32 invocations_y, u32 invocations_z)
 	{
 		// CmdDispatch is outside renderpass scope only
 		if (vk::is_renderpass_open(cmd))
 		{
-			vk::end_renderpass(cmd);
+			if (rsx::prof::enabled()) [[unlikely]] rsx::prof::g_rp_sites[3]++; vk::end_renderpass(cmd);
+		}
+
+		// Per-task selective skip. ARMSX3_SKIP_COMPUTE is a comma-separated list of substrings
+		// matched against the mangled task name, so a run can eliminate ONE compute task without a
+		// rebuild -- driver_env.txt is editable on the device. Note the mangled names end in 'E',
+		// so "cs_shuffle_32E" selects cs_shuffle_32 alone while "cs_shuffle_32" also takes
+		// cs_shuffle_32_16.
+		if (m_skip_state < 0) [[unlikely]]
+		{
+			m_skip_state = 0;
+			if (const char* list = std::getenv("ARMSX3_SKIP_COMPUTE"); list && list[0])
+			{
+				for (const char* p = list; *p;)
+				{
+					const char* e = std::strchr(p, ',');
+					const std::string tok(p, e ? e - p : std::strlen(p));
+					if (!tok.empty() && std::strstr(m_debug_name, tok.c_str()))
+					{
+						m_skip_state = 1;
+						rsx_log.error("ARMSX3_SKIP_COMPUTE: dispatches from %s are DISABLED.", m_debug_name);
+						break;
+					}
+					if (!e) break;
+					p = e + 1;
+				}
+			}
+		}
+
+		if (m_skip_state == 1) [[unlikely]]
+		{
+			return;
+		}
+
+		// Per-task dispatch volume. Logged at widening milestones so `grep "Compute DISPATCH"` on a
+		// captured log ranks the tasks by how much engine switching each one actually causes --
+		// which is the number the last two fix attempts were guessed without.
+		if (const u64 n = ++m_dispatch_count;
+			n == 1 || n == 100 || n == 1000 || n == 10000 || (n % 100000) == 0) [[unlikely]]
+		{
+			m_logged_first_dispatch = true;
+			// error level on purpose: notice sits below the shipped log level, so the counters
+			// this was built for produced NOTHING in the capture they were meant to inform.
+			// The milestones are rare (1/100/1000/10000/100k), so this cannot spam.
+			rsx_log.warning("Compute DISPATCH %s x%d", m_debug_name, n);
 		}
 
 		load_program(cmd);
-		if (!m_program)
-		{
-			// The driver rejected this pipeline (see program::link). Skipping
-			// the dispatch is preferable to crashing the whole emulator.
-			return;
-		}
 		vkCmdDispatch(cmd, invocations_x, invocations_y, invocations_z);
 	}
 

@@ -7,8 +7,8 @@
 #include "Emu/Memory/vm.h"
 #include "Emu/emu_callbacks.h"
 #include "Emu/System.h"
-#include "Emu/system_config.h"
 #include "Emu/VFS.h"
+#include "Emu/system_config.h"
 
 #include "util/types.hpp"
 #include "util/asm.hpp"
@@ -896,6 +896,13 @@ void patch_engine::append_global_patches()
 
 	// Imported patch.yml
 	load(m_map, get_imported_patch_path());
+
+	// ARMSX3: the Artemis collection and our bundled fixes, each in a file of its own so that a
+	// download can replace its file whole. Merged into patch.yml, a patch renamed or withdrawn
+	// at the source stayed in the list for good, beside whatever replaced it. A missing file is
+	// skipped quietly, like the two above.
+	load(m_map, get_patches_path() + "artemis_patch.yml");
+	load(m_map, get_patches_path() + "armsx3_patch.yml");
 }
 
 void patch_engine::append_title_patches(std::string_view title_id)
@@ -1155,7 +1162,15 @@ static usz apply_modification(std::vector<u32>& applied, patch_engine::patch_inf
 				continue;
 			}
 
-			const u32 alloc_size = utils::align(static_cast<u32>(p.value.long_value + 1) * 4, 0x10000);
+			// Include the return hook, and leave room for 64 KiB allocation alignment.
+			if (p.value.long_value >= (u32{umax} & -0x10000) / 4)
+			{
+				fmt::throw_exception("Invalid calloc instruction count %u at 0x%x (patch '%s', hash '%s')",
+					p.value.long_value, out_branch, patch.description, patch.hash);
+			}
+
+			const u32 code_size = static_cast<u32>(p.value.long_value + 1) * 4;
+			const u32 alloc_size = utils::align(code_size, 0x10000);
 
 			// Check if should maybe reuse previous code cave allocation (0 size)
 			if (alloc_size - 4 != 0)
@@ -1228,6 +1243,11 @@ static usz apply_modification(std::vector<u32>& applied, patch_engine::patch_inf
 			// Record the insertion point as a faux block.
 			g_fxo->need<ppu_patch_block_registry_t>();
 			g_fxo->get<ppu_patch_block_registry_t>().block_addresses.insert(resval);
+
+			// Keep the initialized helper extent separate from its allocation padding
+			auto& ranges = g_fxo->get<ppu_patch_block_registry_t>().code_ranges;
+			std::erase_if(ranges, [addr](const auto& range) { return range.addr == addr; });
+			ranges.push_back({addr, code_size, fmt::format("%s (hash '%s')", patch.description, patch.hash)});
 
 			relocate_instructions_at = addr;
 			break;
@@ -1459,6 +1479,45 @@ static usz apply_modification(std::vector<u32>& applied, patch_engine::patch_inf
 	return old_applied_size;
 }
 
+// ARMSX3: settings a patch bundled in canary_patches.yml makes unnecessary, switched off for the
+// run when that patch is applied.
+//
+// Gran Turismo 6 v01.22 reads every frame back for its MLAA pass, so it only renders correctly
+// with Write and Read Color Buffers on, which cost a lot of frame time. illusion's "Disable MLAA"
+// removes the pass, after which the buffers only cost time. Tied to the patch being applied, not
+// to the version: other v01.22 executables are in circulation, and without the patch those still
+// need the buffers, which then stay as configured.
+static void armsx3_apply_patch_settings(const std::string& hash, const std::string& description)
+{
+	static constexpr std::string_view gt6_mlaa_hashes[] =
+	{
+		"PPU-42367707f4caac2668f10cb46498f64bde9db440", // BCUS99247 v01.22
+		"PPU-4f1e9acd7d98961b4b742fb324a2faba6212ea67", // BCUS98296 v01.22
+		"PPU-6ac472e1f334f54ec4753cde9e8e1515bfab4d17", // BCUS98296 v01.22, the one RPCS3's database lists
+		"PPU-638ef307e2b35d593f599efec0dc0c37059a984b", // BCES01893 v01.22
+		"PPU-80f0d67b29d3d17ac885a309a3fc4cd8dcf50658", // NPEA00502 v01.22
+		"PPU-4213aba5ed17f7e3cd3f299fa44d9d9acef0ba18", // NPUA81049 v01.22
+		"PPU-6a7de7fdfd7e7cbd1031bf28a7104b29c308136c", // NPHA80269 v01.22
+		"PPU-43e618448eed82aa96856338d072f1e4978c36a8", // NPJA00113 v01.22
+	};
+
+	if (description != "Disable MLAA")
+	{
+		return;
+	}
+
+	for (std::string_view gt6 : gt6_mlaa_hashes)
+	{
+		if (hash == gt6)
+		{
+			g_cfg.video.write_color_buffers.set(false);
+			g_cfg.video.read_color_buffers.set(false);
+			patch_log.success("Write and Read Color Buffers are off for this run: '%s' removes the pass that needed them", description);
+			return;
+		}
+	}
+}
+
 void patch_engine::apply(std::vector<u32>& applied_total, const std::string& name, std::function<u8*(u32, u32)> mem_translate, u32 filesz, u32 min_addr)
 {
 	// applied_total may be non-empty, do not clear it
@@ -1608,19 +1667,7 @@ void patch_engine::apply(std::vector<u32>& applied_total, const std::string& nam
 					patch_log.success("Applied patch (hash='%s', description='%s', author='%s', patch_version='%s', file_version='%s') (<- %u)",
 						patch->hash, patch->description, patch->author, patch->patch_version, patch->version, applied_total.size() - old_size);
 
-					// GT6's MLAA patch removes the pass that requires these expensive buffers.
-					static constexpr std::string_view gt6_hashes[] = {
-						"PPU-42367707f4caac2668f10cb46498f64bde9db440", "PPU-4f1e9acd7d98961b4b742fb324a2faba6212ea67",
-						"PPU-6ac472e1f334f54ec4753cde9e8e1515bfab4d17", "PPU-638ef307e2b35d593f599efec0dc0c37059a984b",
-						"PPU-80f0d67b29d3d17ac885a309a3fc4cd8dcf50658", "PPU-4213aba5ed17f7e3cd3f299fa44d9d9acef0ba18",
-						"PPU-6a7de7fdfd7e7cbd1031bf28a7104b29c308136c", "PPU-43e618448eed82aa96856338d072f1e4978c36a8"
-					};
-					if (patch->description == "Disable MLAA" && std::find(std::begin(gt6_hashes), std::end(gt6_hashes), patch->hash) != std::end(gt6_hashes))
-					{
-						g_cfg.video.write_color_buffers.set(false);
-						g_cfg.video.read_color_buffers.set(false);
-						patch_log.notice("Disabled GT6 color buffer transfers for the patched MLAA pass");
-					}
+					armsx3_apply_patch_settings(patch->hash, patch->description);
 				}
 			}
 		}
@@ -1646,6 +1693,12 @@ void patch_engine::unload(const std::string& name)
 			// Deallocate used memory
 			if (u32 addr = std::exchange(entry.alloc_addr, 0))
 			{
+				if (auto* registry = g_fxo->try_get<ppu_patch_block_registry_t>())
+				{
+					std::erase_if(registry->code_ranges,
+						[addr](const auto& range) { return range.addr == addr; });
+				}
+
 				vm::dealloc(addr);
 
 				auto alloc_map = vm::get(vm::any, addr);
@@ -1821,14 +1874,6 @@ static void append_patches(patch_engine::patch_map& existing_patches, const patc
 
 bool patch_engine::save_patches(const patch_map& patches, const std::string& path, std::stringstream* log_messages)
 {
-	fs::pending_file file(path);
-
-	if (!file.file)
-	{
-		append_log_message(log_messages, fmt::format("Failed to open patch file %s (%s)", path, fs::g_tls_error), &patch_log.fatal);
-		return false;
-	}
-
 	YAML::Emitter out;
 	out << YAML::BeginMap;
 	out << patch_key::version << patch_engine_version;
@@ -1924,13 +1969,20 @@ bool patch_engine::save_patches(const patch_map& patches, const std::string& pat
 				out << YAML::BeginSeq;
 				out << fmt::format("%s", data.type);
 
+				// move_file and hide_file carry a VFS path in the address element instead of a
+				// number. load() keeps that text in original_offset and skips the u32 validation for
+				// them, so formatting it numerically here would write out 0x00000000 and the loader
+				// would accept it back as a patch that silently never matches anything.
+				//
+				// The numeric branch deliberately uses offset rather than original_offset: an
+				// address modifier is folded into offset at load time, and the flat form emitted
+				// here has nowhere to put it.
 				if (patch_type_uses_hex_offset(data.type))
 				{
 					out << fmt::format("0x%.8x", data.offset);
 				}
 				else
 				{
-					// This element is a path for move_file and hide_file, not an address
 					out << data.original_offset;
 				}
 
@@ -1947,7 +1999,13 @@ bool patch_engine::save_patches(const patch_map& patches, const std::string& pat
 
 	out << YAML::EndMap;
 
-	if (file.file.write(out.c_str(), out.size()) < out.size() || !file.commit())
+	// Write through a temporary and rename on success, as save_config already does. A truncating
+	// in-place write that fails part way (out of space, process killed) leaves a half-written file,
+	// and load() rejects the whole file on a parse error -- so a failure here costs the user every
+	// patch they had, with no way to rebuild it from inside the app.
+	fs::pending_file file(path);
+
+	if (!file.file || file.file.write(out.c_str(), out.size()) < out.size() || !file.commit())
 	{
 		append_log_message(log_messages, fmt::format("Failed to write patch file %s (%s)", path, fs::g_tls_error), &patch_log.fatal);
 		return false;

@@ -2021,4 +2021,51 @@ Over-Under 更接近原生立体声输出，但不太受支持。</string>
     <string name="settings_gamepad_action_right_stick_down">右摇杆下</string>
     <string name="settings_gamepad_action_right_stick_left">右摇杆左</string>
     <string name="settings_gamepad_action_right_stick_right">右摇杆右</string>
+
+    <string name="ps3_core_pending_restart">保存的更改将在游戏重新启动后生效。</string>
+    <string name="ps3_core_apply_restart">应用并重新启动</string>
+
+    <string name="core_label_snapdragon_game_super_resolution">Snapdragon Game Super Resolution</string>
+    <string name="core_label_snapdragon_game_super_resolution_edge_direction">Snapdragon Game Super Resolution (边缘方向)</string>
+
+    <string name="core_label_oboe">Oboe</string>
+    <string name="core_label_x2">x2</string>
+    <string name="core_label_x3">x3</string>
+    <string name="core_label_x4">x4</string>
+
+    <!-- Current Android renderer, audio and presentation settings. -->
+    <string name="core_label_frame_generation" formatted="false">帧生成</string>
+    <string name="core_help_video_frame_generation" formatted="false">在游戏帧之间插入生成的帧。使用您自有 Lossless Scaling 文件中的着色器；会增加 GPU 负载和延迟。</string>
+    <string name="core_label_frame_generation_performance_mode" formatted="false">性能模式</string>
+    <string name="core_help_video_frame_generation_performance_mode" formatted="false">使用更轻量的着色器。更改后请重新启动帧生成。</string>
+    <string name="core_label_frame_generation_flow_scale" formatted="false">运动细节 (%)</string>
+    <string name="core_help_video_frame_generation_flow_scale" formatted="false">以百分比设置运动分析分辨率。较低值更快、画面更柔和。需重新启动帧生成才能生效。</string>
+    <string name="core_label_frame_generation_target_rate" formatted="false">目标刷新率 (Hz)</string>
+    <string name="core_help_video_frame_generation_target_rate" formatted="false">目标输出频率，单位 Hz。0 使用所选的固定倍数。</string>
+    <string name="core_label_frame_generation_lossless_path" formatted="false">Lossless Scaling 文件</string>
+    <string name="core_help_video_frame_generation_lossless_path" formatted="false">您自有 Lossless Scaling DLL 的完整路径。需要时会从该文件建立着色器缓存。</string>
+    <string name="core_label_cubeb_backend" formatted="false">Cubeb 音频后端</string>
+    <string name="core_help_audio_cubeb_backend" formatted="false">Cubeb 音频路径：留空在 Android 上使用 OpenSL ES，也可输入 aaudio 或 opensl。需重新启动。</string>
+    <string name="core_label_recording_compatible" formatted="false">录屏兼容音频</string>
+    <string name="core_help_audio_recording_compatible" formatted="false">允许录屏应用通过系统混音器捕获 Oboe 音频，可能增加延迟。</string>
+    <string name="core_label_sgsr_edge_sharpness" formatted="false">SGSR 边缘锐度</string>
+    <string name="core_help_video_sgsr_edge_sharpness" formatted="false">SGSR 缩放的边缘锐度。值越高，轮廓越锐利。</string>
+    <string name="core_label_early_submit_draw_threshold" formatted="false">提前提交的绘制次数阈值</string>
+    <string name="core_help_video_vulkan_early_submit_draw_threshold" formatted="false">达到此绘制次数后提交 GPU 命令。0 关闭提前提交。需重新启动。</string>
+    <string name="core_label_vertex_fetch_specialization" formatted="false">顶点读取特化</string>
+    <string name="core_help_video_vulkan_vertex_fetch_specialization" formatted="false">为此游戏特化顶点读取，可能提高 GPU 性能。需重新启动。</string>
+    <string name="core_label_disable_swap_chain_pre_rotation" formatted="false">禁用交换链预旋转</string>
+    <string name="core_help_video_disable_swap_chain_pre_rotation" formatted="false">Vulkan：对侧装屏幕，将画面旋转交给系统处理，与早期版本相同。仅用于故障排查；在这类屏幕上会占用 GPU 时间。</string>
+    <string name="core_label_shader_preset_resolution" formatted="false">着色器分辨率</string>
+    <string name="core_help_video_shader_preset_resolution" formatted="false">以较低的分辨率运行着色器，再将画面放大到屏幕。越低在重型预设下运行越快，画面会稍微柔和一些。</string>
+    <string name="core_label_cardboard_vr" formatted="false">Cardboard VR</string>
+    <string name="core_help_video_cardboard_vr" formatted="false">将游戏左右并排显示两次，每只眼睛一个画面，适用于放入 Cardboard 式 VR 眼镜的手机。请横向握持手机。支持立体 3D 的游戏在所有核心设置中开启 3D Display Enabled 且 PS3 分辨率为 1280x720 时，会为每只眼睛提供各自的视角。开启此模式时会跳过 RetroArch 着色器和 SGSR；FSR 仍可使用。</string>
+    <string name="core_label_vr_picture_size" formatted="false">VR 画面大小</string>
+    <string name="core_help_video_vr_picture_size" formatted="false">每个画面占其所在半屏的比例。</string>
+    <string name="core_label_vr_eye_spacing" formatted="false">VR 双眼间距</string>
+    <string name="core_help_video_vr_eye_spacing" formatted="false">数值越高两个画面越分开，越低越靠近，用于对准眼镜的镜片。</string>
+    <string name="core_label_vr_height" formatted="false">VR 高度</string>
+    <string name="core_help_video_vr_height" formatted="false">数值越高两个画面越靠上，越低越靠下，用于对准眼镜的镜片。</string>
+    <string name="core_label_show_spu_compilation_hint" formatted="false">显示 SPU 编译提示</string>
+    <string name="core_help_miscellaneous_show_spu_compilation_hint" formatted="false">使用本机覆盖层显示“编译 SPU 模块”提示。</string>
 </resources>

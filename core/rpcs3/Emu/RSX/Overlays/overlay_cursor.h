@@ -11,8 +11,7 @@ namespace rsx
 		enum cursor_offset : u32
 		{
 			cell_gem = 0, // CELL_GEM_MAX_NUM = 4 Move controllers
-			wiimote_ir = 4, // 4 points per Wiimote * 4 Wiimotes (up to 16 points)
-			last = 20
+			last = 4
 		};
 
 		class cursor_item

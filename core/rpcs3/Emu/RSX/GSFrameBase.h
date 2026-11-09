@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "display.h"
+#include "Emu/system_config_types.h"
 
 class GSFrameBase
 {
@@ -14,6 +15,10 @@ public:
 
 	virtual void close() = 0;
 	virtual void reset() = 0;
+
+	// The renderer the window was created for. Windows are set up for a specific backend (e.g. OpenGL window management is handled by Qt).
+	virtual video_renderer renderer() const = 0;
+
 	virtual bool shown() = 0;
 	virtual void hide() = 0;
 	virtual void show() = 0;
@@ -29,7 +34,16 @@ public:
 	virtual bool has_alpha() = 0;
 
 	virtual display_handle_t handle() const = 0;
-	virtual u64 surface_generation() const { return 0; }
+
+	// Bumped whenever handle() starts referring to a DIFFERENT native window.
+	//
+	// The swapchain is rebuilt when client_width()/client_height() stop matching it, and that is
+	// the only trigger there is. A replacement window with the same dimensions is therefore
+	// invisible: the swapchain stays bound to a window that is no longer on screen and the picture
+	// goes black until something happens to change the size -- which is why rotating the device
+	// "fixed" it. Platforms whose window cannot be swapped under a live swapchain keep the default.
+	virtual u64 display_epoch() const { return 0; }
+	virtual u64 surface_generation() const { return display_epoch(); }
 
 	virtual bool can_consume_frame() const = 0;
 	virtual void present_frame(std::vector<u8>&& data, u32 pitch, u32 width, u32 height, bool is_bgra) const = 0;

@@ -64,26 +64,26 @@ vec4 sext(const in ivec4 bits)
 {
 	// convert raw 16 bit values into signed 32-bit float4 counterpart
 	bvec4 sign_check = lessThan(bits, ivec4(0x8000));
-	return vec4(_select(bits - 65536, bits, sign_check));
+	return _select(bits - 65536, bits, sign_check);
 }
 
 float sext(const in int bits)
 {
-	return (bits < 0x8000) ? float(bits) : float(bits - 65536); 
+	return (bits < 0x8000) ? float(bits) : float(bits - 65536);
 }
 
 vec4 fetch_attribute(const in attribute_desc desc, const in int vertex_id, usamplerBuffer input_stream)
 {
-	const int elem_size_table[8] = int[8](0, 2, 4, 2, 1, 2, 4, 1);
-	const float scaling_table[8] = float[8](1., 32767.5, 1., 1., 255., 1., 32767., 1.);
+	const int elem_size_table[] = { 0, 2, 4, 2, 1, 2, 4, 1 };
+	const float scaling_table[] = { 1., 32767.5, 1., 1., 255., 1., 32767., 1. };
 	const int elem_size = elem_size_table[desc.type];
-	const vec4 scale = vec4(scaling_table[desc.type]);
+	const vec4 scale = scaling_table[desc.type].xxxx;
 
 	uvec4 tmp, result = uvec4(0u);
 	vec4 ret;
-	int n, i = (vertex_id * int(desc.stride)) + int(desc.starting_offset);
+	int n, i = int((vertex_id * desc.stride) + desc.starting_offset);
 
-	for (n = 0; n < int(desc.attribute_size); n++)
+	for (n = 0; n < desc.attribute_size; n++)
 	{
 		tmp.x = texelFetch(input_stream, i++).x;
 		if (elem_size == 2)
@@ -103,16 +103,16 @@ vec4 fetch_attribute(const in attribute_desc desc, const in int vertex_id, usamp
 	}
 
 	// Actual decoding step is done in vector space, outside the loop
-	if (desc.type == uint(VTX_FMT_SNORM16) || desc.type == uint(VTX_FMT_SINT16))
+	if (desc.type == VTX_FMT_SNORM16 || desc.type == VTX_FMT_SINT16)
 	{
 		ret = sext(ivec4(result));
-		ret = fma(vec4(0.5), vec4(desc.type == uint(VTX_FMT_SNORM16)), ret);
+		ret = fma(vec4(0.5), vec4(desc.type == VTX_FMT_SNORM16), ret);
 	}
-	else if (desc.type == uint(VTX_FMT_FLOAT32))
+	else if (desc.type == VTX_FMT_FLOAT32)
 	{
 		ret = uintBitsToFloat(result);
 	}
-	else if (desc.type == uint(VTX_FMT_FLOAT16))
+	else if (desc.type == VTX_FMT_FLOAT16)
 	{
 		tmp.x = _set_bits(result.x, result.y, 16, 16);
 		tmp.y = _set_bits(result.z, result.w, 16, 16);
@@ -133,12 +133,12 @@ vec4 fetch_attribute(const in attribute_desc desc, const in int vertex_id, usamp
 		ret = sext(ivec4(result) << ivec4(5, 5, 6, 0));
 	}
 
-	if (desc.attribute_size < 4u)
+	if (desc.attribute_size < 4)
 	{
 		ret.w = scale.x;
 	}
 
-	return ret / scale; 
+	return ret / scale;
 }
 
 attribute_desc fetch_desc(const in int location)
@@ -188,7 +188,7 @@ vec4 read_location(const in int location)
 	int vertex_id;
 	attribute_desc desc = fetch_desc(location);
 
-	if (desc.frequency == 0u)
+	if (desc.frequency == 0)
 	{
 		vertex_id = 0;
 	}
@@ -199,7 +199,7 @@ vec4 read_location(const in int location)
 	}
 	else
 	{
-		vertex_id = (_gl_VertexID - int(vertex_base_index)) / int(desc.frequency); 
+		vertex_id = (_gl_VertexID - int(vertex_base_index)) / int(desc.frequency);
 	}
 
 	if (desc.is_volatile)

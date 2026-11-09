@@ -1,7 +1,10 @@
+#include "Emu/RSX/rsx_profiler.h"
 #include "stdafx.h"
 #include "Emu/RSX/VK/VKGSRenderTypes.hpp"
 #include "VKTextureCache.h"
+#include "vkutils/gpu_timer.h"
 #include "VKCompute.h"
+#include "VKResolveHelper.h"
 #include "VKAsyncScheduler.h"
 #include "vkutils/data_heap.h"
 
@@ -52,7 +55,14 @@ namespace vk
 		const auto key = hash_image_properties(data->format(), data->width(), data->height(), data->depth(), data->mipmaps(), data->info.imageType, data->info.flags, data->info.sharingMode);
 		std::lock_guard lock(parent->m_cached_pool_lock);
 
+#if defined(__APPLE__) && defined(ARCH_ARM64)
+		// The pool is trimmed only at frame end, so an image that would pass its bounds is not admitted.
+		const bool pool_full = parent->m_cached_images.size() >= parent->max_cached_image_pool_size || parent->m_cached_memory_size + data->memory->size() > 256 * 0x100000;
+
+		if (!parent->m_cache_is_exiting && !pool_full)
+#else
 		if (!parent->m_cache_is_exiting)
+#endif
 		{
 			parent->m_cached_memory_size += data->memory->size();
 			parent->m_cached_images.emplace_front(key, data);
@@ -66,6 +76,7 @@ namespace vk
 
 	void cached_texture_section::dma_transfer(vk::command_buffer& cmd, vk::image* src, const areai& src_area, const utils::address_range32& valid_range, u32 pitch)
 	{
+		vk::gpu_scope dma_gpu_scope(cmd, vk::gpu_timer::region::readback_dma);
 		ensure(src->samples() == 1);
 
 		if (!m_device)
@@ -83,7 +94,7 @@ namespace vk
 
 		if (vk::is_renderpass_open(cmd))
 		{
-			vk::end_renderpass(cmd);
+			if (rsx::prof::enabled()) [[unlikely]] rsx::prof::g_rp_sites[14]++; vk::end_renderpass(cmd);
 		}
 
 		src->push_layout(cmd, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
@@ -168,6 +179,89 @@ namespace vk
 					shuffle_kernel = nullptr;
 				}
 
+				// Defer the byteswap to the CPU where the layout is plain linear.
+				//
+				// This dispatch is a graphics->compute engine switch, and those wedge the GPU on
+				// Adreno 830 under Turnip -- removing them is what stopped both Minecraft and
+				// Batman: Arkham City hanging. imp_flush() does the swap with the NEON
+				// copy_data_swap_u32 after flush_dma instead.
+				//
+				// Tiled and swizzled regions keep the GPU path: their bytes are rearranged after
+				// this point, so a flat swap over the flushed range would be wrong rather than
+				// merely slower.
+				// Tiled regions are eligible too, for 32-bit elements only.
+				//
+				// A byteswap is element-wise and tiling is a permutation of whole u32 texels
+				// (rsx::tile_texel_data<u32>, tiled_dma_copy.hpp), so the two commute: swapping
+				// after the tiler gives the same bytes as swapping before it. That is what lets
+				// the swap move to the CPU while the tiling job stays on the GPU.
+				//
+				// elem_size 4 only, because the tiler is u32-based -- a 16-bit swap over
+				// u32-permuted data would not commute. Swizzled regions also keep the GPU path:
+				// convert_linear_swizzle rewrites the layout afterwards and is not a whole-element
+				// permutation.
+				const bool tiling_commutes = !require_tiling || elem_size == 4;
+
+				// OFF by default: this deferral corrupts guest memory.
+				//
+				// The GPU kernel swaps the readback BUFFER, which holds only the packed image, and
+				// flush_dma then writes it out a row at a time at rsx_pitch stride. Deferring the
+				// swap to after the DMA moves it onto GUEST memory, where a flat run over
+				// rsx_pitch * height also covers the padding between rows -- bytes this flush never
+				// wrote. Minecraft does over a thousand of these flushes in thirteen seconds, and
+				// the damage accumulated into visible texture corruption that faded as you
+				// approached a surface. Confirmed on device: forcing this path back to the GPU
+				// kernel fixes it outright.
+				//
+				// A correct version has to walk rows and swap only the real_pitch bytes per row,
+				// the way the swizzle path in imp_flush already does. That needs the sub-range
+				// cases worked through properly, so it is not enabled on a hunch --
+				// ARMSX3_CPU_READBACK_SWAP=1 opts back in for whoever does that work.
+				static const bool s_cpu_readback_swap = []()
+				{
+					const char* v = std::getenv("ARMSX3_CPU_READBACK_SWAP");
+					const bool on = v && v[0] == '1';
+					if (on) rsx_log.error("ARMSX3_CPU_READBACK_SWAP=1: deferring the readback byteswap"
+						" to the CPU. This is known to corrupt guest memory when real_pitch != rsx_pitch.");
+					return on;
+				}();
+
+				if (s_cpu_readback_swap && shuffle_kernel && tiling_commutes && !is_swizzled())
+				{
+					static u64 s_deferred_count = 0;
+					if (const u64 n = ++s_deferred_count;
+						n == 1 || n == 100 || n == 1000 || n == 10000 || (n % 100000) == 0) [[unlikely]]
+					{
+						rsx_log.warning("CPU readback byteswap x%d (elem=%u, tiled=%d)",
+							n, elem_size, require_tiling ? 1 : 0);
+					}
+
+					deferred_cpu_byteswap_element_size = static_cast<u8>(elem_size);
+					shuffle_kernel = nullptr;
+
+					// Only drop the barrier when nothing writes this buffer afterwards. The tiling
+					// job below still runs and still needs it.
+					if (!require_tiling)
+					{
+						require_rw_barrier = false;
+					}
+				}
+
+				// Graphics-pipe twin first, for the same reason the upload side takes it: this
+				// dispatch is a graphics->compute engine switch and those wedge the GPU on Adreno
+				// 830. gfx_shuffle_32 barriers its own result into both transfer and compute
+				// readers, so the tiling job below still sees it.
+				if (shuffle_kernel && elem_size == 4 &&
+					vk::gfx_shuffle_32(cmd, working_buffer, 0, task_length))
+				{
+					shuffle_kernel = nullptr;
+
+					if (!require_tiling)
+					{
+						require_rw_barrier = false;
+					}
+				}
+
 				if (shuffle_kernel)
 				{
 					vk::insert_buffer_memory_barrier(cmd, working_buffer->value, 0, task_length,
@@ -249,8 +343,10 @@ namespace vk
 				};
 
 				// Execute
-				const auto job = vk::get_compute_task<vk::cs_tile_memcpy<RSX_detiler_op::encode>>();
-				job->run(cmd, config);
+				{
+					const auto job = vk::get_compute_task<vk::cs_tile_memcpy<RSX_detiler_op::encode>>();
+					job->run(cmd, config);
+				}
 
 				// Update internal variables
 				result_offset = task_length;
@@ -407,6 +503,10 @@ namespace vk
 		}
 		baseclass::clear();
 
+#if defined(__APPLE__) || defined(__ANDROID__)
+		// Not held across baseclass::clear(), whose disposals take the same lock.
+		std::lock_guard lock(m_cached_pool_lock);
+#endif
 		m_cached_images.clear();
 		m_cached_memory_size = 0;
 	}
@@ -519,18 +619,45 @@ namespace vk
 				}
 
 				src_image = vk::get_typeless_helper(dst->format(), dst->format_class(), convert_x + convert_w, src_y + src_h);
-				src_image->change_layout(cmd, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+				// GENERAL for the same reason as the output helper below: this is the SAME shared
+				// scratch image on every section, so flipping it TRANSFER_DST -> TRANSFER_SRC per
+				// section serialises the GPU once per flip.
+				//
+				// Measured on an Adreno 830 snapshot: fixing only the output side took one command
+				// buffer from CP_WAIT_FOR_IDLE x68 / CP_BLIT x40 down to x26 / x19. This is the
+				// other half of the same pattern. The ensure() below already accepts GENERAL.
+				if (!vk::typeless_helper_general())
+				{
+					src_image->change_layout(cmd, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+				}
+				else if (src_image->current_layout != VK_IMAGE_LAYOUT_GENERAL)
+				{
+					src_image->change_layout(cmd, VK_IMAGE_LAYOUT_GENERAL);
+				}
 
 				const areai src_rect = coordi{{ src_x, src_y }, { src_w, src_h }};
 				const areai dst_rect = coordi{{ 0, 0 }, { convert_w, src_h }};
 				vk::copy_image_typeless(cmd, section.src, src_image, src_rect, dst_rect);
-				src_image->change_layout(cmd, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+
+				if (!vk::typeless_helper_general())
+				{
+					src_image->change_layout(cmd, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+				}
 
 				src_x = 0;
 				src_y = 0;
 				src_w = convert_w;
 			}
 
+			// A/B against the pre-14:16 layout handling.
+			//
+			// Holding the shared typeless helper in GENERAL removed a per-section pipeline drain,
+			// but change_layout() early-returns when the layout already matches, so a later
+			// push_layout(GENERAL) -- which copy_scaled_image issues on its write-to-self path,
+			// and get_typeless_helper does hand back the same image for both ends -- stopped
+			// emitting a barrier at all. ARMSX3_TYPELESS_GENERAL=0 restores the original
+			// TRANSFER_DST/TRANSFER_SRC ping-pong so the two can be compared on device.
 			ensure(src_image->current_layout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL || src_image->current_layout == VK_IMAGE_LAYOUT_GENERAL);
 			ensure(transform == rsx::surface_transform::identity);
 
@@ -549,7 +676,31 @@ namespace vk
 					const u32 requested_width = dst->width();
 					const u32 requested_height = src_y + src_h + section.dst_h; // Accounts for possible typeless ref on the same helper on src
 					_dst = vk::get_typeless_helper(src_image->format(), src_image->format_class(), requested_width, requested_height);
-					_dst->change_layout(cmd, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+					// GENERAL, and only when it is not already there.
+					//
+					// get_typeless_helper returns a SHARED scratch image, so every section that
+					// needs a bitcast was flipping the same image TRANSFER_DST -> TRANSFER_SRC and
+					// back, once per section. Same image, so the driver cannot overlap them: each
+					// flip is a full pipeline drain.
+					//
+					// Read out of an Adreno 830 GPU snapshot taken at a hang: one command buffer
+					// held CP_BLIT x40, CP_WAIT_FOR_IDLE x68, and the same nine registers re-emitted
+					// forty times -- the GPU serialised itself sixty-eight times in a single
+					// submit. The ringbuffer stopped inside CP_INDIRECT_BUFFER_PFE for that buffer.
+					//
+					// GENERAL is valid for both ends of a copy and for blit source and destination,
+					// so holding the helper there for the whole loop removes the ping-pong entirely.
+					// This is the same trick already used on the source images above, for the same
+					// reason.
+					if (!vk::typeless_helper_general())
+					{
+						_dst->change_layout(cmd, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+					}
+					else if (_dst->current_layout != VK_IMAGE_LAYOUT_GENERAL)
+					{
+						_dst->change_layout(cmd, VK_IMAGE_LAYOUT_GENERAL);
+					}
 				}
 
 				auto dst_rect = coord3i{ { section.dst_x, section.dst_y, 0 }, { section.dst_w, section.dst_h, 1 } };
@@ -583,7 +734,12 @@ namespace vk
 				{
 					// Casting comes after the scaling!
 					const auto copy_rgn = get_output_region(section, dst_rect.position.x, dst_rect.position.y, section.dst_w, section.dst_h, _dst);
-					_dst->change_layout(cmd, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+
+					if (!vk::typeless_helper_general())
+					{
+						_dst->change_layout(cmd, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+					}
+
 					vkCmdCopyImage(cmd, _dst->value, _dst->current_layout, dst->value, dst->current_layout, 1, &copy_rgn);
 				}
 			}
@@ -1014,32 +1170,57 @@ namespace vk
 		dst->pop_layout(cmd);
 	}
 
-	bool texture_cache::supports_linear_image(VkFormat format, VkImageType type, u16 width, VkImageUsageFlags usage)
+	// Single-row textures in a linear layout (ARMSX3).
+	//
+	// Turnip lays a tiled image out in tiles 16 rows tall and adds a compression metadata block, so
+	// a 4096x1 four-float texture, 64 KB of data, costs 1040 KB. Blitz: The League II binds a slice
+	// of its per-draw data buffer as such a texture for every draw, at a new address each time;
+	// while a match loads that is ~300 of them a frame, ~300 MB, which ran the 2048 MB cap out and
+	// killed the RSX thread (Odin 3, 10-19). A linear image has neither the padding nor the block.
+	// Only where the linear layout can do everything the tiled one does for this format (sampling,
+	// filtering, copies, blits), since the draw code decides filtering from the tiled features; and
+	// only for what such a texture is used for, a copy in and sampling.
+	static bool use_linear_layout(VkFormat format, VkImageType type, u16 width, u16 height, u16 depth, u16 layers, u16 mipmaps,
+		VkImageUsageFlags usage, VkImageCreateFlags create_flags)
 	{
-		const auto props = m_device->get_format_properties(format);
+		if (height != 1 || depth != 1 || layers != 1 || mipmaps != 1 || create_flags != 0 ||
+			(type != VK_IMAGE_TYPE_1D && type != VK_IMAGE_TYPE_2D) ||
+			(usage & ~(VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT)))
+		{
+			return false;
+		}
+
+		const auto& dev = *vk::get_current_renderer();
+		const VkFormatProperties props = dev.get_format_properties(format);
 		constexpr VkFormatFeatureFlags relevant = VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT |
 			VK_FORMAT_FEATURE_TRANSFER_SRC_BIT | VK_FORMAT_FEATURE_TRANSFER_DST_BIT | VK_FORMAT_FEATURE_BLIT_SRC_BIT | VK_FORMAT_FEATURE_BLIT_DST_BIT;
-		const auto wanted = props.optimalTilingFeatures & relevant;
+		const VkFormatFeatureFlags wanted = props.optimalTilingFeatures & relevant;
+
 		if (!(wanted & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT) || (props.linearTilingFeatures & wanted) != wanted)
 		{
 			return false;
 		}
 
-		// Cache limits per texture cache, so a new renderer or driver cannot reuse old limits.
+		// Linear images have size limits of their own: ask the driver, once per format, type and usage
+		static std::unordered_map<u64, u32> s_max_width;
+		static shared_mutex s_mutex;
 		const u64 key = (u64{static_cast<u32>(format)} << 32) | (u64{static_cast<u32>(type)} << 24) | usage;
+
 		{
-			reader_lock lock(m_linear_image_limits_lock);
-			if (const auto found = m_linear_image_max_width.find(key); found != m_linear_image_max_width.end())
+			reader_lock lock(s_mutex);
+
+			if (const auto found = s_max_width.find(key); found != s_max_width.end())
 			{
 				return width <= found->second;
 			}
 		}
 
 		VkImageFormatProperties limits{};
-		const u32 max_width = vkGetPhysicalDeviceImageFormatProperties(m_device->gpu(), format, type, VK_IMAGE_TILING_LINEAR, usage, 0, &limits) == VK_SUCCESS
+		const u32 max_width = vkGetPhysicalDeviceImageFormatProperties(dev.gpu(), format, type, VK_IMAGE_TILING_LINEAR, usage, 0, &limits) == VK_SUCCESS
 			? limits.maxExtent.width : 0;
-		std::lock_guard lock(m_linear_image_limits_lock);
-		m_linear_image_max_width[key] = max_width;
+
+		std::lock_guard lock(s_mutex);
+		s_max_width[key] = max_width;
 		return width <= max_width;
 	}
 
@@ -1189,12 +1370,7 @@ namespace vk
 					create_format.viewFormatCount = mutable_format_list.size();
 				}
 
-				// Avoid tiled-image padding for single-row sampled textures when the driver
-				// supports the same sampling and transfer features for linear images.
-				const bool linear_candidate = height == 1 && depth == 1 && layer == 1 && mipmaps == 1 && create_flags == 0 &&
-					(image_type == VK_IMAGE_TYPE_1D || image_type == VK_IMAGE_TYPE_2D) &&
-					!(usage_flags & ~(VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT));
-				const auto tiling = linear_candidate && supports_linear_image(vk_format, image_type, width, usage_flags)
+				const VkImageTiling tiling = use_linear_layout(vk_format, image_type, width, height, depth, layer, mipmaps, usage_flags, create_flags)
 					? VK_IMAGE_TILING_LINEAR : VK_IMAGE_TILING_OPTIMAL;
 
 				image = new vk::viewable_image(*m_device,
@@ -1272,11 +1448,13 @@ namespace vk
 	cached_texture_section* texture_cache::upload_image_from_cpu(vk::command_buffer& cmd, const utils::address_range32& rsx_range, u16 width, u16 height, u16 depth, u16 mipmaps, u32 pitch, u32 gcm_format,
 		rsx::texture_upload_context context, const std::vector<rsx::subresource_layout>& subresource_layout, rsx::texture_dimension_extended type, bool swizzled)
 	{
+		vk::gpu_scope upload_gpu_scope(cmd, vk::gpu_timer::region::upload);
+
 		if (context != rsx::texture_upload_context::shader_read)
 		{
 			if (vk::is_renderpass_open(cmd))
 			{
-				vk::end_renderpass(cmd);
+				if (rsx::prof::enabled()) [[unlikely]] rsx::prof::g_rp_sites[15]++; vk::end_renderpass(cmd);
 			}
 		}
 
@@ -1315,8 +1493,6 @@ namespace vk
 
 		rsx::flags32_t upload_command_flags = initialize_image_layout | upload_contents_inline;
 #ifdef __ANDROID__
-		// upload_texture() resolves protected guest pages before reacquiring the
-		// texture-cache lock. Avoid repeating that work from upload_image().
 		upload_command_flags |= source_guest_read_prepared;
 #endif
 		if (context == rsx::texture_upload_context::shader_read && upload_async)
@@ -1539,7 +1715,6 @@ namespace vk
 
 	void texture_cache::initialize(vk::render_device& device, VkQueue submit_queue, vk::data_heap& upload_heap)
 	{
-		m_linear_image_max_width.clear();
 		m_device = &device;
 		m_memory_types = device.get_memory_mapping();
 		m_formats_support = device.get_formats_support();
@@ -1614,6 +1789,22 @@ namespace vk
 		}
 
 		// Nuke temporary resources. They will still be visible to the GPU.
+#if defined(__APPLE__) || defined(__ANDROID__)
+		// The driver thread pushes into the pool under its lock, so swap it out and dispose outside it.
+		auto gc = vk::get_resource_manager();
+		std::deque<cached_image_t> released_images;
+		{
+			std::lock_guard pool_lock(m_cached_pool_lock);
+			released_images.swap(m_cached_images);
+			m_cached_memory_size = 0;
+		}
+
+		any_released |= !released_images.empty();
+		for (auto& img : released_images)
+		{
+			gc->dispose(img.data);
+		}
+#else
 		auto gc = vk::get_resource_manager();
 		any_released |= !m_cached_images.empty();
 		for (auto& img : m_cached_images)
@@ -1622,6 +1813,7 @@ namespace vk
 		}
 		m_cached_images.clear();
 		m_cached_memory_size = 0;
+#endif
 
 		any_released |= !m_temporary_subresource_cache.empty();
 		for (auto& e : m_temporary_subresource_cache)
@@ -1643,11 +1835,18 @@ namespace vk
 			purge_unreleased_sections();
 		}
 
+#if defined(__APPLE__) || defined(__ANDROID__)
+		if (std::lock_guard lock(m_cached_pool_lock);
+			m_cached_images.size() > max_cached_image_pool_size ||
+			m_cached_memory_size > 256 * 0x100000)
+		{
+#else
 		if (m_cached_images.size() > max_cached_image_pool_size ||
 			m_cached_memory_size > 256 * 0x100000)
 		{
 			std::lock_guard lock(m_cached_pool_lock);
 
+#endif
 			const auto new_size = m_cached_images.size() / 2;
 			for (usz i = new_size; i < m_cached_images.size(); ++i)
 			{
@@ -1747,7 +1946,14 @@ namespace vk
 
 	u32 texture_cache::get_unreleased_textures_count() const
 	{
+#if defined(__APPLE__) || defined(__ANDROID__)
+		// Taken after the baseclass call, so this never holds it while the base takes its own.
+		const u32 base_count = baseclass::get_unreleased_textures_count();
+		reader_lock lock(m_cached_pool_lock);
+		return base_count + ::size32(m_cached_images);
+#else
 		return baseclass::get_unreleased_textures_count() + ::size32(m_cached_images);
+#endif
 	}
 
 	u64 texture_cache::get_temporary_memory_in_use() const

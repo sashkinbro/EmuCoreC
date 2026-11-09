@@ -17,6 +17,40 @@ class InstalledGameRepositoryTest {
     val tempFolder = TemporaryFolder()
 
     @Test
+    fun unlockedTrialRefreshesTitleAndIconWithoutChangingItsLaunchRoot() {
+        val directory = tempFolder.newFolder("trial")
+        val c00 = File(directory, "C00").apply { mkdirs() }
+        val base = File(directory, "PARAM.SFO").apply {
+            writeBytes(createParamSfoBytes("NPUB30505", "Harmony of Despair Demo", "HG", "UP0101-NPUB30505_00-TEST000000000000"))
+        }
+        File(directory, "ICON0.PNG").writeBytes(byteArrayOf(1))
+        File(c00, "PARAM.SFO").writeBytes(createParamSfoBytes("NPUB30505", "Harmony of Despair", "HG"))
+        val fullIcon = File(c00, "ICON0.PNG").apply { writeBytes(byteArrayOf(2)) }
+        val oldTimestamp = base.lastModified()
+        var unlocked = false
+        var probes = 0
+        fun scan() = readInstalledFolder(directory) { probes++; if (unlocked) c00 else directory }!!
+        assertEquals("Harmony of Despair Demo", scan().title)
+        unlocked = true
+        val full = scan()
+        assertEquals("Harmony of Despair", full.title)
+        assertEquals(fullIcon.canonicalFile, File(full.iconPath!!).canonicalFile)
+        assertEquals(directory.absolutePath, full.installPath)
+        assertEquals(oldTimestamp, base.lastModified())
+        assertEquals(2, probes)
+    }
+
+    @Test
+    fun c00WithoutVerifiedUnlockOrValidMetadataKeepsTheTrial() {
+        val directory = tempFolder.newFolder("locked-trial")
+        val c00 = File(directory, "C00").apply { mkdirs() }
+        File(directory, "PARAM.SFO").writeBytes(createParamSfoBytes("NPUB30505", "Demo", "HG", "UP0101-NPUB30505_00-TEST000000000000"))
+        File(c00, "PARAM.SFO").writeBytes(createParamSfoBytes("NPUB00000", "Different Game", "HG"))
+        assertEquals("Demo", readInstalledFolder(directory)!!.title)
+        assertEquals("Demo", readInstalledFolder(directory) { c00 }!!.title)
+    }
+
+    @Test
     fun parsesValidParamSfo() {
         val sfoFile = tempFolder.newFile("PARAM.SFO")
         sfoFile.writeBytes(createParamSfoBytes("BLES01234", "Demon's Souls"))
@@ -152,10 +186,12 @@ class InstalledGameRepositoryTest {
         installPath = installPath
     )
 
-    private fun createParamSfoBytes(titleId: String, title: String): ByteArray {
-        val entries = listOf(
+    private fun createParamSfoBytes(titleId: String, title: String, category: String? = null, contentId: String? = null): ByteArray {
+        val entries = listOfNotNull(
             "TITLE_ID" to titleId,
-            "TITLE" to title
+            "TITLE" to title,
+            category?.let { "CATEGORY" to it },
+            contentId?.let { "CONTENT_ID" to it },
         )
 
         val headerSize = 20

@@ -25,6 +25,10 @@ using namespace std::literals::chrono_literals;
 #include <sys/stat.h>
 #endif
 
+#ifdef __APPLE__
+// Included directly: an undefined TARGET_OS_IPHONE in an #if is silently 0.
+#include <TargetConditionals.h>
+#endif
 #include <zlib.h>
 
 static std::string default_string()
@@ -91,6 +95,9 @@ namespace logs
 
 		atomic_t<u64, 128> m_buf{0}; // MSB (39 bits): push begin, LSB (25 bis): push size
 		atomic_t<u64, 128> m_out{0}; // Amount of bytes written to file
+
+		// ARMSX3: bumped to cut the writer's idle wait short, see the writer thread
+		atomic_t<u32> m_wake{0};
 
 		uchar m_zout[65536]{};
 
@@ -404,16 +411,26 @@ void logs::message::broadcast(const char* fmt, const fmt_type_info* sup, ...) co
 	g_tls_log_control(fmt, 0);
 
 	// Get text, extract va_args
+	// exit() destroys the thread_local objects of the exiting thread before it runs static
+	// destructors (macOS dyld and glibc both do this), and static destructors may still log
+	// (e.g. sdl_instance). Fall back to local buffers once the thread_local ones are gone.
 	thread_local bool tls_destroyed = false;
+
 	struct tls_buffers
 	{
 		std::string text;
 		std::vector<u64> args;
-		~tls_buffers() { tls_destroyed = true; }
+
+		~tls_buffers()
+		{
+			tls_destroyed = true;
+		}
 	};
+
 	thread_local tls_buffers tls;
 	std::string local_text;
 	std::vector<u64> local_args;
+
 	std::string& text = tls_destroyed ? local_text : tls.text;
 	std::vector<u64>& args = tls_destroyed ? local_args : tls.args;
 
@@ -516,8 +533,13 @@ logs::file_writer::file_writer(const std::string& name, u64 max_size)
 
 		thread_ctrl::scoped_priority low_prio(-1);
 
+		// ARMSX3: empty polls in a row
+		u32 idle = 0;
+
 		while (true)
 		{
+			// Read before looking for work, so a wake that lands after the look still ends the wait
+			const u32 wake = m_wake;
 			const u64 bufv = m_buf;
 
 			if (bufv % s_log_size)
@@ -527,14 +549,35 @@ logs::file_writer::file_writer(const std::string& name, u64 max_size)
 				continue;
 			}
 
-			if (!flush(bufv))
+			if (flush(bufv))
+			{
+				idle = 0;
+			}
+			else
 			{
 				if (m_out == umax)
 				{
 					break;
 				}
 
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+				// iOS kills the app without warning, so poll every 10 ms to keep the log's tail on disk; after the exit check so join returns.
 				std::this_thread::sleep_for(10ms);
+				continue;
+#endif
+				// ARMSX3: polling every 10 ms is a hundred wakeups a second for the life of the
+				// process, in the library and in the background with the screen off (#196). After a
+				// second with nothing to write, wait up to 250 ms instead. sync() and the destructor
+				// end the wait early; anything else logged meanwhile is written when it ends.
+				if (idle < 100)
+				{
+					idle++;
+					std::this_thread::sleep_for(10ms);
+				}
+				else
+				{
+					m_wake.wait(wake, atomic_wait_timeout{250'000'000});
+				}
 			}
 		}
 	});
@@ -551,6 +594,8 @@ logs::file_writer::~file_writer()
 	file_writer::sync();
 
 	m_out = -1;
+	m_wake++;
+	m_wake.notify_one();
 	m_writer.join();
 
 	if (m_fout2)
@@ -707,6 +752,10 @@ void logs::file_writer::sync()
 		return;
 	}
 
+	// ARMSX3: the writer may be in its idle wait
+	m_wake++;
+	m_wake.notify_one();
+
 	// Wait for the writer thread
 	while ((m_out % s_log_size) * s_log_size != m_buf % (s_log_size * s_log_size))
 	{
@@ -796,12 +845,14 @@ logs::file_listener::file_listener(const std::string& path, u64 max_size)
 void logs::file_listener::log(u64 stamp, const logs::message& msg, std::string_view prefix, std::string_view _text)
 {
 	thread_local bool tls_destroyed = false;
+
 	struct tls_buffer
 	{
 		std::string text;
 		tls_buffer() { text.reserve(50000); }
 		~tls_buffer() { tls_destroyed = true; }
 	};
+
 	thread_local tls_buffer tls;
 	std::string local_text;
 	std::string& text = tls_destroyed ? local_text : tls.text;

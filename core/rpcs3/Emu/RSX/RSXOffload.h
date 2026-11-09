@@ -12,12 +12,9 @@ class named_thread;
 namespace rsx
 {
 #ifdef __ANDROID__
-	// Resolve RSX-protected guest pages before code which cannot safely recover
-	// from a nested Android signal reads them directly.
 	bool prepare_guest_read(u32 address, u32 length);
 	bool prepare_guest_write(u32 address, u32 length);
 #endif
-
 	class dma_manager
 	{
 		enum op
@@ -91,8 +88,21 @@ namespace rsx
 		// and whoever waits for it waits forever.
 		bool is_offloader_running() const;
 
+		// Whether work may be handed to the offloader at all.
+		//
+		// The setting alone is not enough: it says what the user asked for, not whether the thread
+		// exists to honour it. Every deferral decision must use this, because the cost of getting
+		// it wrong is not a slow path but a permanent one -- sync() waits for a drain that cannot
+		// come, and it is called from the flip.
+		bool can_offload() const;
+
 		bool is_current_thread() const;
-		bool sync() const;
+
+		// Waits until every queued job has run. With run_here, the RSX thread runs the jobs
+		// itself when the offloader has not picked them up yet, instead of waiting for it to
+		// wake. Only for callers outside command submission: a job that faults flushes the
+		// command queue, and close_and_submit_command_buffer must not be re-entered.
+		bool sync(bool run_here = false) const;
 		void join();
 		void set_mem_fault_flag();
 		void clear_mem_fault_flag();

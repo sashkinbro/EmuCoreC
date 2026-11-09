@@ -171,6 +171,11 @@ val buildEmuCorecCore by tasks.registering(Exec::class) {
 
     workingDir = buildDir2
     val ninjaTargets = mutableListOf("-C", buildDir2.absolutePath, "emucorec-core")
+    providers.environmentVariable("NINJA_JOBS").orNull?.let { requestedJobs ->
+        val jobs = requestedJobs.toIntOrNull()
+        require(jobs != null && jobs > 0) { "NINJA_JOBS must be a positive integer" }
+        ninjaTargets.addAll(0, listOf("-j", jobs.toString()))
+    }
     if (discordSdkDirectory != null) ninjaTargets += "emucorec_discord"
     commandLine(ninjaExe, *ninjaTargets.toTypedArray())
 

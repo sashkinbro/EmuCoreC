@@ -1,8 +1,8 @@
 #include "stdafx.h"
 #include "OpenGL.h"
 
-#ifdef __ANDROID__
-#include <EGL/egl.h>
+#if defined(RSX_GLES)
+#include "glutils/capabilities.h"
 #endif
 
 #if defined(HAVE_WAYLAND)
@@ -39,7 +39,19 @@ void gl::init()
 #undef WGL_PROC
 #undef OPENGL_PROC2
 #endif
-#if defined(__unix__) && !defined(__ANDROID__)
+#if defined(RSX_GLES)
+	// ARMSX3: no GLEW on Android. The EGL context has already been made current
+	// by GraphicsFrame::set_current at this point, so the entry points can be
+	// resolved now. A failure here means we were handed something that is not an
+	// ES 3.2 implementation, which is fatal - every call after this is a null
+	// function pointer.
+	ensure(gl::es::load_procs(&gl::es::default_proc_loader), "Failed to load OpenGL ES entry points");
+
+	// Capabilities belong to the driver behind this context. The previous game may have run on the
+	// other one (ANGLE or the system driver), and anything asked before this point was answered
+	// from defaults (capabilities::initialize). Read them again from here.
+	gl::reset_driver_caps();
+#elif defined(__unix__)
 	glewExperimental = true;
 	glewInit();
 #endif
@@ -47,7 +59,9 @@ void gl::init()
 
 void gl::set_swapinterval(int interval)
 {
-#ifdef _WIN32
+#if defined(RSX_GLES)
+	gl::es::set_swap_interval(interval);
+#elif defined(_WIN32)
 	wglSwapIntervalEXT(interval);
 #elif defined(HAVE_X11)
 	if (glXSwapIntervalEXT)
@@ -69,11 +83,6 @@ void gl::set_swapinterval(int interval)
 
 	//No existing drawable or missing swap extension, EGL?
 	rsx_log.error("Failed to set swap interval");
-#elif defined(__ANDROID__)
-	if (!eglSwapInterval(eglGetCurrentDisplay(), interval))
-	{
-		rsx_log.error("Failed to set EGL swap interval to %d (error=0x%x)", interval, eglGetError());
-	}
 #else
 	rsx_log.error("Swap control not implemented for this platform. Vsync options not available. (interval=%d)", interval);
 #endif
