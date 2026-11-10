@@ -339,7 +339,7 @@ fun LibraryScreen(
                     EmuCoreLoadingAnimation()
                 }
             }
-        } else if (uiState.items.isEmpty()) {
+        } else if (uiState.items.isEmpty() && (!uiState.isLoading || uiState.hasLoadedOnce)) {
             item {
                 EmptyStateCard(
                     icon = if (uiState.query.isBlank()) Icons.Rounded.FolderOpen else Icons.Rounded.Search,

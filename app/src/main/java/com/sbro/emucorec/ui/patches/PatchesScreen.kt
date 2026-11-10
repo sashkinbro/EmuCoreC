@@ -158,7 +158,7 @@ fun PatchesScreen(
                     EmuCoreLoadingAnimation()
                 }
             }
-        } else if (uiState.games.isEmpty() && !uiState.isLoading) {
+        } else if (uiState.games.isEmpty() && (!uiState.isLoading || uiState.hasLoadedOnce)) {
             item {
                 EmptyPatchesState()
             }
@@ -181,7 +181,7 @@ fun PatchesScreen(
                 }
             }
 
-            if (uiState.patches.isEmpty() && !uiState.patchesLoading) {
+            if (uiState.patches.isEmpty() && uiState.patchesLoadedSerial == uiState.selectedTitleId) {
                 item {
                     NoPatchesHint(
                         hasDownloaded = uiState.downloadResult != null || uiState.catalogueSynced,

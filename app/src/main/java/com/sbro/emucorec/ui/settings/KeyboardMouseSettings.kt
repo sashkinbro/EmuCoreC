@@ -59,6 +59,7 @@ import com.sbro.emucorec.core.input.KeyboardMouseManager
 import com.sbro.emucorec.data.AppPreferences
 import com.sbro.emucorec.data.KeyboardMouseSettings
 import com.sbro.emucorec.ui.common.AppAlertDialog
+import com.sbro.emucorec.ui.common.ImmersiveDialogWindow
 import com.sbro.emucorec.ui.common.SectionCard
 import com.sbro.emucorec.ui.common.SettingHelpButton
 import com.sbro.emucorec.ui.common.SettingsStyledDialog
@@ -133,6 +134,8 @@ fun KeyboardMouseSettingsDialog(
         onDismissRequest = onDismiss,
         edgeToEdgeContent = true
     ) {
+        // Shown over a running game: keep the system bars hidden inside this dialog's window.
+        ImmersiveDialogWindow()
         KeyboardMouseSettingsContent(
             settings = settings,
             onSettingsChange = onSettingsChange,

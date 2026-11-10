@@ -132,7 +132,7 @@ fun SaveStatesScreen(
     // Only the genuinely empty first load shows the spinner, and only if it
     // takes long enough to see; refreshing with slots already on screen just
     // updates the list. This is what made the animation "blink" here.
-    val showLoading = rememberDelayedLoading(uiState.isLoading && uiState.games.isEmpty())
+    val showLoading = rememberDelayedLoading(uiState.isLoading && !uiState.hasLoadedOnce)
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -185,7 +185,7 @@ fun SaveStatesScreen(
                 }
             }
 
-            uiState.games.isEmpty() && !uiState.isLoading -> item {
+            uiState.games.isEmpty() && (!uiState.isLoading || uiState.hasLoadedOnce) -> item {
                 EmptySaveStatesCard()
             }
 

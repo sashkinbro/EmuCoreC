@@ -277,7 +277,7 @@ fun SaveDataScreen(
                     EmuCoreLoadingAnimation()
                 }
             }
-        } else if (uiState.saves.isEmpty() && !uiState.isLoading) {
+        } else if (uiState.saves.isEmpty() && (!uiState.isLoading || uiState.hasLoadedOnce)) {
             item {
                 if (uiState.query.isNotBlank()) {
                     EmptyStateCard(

@@ -52,6 +52,7 @@ import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import com.sbro.emucorec.ui.common.AppAlertDialog as AlertDialog
+import com.sbro.emucorec.ui.common.ImmersiveDialogWindow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -686,7 +687,12 @@ fun EmulationOverlayHost(
             val label = if (request.slot == SaveStateRepository.QUICK_SLOT) stringResource(R.string.emulation_savestate_quick_label)
                 else stringResource(R.string.emulation_savestate_slot_label, request.slot)
             AlertDialog(onDismissRequest = { pendingSaveRequest = null },
-                title = { Text(stringResource(title)) }, text = { Text(stringResource(body, label)) },
+                title = { Text(stringResource(title)) },
+                text = {
+                    // The dialog owns its own window; keep the game's system bars hidden.
+                    ImmersiveDialogWindow()
+                    Text(stringResource(body, label))
+                },
                 confirmButton = { TextButton(onClick = {
                     pendingSaveRequest = null
                     performSaveRequest(request)
@@ -738,6 +744,8 @@ fun EmulationOverlayHost(
                     Text(text = stringResource(R.string.emulation_exit_confirm_title))
                 },
                 text = {
+                    // The dialog owns its own window; keep the game's system bars hidden.
+                    ImmersiveDialogWindow()
                     Text(text = stringResource(R.string.emulation_exit_confirm_body))
                 },
                 confirmButton = {

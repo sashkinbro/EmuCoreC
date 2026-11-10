@@ -21,7 +21,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 data class SaveStatesGame(val titleId: String, val title: String, val iconPath: String?, val slots: List<SaveStateSlot>)
-data class SaveStatesUiState(val games: List<SaveStatesGame> = emptyList(), val isLoading: Boolean = true, val busyKey: String? = null, val refreshFailed: Boolean = false)
+data class SaveStatesUiState(
+    val games: List<SaveStatesGame> = emptyList(),
+    val isLoading: Boolean = true,
+    val busyKey: String? = null,
+    val refreshFailed: Boolean = false,
+    /** True once the first scan finished, so a later refresh never swaps content for the spinner. */
+    val hasLoadedOnce: Boolean = false,
+)
 
 class SaveStatesViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = SaveStateRepository(application)
@@ -53,7 +60,9 @@ class SaveStatesViewModel(application: Application) : AndroidViewModel(applicati
                 if (generation == refreshGeneration) mutableState.update { it.copy(refreshFailed = true) }
             }
             finally {
-                if (generation == refreshGeneration) mutableState.update { it.copy(isLoading = false) }
+                if (generation == refreshGeneration) {
+                    mutableState.update { it.copy(isLoading = false, hasLoadedOnce = true) }
+                }
             }
         }
     }

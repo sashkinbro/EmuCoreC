@@ -23,6 +23,8 @@ data class PatchesUiState(
     val isLoading: Boolean = true,
     val hasLoadedOnce: Boolean = false,
     val patchesLoading: Boolean = false,
+    /** Serial whose patch list is currently rendered; a reload of the same game keeps it. */
+    val patchesLoadedSerial: String? = null,
     val isDownloading: Boolean = false,
     val downloadResult: PatchRepository.DownloadResult? = null,
     /** True once the catalogue was fetched in this screen, even when nothing new came in. */
@@ -107,7 +109,14 @@ class PatchesViewModel(application: Application) : AndroidViewModel(application)
 
     fun selectGame(titleId: String) {
         if (titleId == _uiState.value.selectedTitleId) return
-        _uiState.update { it.copy(selectedTitleId = titleId, patches = emptyList(), patchesLoading = true) }
+        _uiState.update {
+            it.copy(
+                selectedTitleId = titleId,
+                patches = emptyList(),
+                patchesLoading = true,
+                patchesLoadedSerial = null,
+            )
+        }
         loadPatches(titleId)
     }
 
@@ -117,7 +126,11 @@ class PatchesViewModel(application: Application) : AndroidViewModel(application)
             _uiState.update { it.copy(patchesLoading = true) }
             val patches = withContext(Dispatchers.IO) { patchRepository.listPatches(serial) }
             _uiState.update {
-                if (it.selectedTitleId == serial) it.copy(patches = patches, patchesLoading = false) else it
+                if (it.selectedTitleId == serial) {
+                    it.copy(patches = patches, patchesLoading = false, patchesLoadedSerial = serial)
+                } else {
+                    it
+                }
             }
         }
     }
