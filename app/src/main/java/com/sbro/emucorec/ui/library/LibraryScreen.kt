@@ -235,8 +235,9 @@ fun LibraryScreen(
             )
         }
         // X shows the loader as the whole content area on a first scan, centred on the screen,
-        // instead of a spinner below a header that still reads "0 games".
-        val showLoading = uiState.isLoading && !uiState.hasLoadedOnce
+        // instead of a spinner below a header that still reads "0 games". Keyed on the load
+        // result rather than on isLoading so no transient loading=false can uncover the list.
+        val showLoading = !uiState.hasLoadedOnce
         if (showLoading) {
             Box(
                 modifier = Modifier.fillMaxSize(),

@@ -121,7 +121,13 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStackEntry?.destination?.route
     var firmwareInstalled by remember(context) { mutableStateOf(EmulatorStorage.hasInstalledFirmware(context)) }
-    val startDestination = if (preferences.onboardingCompleted) ROUTE_LIBRARY else ROUTE_ONBOARDING
+    // NavHost builds its graph from the start destination. Reading the preference on every
+    // recomposition meant that finishing onboarding (which flips it and also changes the back
+    // stack) rebuilt the graph and reset it, recreating the library destination and its
+    // ViewModel right after the first navigation - the one-frame flash before the loader.
+    val startDestination = remember {
+        if (preferences.onboardingCompleted) ROUTE_LIBRARY else ROUTE_ONBOARDING
+    }
     stringResource(R.string.core_install_firmware_failed)
     val unsupportedFirmware = stringResource(R.string.core_install_firmware_unsupported)
     stringResource(R.string.core_install_pkg_failed)
