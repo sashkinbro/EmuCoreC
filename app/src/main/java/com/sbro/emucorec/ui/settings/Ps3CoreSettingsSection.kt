@@ -141,6 +141,7 @@ fun Ps3CoreSettingsSection(
     titleId: String? = null,
     additionalCategories: Set<Ps3CoreSettingsCategory> = emptySet(),
     surface: Ps3CoreSettingsSurface = Ps3CoreSettingsSurface.FullSettings,
+    hiddenSections: Set<String> = emptySet(),
     onOverridesChanged: () -> Unit = {},
 ) {
     val context = LocalContext.current
@@ -152,7 +153,14 @@ fun Ps3CoreSettingsSection(
     var restarting by remember { mutableStateOf(false) }
 
     fun settingTitle(setting: Ps3CoreSetting): String {
-        val titleId = resources.getIdentifier(coreLabelResourceName(setting.name), "string", context.packageName)
+        // The audio backend setting is also called "Renderer" in the core metadata, which reads as
+        // the graphics renderer inside the audio tab. Give it its own label.
+        val raw = if (setting.path.startsWith("Audio@@") && setting.name == "Renderer") {
+            "Audio Renderer"
+        } else {
+            setting.name
+        }
+        val titleId = resources.getIdentifier(coreLabelResourceName(raw), "string", context.packageName)
         return resources.getString(if (titleId != 0) titleId else R.string.core_label_unknown)
     }
 
@@ -283,10 +291,11 @@ fun Ps3CoreSettingsSection(
         }
     }
 
-    val filtered = remember(settings, category, additionalCategories, surface) {
+    val filtered = remember(settings, category, additionalCategories, surface, hiddenSections) {
         val accepted = additionalCategories + category
         settings.filter {
             coreSettingsCategory(it.path) in accepted &&
+                it.section !in hiddenSections &&
                 isCoreSettingVisibleOnSurface(it.path, surface)
         }
     }
@@ -436,7 +445,7 @@ private fun MicrophoneTest(device: String) {
  * card, so each group is one clear block instead of a floating heading over a merged panel.
  */
 @Composable
-private fun InGameSettingsCard(title: String, content: @Composable () -> Unit) {
+internal fun InGameSettingsCard(title: String, content: @Composable () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     val dark = scheme.background.luminance() < 0.5f
     Surface(

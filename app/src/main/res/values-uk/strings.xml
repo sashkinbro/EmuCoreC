@@ -751,6 +751,7 @@
     <string name="core_label_audio_format">Аудіоформат</string>
     <string name="core_label_audio_formats">Аудіоформати</string>
     <string name="core_label_audio_provider">Постачальник звуку</string>
+    <string name="core_label_audio_renderer">Аудіо-рендерер</string>
     <string name="core_label_auto">Авто</string>
     <string name="core_label_automatic">Автоматичний</string>
     <string name="core_label_automatically_start_games_after_boot">Автоматичний запуск ігор після завантаження</string>
@@ -1040,7 +1041,7 @@
     <string name="core_label_spu_cache">Кеш SPU</string>
     <string name="core_label_spu_debug">Налагодження SPU</string>
     <string name="core_label_spu_decoder">Декодер SPU</string>
-    <string name="core_label_spu_delay_penalty">Штраф за затримку СПУ</string>
+    <string name="core_label_spu_delay_penalty">Штраф за затримку SPU</string>
     <string name="core_label_spu_getllar_busy_waiting_percentage">SPU GETLLAR Відсоток очікування зайнятості</string>
     <string name="core_label_spu_llvm_lower_bound">Нижня межа SPU LLVM</string>
     <string name="core_label_spu_llvm_upper_bound">SPU LLVM Верхня межа</string>
@@ -1097,13 +1098,13 @@
     <string name="core_label_video">Відео</string>
     <string name="core_label_vram_allocation_limit_mb">Ліміт розподілу VRAM (МБ)</string>
     <string name="core_label_vsync_mode">Режим VSync</string>
-    <string name="core_label_vulkan">Вулкан</string>
+    <string name="core_label_vulkan">Vulkan</string>
     <string name="core_label_window_title_format">Формат заголовка вікна</string>
     <string name="core_label_write_color_buffers">Напишіть буфери кольорів</string>
     <string name="core_label_write_depth_buffer">Буфер глибини запису</string>
     <string name="core_label_xaudio2">XAudio2</string>
     <string name="core_label_yyyymmdd">Рік–місяць–день</string>
-    <string name="core_help_core_accurate_cache_line_stores" formatted="false">Акуратно опрацьовує інструкцію ППУ ДКБЗ.
+    <string name="core_help_core_accurate_cache_line_stores" formatted="false">Акуратно опрацьовує інструкцію PPU DCBZ.
 Крім того, у поєднанні з Accurate SPU DMA доступи до лінії кешу SPU PUT оброблятимуться атомарно.</string>
     <string name="core_help_core_use_accurate_dfma" formatted="false">Використовуйте точні інструкції FMA подвійної точності в PPU та SPU.
 Хоча його вимкнення може дати пристойний приріст продуктивності, якщо ваш ЦП не підтримує FMA, це також може викликати незначні помилки, які інакше не виникають.

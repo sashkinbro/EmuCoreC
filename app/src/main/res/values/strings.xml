@@ -749,6 +749,7 @@
     <string name="core_label_audio_format">Audio Format</string>
     <string name="core_label_audio_formats">Audio Formats</string>
     <string name="core_label_audio_provider">Audio Provider</string>
+    <string name="core_label_audio_renderer">Audio Renderer</string>
     <string name="core_label_auto">Auto</string>
     <string name="core_label_automatic">Automatic</string>
     <string name="core_label_automatically_start_games_after_boot">Automatically start games after boot</string>

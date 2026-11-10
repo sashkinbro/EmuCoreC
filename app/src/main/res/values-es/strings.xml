@@ -748,6 +748,7 @@
     <string name="core_label_audio_format">Formato de audio</string>
     <string name="core_label_audio_formats">Formatos de audio</string>
     <string name="core_label_audio_provider">Proveedor de audio</string>
+    <string name="core_label_audio_renderer">Renderizador de audio</string>
     <string name="core_label_auto">Automático</string>
     <string name="core_label_automatic">Automático</string>
     <string name="core_label_automatically_start_games_after_boot">Iniciar juegos automáticamente después del arranque</string>
@@ -767,7 +768,7 @@
     <string name="core_label_camera_flip">Giro de cámara</string>
     <string name="core_label_camera_id">Identificación de la cámara</string>
     <string name="core_label_camera_type">Tipo de cámara</string>
-    <string name="core_label_cellaudio">Celularaudio</string>
+    <string name="core_label_cellaudio">CellAudio</string>
     <string name="core_label_center_horizontally">Centrar horizontalmente</string>
     <string name="core_label_center_vertically">Centrar verticalmente</string>
     <string name="core_label_clans_enabled">Clanes habilitados</string>
@@ -855,7 +856,7 @@
     <string name="core_label_frametime_datapoints">Puntos de datos de tiempo de marco</string>
     <string name="core_label_frametime_graph_detail_level">Nivel de detalle del gráfico de tiempo de fotograma</string>
     <string name="core_label_full">Completo</string>
-    <string name="core_label_gdb_server">Servidor BGF</string>
+    <string name="core_label_gdb_server">Servidor GDB</string>
     <string name="core_label_ghltar_emulated_controller">Controlador emulado GHLtar</string>
     <string name="core_label_giga">Giga</string>
     <string name="core_label_gun">Pistola</string>
@@ -956,7 +957,7 @@
     <string name="core_label_ppu_reservation_priority_over_spus">Prioridad de reserva de PPU sobre SPU</string>
     <string name="core_label_ppu_set_fpcc_bits">PPU establece bits FPCC</string>
     <string name="core_label_ppu_set_saturation_bit">Bit de saturación establecido por PPU</string>
-    <string name="core_label_ppu_threads">Hilos de poliuretano</string>
+    <string name="core_label_ppu_threads">Hilos de PPU</string>
     <string name="core_label_ppu_vector_nan_handling">Manejo de PPU Vector NaN</string>
     <string name="core_label_precise_spu_verification">Verificación precisa de SPU</string>
     <string name="core_label_prefer_color">Prefiere el color</string>
@@ -1094,7 +1095,7 @@
     <string name="core_label_video">Vídeo</string>
     <string name="core_label_vram_allocation_limit_mb">Límite de asignación de VRAM (MB)</string>
     <string name="core_label_vsync_mode">Modo VSync</string>
-    <string name="core_label_vulkan">Vulcano</string>
+    <string name="core_label_vulkan">Vulkan</string>
     <string name="core_label_window_title_format">Formato de título de ventana</string>
     <string name="core_label_write_color_buffers">Escribir buffers de color</string>
     <string name="core_label_write_depth_buffer">Búfer de profundidad de escritura</string>

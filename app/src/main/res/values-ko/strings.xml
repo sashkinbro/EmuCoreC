@@ -746,6 +746,7 @@
     <string name="core_label_audio_format">오디오 형식</string>
     <string name="core_label_audio_formats">오디오 형식</string>
     <string name="core_label_audio_provider">오디오 백엔드</string>
+    <string name="core_label_audio_renderer">오디오렌더러</string>
     <string name="core_label_auto">자동</string>
     <string name="core_label_automatic">자동</string>
     <string name="core_label_automatically_start_games_after_boot">부팅 후 자동으로 게임 시작</string>

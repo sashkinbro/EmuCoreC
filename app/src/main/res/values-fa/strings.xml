@@ -381,7 +381,7 @@
     <string name="settings_about_website">وب‌سایت رسمی</string>
     <string name="settings_about_website_desc">وب‌سایت EmuCoreC را برای دانلودها، اخبار و پیوندهای پروژه باز کنید.</string>
     <string name="settings_about_repository">مخزن EmuCoreC</string>
-    <string name="settings_about_repository_desc">کد منبع را در گیت‌هاب ببینید، مشکلات را گزارش دهید و توسعه را دنبال کنید.</string>
+    <string name="settings_about_repository_desc">کد منبع را در GitHub ببینید، مشکلات را گزارش دهید و توسعه را دنبال کنید.</string>
     <string name="settings_about_discord">به Discord ما بپیوندید</string>
     <string name="settings_about_discord_desc">با انجمن گفت‌وگو کنید، بازخورد بدهید و به‌روزرسانی‌های پروژه را دریافت کنید.</string>
     <string name="settings_about_support">حمایت از EmuCoreC</string>
@@ -400,7 +400,7 @@
     <string name="settings_updates_release_notes_title">موارد جدید</string>
     <string name="settings_updates_release_notes_empty">این انتشار یادداشت نسخه ندارد.</string>
     <string name="settings_updates_history_title">تاریخچه به‌روزرسانی</string>
-    <string name="settings_updates_history_body">نسخه‌های منتشرشده در گیت‌هاب، تاریخ انتشار و فهرست تغییرات را مرور کنید.</string>
+    <string name="settings_updates_history_body">نسخه‌های منتشرشده در GitHub، تاریخ انتشار و فهرست تغییرات را مرور کنید.</string>
     <string name="settings_updates_history_loading">در حال بارگذاری تاریخچه انتشار</string>
     <string name="settings_updates_history_empty">هیچ نسخه‌ای پیدا نشد.</string>
     <string name="settings_updates_published_label">منتشرشده</string>
@@ -746,6 +746,7 @@
     <string name="core_label_audio_format">قالب صوتی</string>
     <string name="core_label_audio_formats">قالب‌های صوتی</string>
     <string name="core_label_audio_provider">ارائه‌دهندهٔ صوت</string>
+    <string name="core_label_audio_renderer">صدا رندرکننده</string>
     <string name="core_label_auto">خودکار</string>
     <string name="core_label_automatic">خودکار</string>
     <string name="core_label_automatically_start_games_after_boot">شروع خودکار بازی ها پس از بوت شدن</string>

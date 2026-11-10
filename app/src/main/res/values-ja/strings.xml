@@ -746,6 +746,7 @@
     <string name="core_label_audio_format">オーディオフォーマット</string>
     <string name="core_label_audio_formats">オーディオフォーマット</string>
     <string name="core_label_audio_provider">オーディオバックエンド</string>
+    <string name="core_label_audio_renderer">オーディオレンダラー</string>
     <string name="core_label_auto">自動</string>
     <string name="core_label_automatic">自動</string>
     <string name="core_label_automatically_start_games_after_boot">起動後にゲームを自動的に開始する</string>

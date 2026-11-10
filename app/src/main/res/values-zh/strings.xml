@@ -746,6 +746,7 @@
     <string name="core_label_audio_format">音频格式</string>
     <string name="core_label_audio_formats">音频格式</string>
     <string name="core_label_audio_provider">音频提供商</string>
+    <string name="core_label_audio_renderer">音频渲染器</string>
     <string name="core_label_auto">汽车</string>
     <string name="core_label_automatic">自动</string>
     <string name="core_label_automatically_start_games_after_boot">开机后自动开始游戏</string>
@@ -765,7 +766,7 @@
     <string name="core_label_camera_flip">相机翻转</string>
     <string name="core_label_camera_id">相机ID</string>
     <string name="core_label_camera_type">相机类型</string>
-    <string name="core_label_cellaudio">细胞音频</string>
+    <string name="core_label_cellaudio">CellAudio</string>
     <string name="core_label_center_horizontally">水平居中</string>
     <string name="core_label_center_vertically">垂直居中</string>
     <string name="core_label_clans_enabled">部落已启用</string>
@@ -853,7 +854,7 @@
     <string name="core_label_frametime_datapoints">帧时间数据点</string>
     <string name="core_label_frametime_graph_detail_level">帧时间图细节级别</string>
     <string name="core_label_full">满</string>
-    <string name="core_label_gdb_server">数据库服务器</string>
+    <string name="core_label_gdb_server">GDB Server</string>
     <string name="core_label_ghltar_emulated_controller">GHLtar 仿真控制器</string>
     <string name="core_label_giga">千兆</string>
     <string name="core_label_gun">枪</string>
@@ -986,19 +987,19 @@
     <string name="core_label_resolution">分辨率</string>
     <string name="core_label_resolution_scale">分辨率比例</string>
     <string name="core_label_rocksmith">石匠</string>
-    <string name="core_label_rpcn">远程控制网络</string>
+    <string name="core_label_rpcn">RPCN</string>
     <string name="core_label_rpcs3_alternative_scheduler">RPCS3 替代调度程序</string>
     <string name="core_label_rpcs3_scheduler">RPCS3 调度程序</string>
     <string name="core_label_rsx_fifo_fetch_accuracy">RSX FIFO 读取精度</string>
     <string name="core_label_rsx_profiler">RSX 分析器</string>
-    <string name="core_label_rsxaudio">RSX音频</string>
-    <string name="core_label_rsxaudio_avport">RSX音频端口</string>
+    <string name="core_label_rsxaudio">RSXAudio</string>
+    <string name="core_label_rsxaudio_avport">RSXAudio Avport</string>
     <string name="core_label_safe">安全</string>
     <string name="core_label_save_disc_game_data">保存光盘游戏数据</string>
     <string name="core_label_save_llvm_logs">保存LLVM日志</string>
     <string name="core_label_savestate">保存状态</string>
     <string name="core_label_screen_size_in_inches">屏幕尺寸（英寸）</string>
-    <string name="core_label_sdl">雪迪龙</string>
+    <string name="core_label_sdl">SDL</string>
     <string name="core_label_sdl_camera_id">SDL 相机 ID</string>
     <string name="core_label_second_frame_limit">第二帧限制</string>
     <string name="core_label_set_daz_and_ftz">设置 DAZ 和 FTZ</string>
@@ -1092,7 +1093,7 @@
     <string name="core_label_video">视频</string>
     <string name="core_label_vram_allocation_limit_mb">VRAM 分配限制 (MB)</string>
     <string name="core_label_vsync_mode">垂直同步模式</string>
-    <string name="core_label_vulkan">伏尔甘</string>
+    <string name="core_label_vulkan">Vulkan</string>
     <string name="core_label_window_title_format">窗口标题格式</string>
     <string name="core_label_write_color_buffers">写入颜色缓冲区</string>
     <string name="core_label_write_depth_buffer">写入深度缓冲区</string>
@@ -1577,7 +1578,7 @@ Over-Under 更接近原生立体声输出，但不太受支持。</string>
     <string name="core_label_scee">SCEE</string>
     <string name="core_label_sceh">科学与工程学院</string>
     <string name="core_label_scej">科学与工程杂志</string>
-    <string name="core_label_scek">塞克</string>
+    <string name="core_label_scek">SCEK</string>
     <string name="core_label_sch">SCH</string>
     <string name="core_label_spanish">西班牙语</string>
     <string name="core_label_spanish_keyboard">西班牙语键盘</string>

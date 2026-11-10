@@ -747,6 +747,7 @@
     <string name="core_label_audio_format">Ses Formatı</string>
     <string name="core_label_audio_formats">Ses Formatları</string>
     <string name="core_label_audio_provider">Ses Sağlayıcı</string>
+    <string name="core_label_audio_renderer">Ses Oluşturucu</string>
     <string name="core_label_auto">Otomatik</string>
     <string name="core_label_automatic">Otomatik</string>
     <string name="core_label_automatically_start_games_after_boot">Oyunları açılıştan sonra otomatik olarak başlat</string>
@@ -992,7 +993,7 @@
     <string name="core_label_rpcs3_scheduler">RPCS3 Zamanlayıcı</string>
     <string name="core_label_rsx_fifo_fetch_accuracy">RSX FIFO Alma Doğruluğu</string>
     <string name="core_label_rsx_profiler">RSX Profilcisi</string>
-    <string name="core_label_rsxaudio">RSXSes</string>
+    <string name="core_label_rsxaudio">RSXAudio</string>
     <string name="core_label_rsxaudio_avport">RSXAudio Avport\'u</string>
     <string name="core_label_safe">Güvenli</string>
     <string name="core_label_save_disc_game_data">Disk Oyunu Verilerini Kaydet</string>

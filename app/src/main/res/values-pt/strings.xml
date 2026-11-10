@@ -748,6 +748,7 @@
     <string name="core_label_audio_format">Formato de áudio</string>
     <string name="core_label_audio_formats">Formatos de áudio</string>
     <string name="core_label_audio_provider">Provedor de áudio</string>
+    <string name="core_label_audio_renderer">Renderizador de áudio</string>
     <string name="core_label_auto">Automático</string>
     <string name="core_label_automatic">Automático</string>
     <string name="core_label_automatically_start_games_after_boot">Iniciar jogos automaticamente após a inicialização</string>
@@ -767,7 +768,7 @@
     <string name="core_label_camera_flip">Virar a câmera</string>
     <string name="core_label_camera_id">ID da câmera</string>
     <string name="core_label_camera_type">Tipo de câmera</string>
-    <string name="core_label_cellaudio">CellÁudio</string>
+    <string name="core_label_cellaudio">CellAudio</string>
     <string name="core_label_center_horizontally">Centralizar horizontalmente</string>
     <string name="core_label_center_vertically">Centralizar verticalmente</string>
     <string name="core_label_clans_enabled">Clãs habilitados</string>
@@ -950,7 +951,7 @@
     <string name="core_label_ppu_accurate_non_java_mode">Modo não Java preciso de PPU</string>
     <string name="core_label_ppu_accurate_vector_nan_values">Valores NaN de vetor preciso de PPU</string>
     <string name="core_label_ppu_calling_history">Histórico de chamadas PPU</string>
-    <string name="core_label_ppu_debug">Depuração de PU</string>
+    <string name="core_label_ppu_debug">Depuração de PPU</string>
     <string name="core_label_ppu_decoder">Decodificador PPU</string>
     <string name="core_label_ppu_profiler">Perfilador PPU</string>
     <string name="core_label_ppu_reservation_priority_over_spus">Prioridade de reserva de PPU sobre SPUs</string>
@@ -993,7 +994,7 @@
     <string name="core_label_rpcs3_scheduler">Agendador RPCS3</string>
     <string name="core_label_rsx_fifo_fetch_accuracy">Precisão de busca RSX FIFO</string>
     <string name="core_label_rsx_profiler">Perfilador RSX</string>
-    <string name="core_label_rsxaudio">RSXÁudio</string>
+    <string name="core_label_rsxaudio">RSXAudio</string>
     <string name="core_label_rsxaudio_avport">Avporto RSXAudio</string>
     <string name="core_label_safe">Seguro</string>
     <string name="core_label_save_disc_game_data">Salvar dados do jogo em disco</string>
@@ -1094,7 +1095,7 @@
     <string name="core_label_video">Vídeo</string>
     <string name="core_label_vram_allocation_limit_mb">Limite de alocação de VRAM (MB)</string>
     <string name="core_label_vsync_mode">Modo VSync</string>
-    <string name="core_label_vulkan">Vulcano</string>
+    <string name="core_label_vulkan">Vulkan</string>
     <string name="core_label_window_title_format">Formato do título da janela</string>
     <string name="core_label_write_color_buffers">Escrever buffers de cores</string>
     <string name="core_label_write_depth_buffer">Buffer de profundidade de gravação</string>

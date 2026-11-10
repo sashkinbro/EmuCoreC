@@ -13,14 +13,36 @@ class EmulationSettingsContractTest {
     fun nativeSettingsHaveOneMatchingInGameTab() {
         val menu = source("ui/emulation/EmulationMenu.kt")
         val dispatch = menu.substringAfter("when (selectedTab) {").substringBefore("Spacer(modifier")
-        for (category in listOf("Graphics", "Overlay", "Audio", "Advanced")) {
+        for (category in listOf("Graphics", "Audio")) {
             assertTrue("Missing $category in-game tab", "EmulationMenuTab.$category ->" in dispatch)
-            assertEquals("Native category must be rendered once: $category", 1,
-                Regex("Ps3CoreSettingsCategory\\.$category\\b").findAll(dispatch).count())
+        }
+        // Overlay and Advanced are deliberately not part of the in-game menu any more: they stay in
+        // Settings and the game manager.
+        for (category in listOf("Overlay", "Advanced")) {
+            assertFalse("$category must not be rendered in-game", "EmulationMenuTab.$category ->" in dispatch)
+            assertFalse("$category must not be dispatched in-game", "EmulationMenuTab.$category," in dispatch)
         }
         val section = source("ui/settings/Ps3CoreSettingsSection.kt")
         val filter = section.substringAfter("val filtered = remember(").substringBefore("val userFacingSettings")
         assertFalse("CPU settings belong in Advanced, not a second Graphics category", "startsWith(\"Core@@\")" in filter)
+    }
+
+    @Test
+    fun everyNativeSettingGroupIsRenderedAtMostOnceInGame() {
+        val menu = source("ui/emulation/EmulationMenu.kt")
+        val inGame = menu.substringAfter("fun EmulationGameMenu(").substringBefore("private enum class MenuBadge")
+        // Each native group has exactly one in-game owner, so nothing is shown twice.
+        for (category in listOf("Graphics", "Audio", "Overlay")) {
+            assertEquals("$category must be rendered exactly once in-game", 1,
+                Regex("Ps3CoreSettingsCategory\\.$category\\b").findAll(inGame).count())
+        }
+        for (category in listOf("Advanced", "Controls", "Storage", "Network", "General")) {
+            assertFalse("$category must stay out of the in-game menu",
+                Regex("Ps3CoreSettingsCategory\\.$category\\b").containsMatchIn(inGame))
+        }
+        assertFalse("The Overlay tab is gone, the overlay settings live in the game tab",
+            "EmulationMenuTab.Overlay" in menu)
+        assertFalse("The Advanced tab is gone", "EmulationMenuTab.Advanced" in menu)
     }
 
     @Test

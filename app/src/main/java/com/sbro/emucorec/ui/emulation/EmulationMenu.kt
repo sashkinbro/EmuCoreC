@@ -43,6 +43,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -125,7 +126,7 @@ private val LiveBadgeColor = Color(0xFF34D27A)
 private val RestartBadgeColor = Color(0xFFE0A82E)
 private val LocalMenuScrollInset = compositionLocalOf { 7.dp }
 
-private data class EmulationMenuPalette(
+internal data class EmulationMenuPalette(
     val panel: Color,
     val panelSoft: Color,
     val row: Color,
@@ -135,7 +136,7 @@ private data class EmulationMenuPalette(
 )
 
 @Composable
-private fun emulationMenuPalette(): EmulationMenuPalette {
+internal fun emulationMenuPalette(): EmulationMenuPalette {
     val scheme = MaterialTheme.colorScheme
     if (LocalNeonTheme.current) {
         return EmulationMenuPalette(
@@ -288,10 +289,13 @@ fun EmulationGameMenu(
     callbacks: EmulationMenuCallbacks,
     saveStates: SaveStateMenuState = SaveStateMenuState(),
     gameIconPath: String? = null,
+    // Hoisted so the menu reopens on the tab and scroll offset the player left it on.
+    selectedTab: EmulationMenuTab = EmulationMenuTab.Game,
+    onSelectedTab: (EmulationMenuTab) -> Unit = {},
+    scrollState: ScrollState = rememberScrollState(),
     modifier: Modifier = Modifier
 ) {
     val palette = emulationMenuPalette()
-    var selectedTab by remember { mutableStateOf(EmulationMenuTab.Game) }
     val effectiveStyle = if (expandHorizontally) layoutStyle else GameMenuLayoutStyle.COMMAND_CENTER
     val shape = if (!expandHorizontally) {
         neonShapeCorners(topStart = 24.dp, topEnd = 24.dp)
@@ -337,6 +341,7 @@ fun EmulationGameMenu(
                         physicalGamepadConnected = physicalGamepadConnected,
                         callbacks = callbacks,
                         selectedTab = selectedTab,
+                        scrollState = scrollState,
                         showHorizontalTabs = false,
                         horizontalPadding = 9.dp
                     )
@@ -373,7 +378,7 @@ fun EmulationGameMenu(
                 Box(modifier = Modifier.fillMaxSize()) {
                     MenuVerticalTabs(
                         selectedTab = selectedTab,
-                        onSelected = { selectedTab = it },
+                        onSelected = onSelectedTab,
                         iconOnly = true,
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(vertical = 14.dp, horizontal = 8.dp)
@@ -426,7 +431,7 @@ fun EmulationGameMenu(
                 GameMenuLayoutStyle.DASHBOARD -> Row(modifier = Modifier.fillMaxSize()) {
                     MenuVerticalTabs(
                         selectedTab = selectedTab,
-                        onSelected = { selectedTab = it },
+                        onSelected = onSelectedTab,
                         iconOnly = false,
                         modifier = Modifier
                             .width(188.dp)
@@ -444,6 +449,7 @@ fun EmulationGameMenu(
                         physicalGamepadConnected = physicalGamepadConnected,
                         callbacks = callbacks,
                         selectedTab = selectedTab,
+                        scrollState = scrollState,
                         showHorizontalTabs = false,
                         horizontalPadding = 9.dp,
                         modifier = Modifier.weight(1f)
@@ -462,11 +468,12 @@ fun EmulationGameMenu(
                     physicalGamepadConnected = physicalGamepadConnected,
                     callbacks = callbacks,
                     selectedTab = selectedTab,
+                    scrollState = scrollState,
                     showHorizontalTabs = true,
                     horizontalPadding = if (effectiveStyle == GameMenuLayoutStyle.COMPACT) 6.dp else 9.dp,
                     compact = effectiveStyle == GameMenuLayoutStyle.COMPACT,
                     showSheetHandle = !expandHorizontally,
-                    onSelected = { selectedTab = it }
+                    onSelected = onSelectedTab
                 )
             }
             if (LocalNeonTheme.current) {
@@ -488,6 +495,7 @@ private fun MenuScrollableContent(
     physicalGamepadConnected: Boolean,
     callbacks: EmulationMenuCallbacks,
     selectedTab: EmulationMenuTab,
+    scrollState: ScrollState,
     showHorizontalTabs: Boolean,
     horizontalPadding: Dp,
     modifier: Modifier = Modifier,
@@ -498,7 +506,7 @@ private fun MenuScrollableContent(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .padding(
                 start = horizontalPadding,
                 end = horizontalPadding,
@@ -558,18 +566,17 @@ private fun MenuSelectedContent(
     ) {
         when (selectedTab) {
             EmulationMenuTab.Game -> {
-                GameTab(gameId = gameId, sessionElapsedMs = sessionElapsedMs)
+                GameTab(gameId = gameId)
             }
             EmulationMenuTab.SaveStates -> SaveStatesTab(saveStates = saveStates, callbacks = callbacks)
             EmulationMenuTab.Graphics -> {
                 InGameCoreSettings(
                     Ps3CoreSettingsCategory.Graphics,
                     gameId,
+                    hiddenSections = IN_GAME_HIDDEN_GRAPHICS_SECTIONS,
                 )
             }
             EmulationMenuTab.Audio -> InGameCoreSettings(Ps3CoreSettingsCategory.Audio, gameId)
-            EmulationMenuTab.Overlay -> InGameCoreSettings(Ps3CoreSettingsCategory.Overlay, gameId)
-            EmulationMenuTab.Advanced -> InGameCoreSettings(Ps3CoreSettingsCategory.Advanced, gameId)
             EmulationMenuTab.Portals -> ToyPortalPanel()
             EmulationMenuTab.Controls -> {
                 ControlsTab(config = config, callbacks = callbacks)
@@ -585,30 +592,45 @@ private fun MenuSelectedContent(
     }
 }
 
-private enum class EmulationMenuTab {
+/**
+ * Overlay and Advanced stay in Settings and the game manager only: inside the game they are noise,
+ * so the in-game menu no longer lists them.
+ */
+enum class EmulationMenuTab {
     Game,
     SaveStates,
     Graphics,
-    Overlay,
     Audio,
-    Advanced,
     Portals,
     Controls,
     Achievements,
     Gamepad
 }
 
+/**
+ * Video sections that are useless while a game is already on screen: the Vulkan card (adapter,
+ * exclusive fullscreen, VRAM budget) and the anaglyph matrix editor. Both stay in Settings and the
+ * game manager.
+ */
+private val IN_GAME_HIDDEN_GRAPHICS_SECTIONS = setOf("Vulkan", "Custom Anaglyph Matrices")
+
+/** Overlay sections that only matter while configuring, not while playing. */
+private val IN_GAME_HIDDEN_OVERLAY_SECTIONS =
+    setOf("Debug overlay", "Shader Loading Dialog", "Miscellaneous")
+
 @Composable
 private fun InGameCoreSettings(
     category: Ps3CoreSettingsCategory,
     gameId: String,
     additionalCategories: Set<Ps3CoreSettingsCategory> = emptySet(),
+    hiddenSections: Set<String> = emptySet(),
 ) {
     Ps3CoreSettingsSection(
         category = category,
         additionalCategories = additionalCategories,
         scope = Ps3CoreSettingsScope.Game,
         surface = Ps3CoreSettingsSurface.InGame,
+        hiddenSections = hiddenSections,
         titleId = gameId,
     )
 }
@@ -627,48 +649,18 @@ private fun Modifier.horizontalBleed(horizontalPadding: Dp): Modifier = layout {
 @Composable
 private fun GameTab(
     gameId: String,
-    sessionElapsedMs: Long,
 ) {
-    MenuSection(
-        title = stringResource(R.string.emulation_menu_section_now),
-        subtitle = stringResource(R.string.emulation_menu_section_now_desc),
-        badge = null
-    ) {
-        MenuInfoRow(
-            label = stringResource(R.string.play_time_title),
-            value = formatPlayDuration(sessionElapsedMs)
-        )
-    }
-    InGameCoreSettings(Ps3CoreSettingsCategory.Overlay, gameId)
+    // Session time already sits in the menu header, so it is not repeated here. What this tab owns
+    // is the single in-game copy of the performance overlay: the stats toggle plus its layout
+    // options. Everything below it in the native tree (debug overlay, shader loading dialog,
+    // compilation hints) stays in Settings, and the report rows live in Settings > Advanced.
+    InGameCoreSettings(
+        Ps3CoreSettingsCategory.Overlay,
+        gameId,
+        hiddenSections = IN_GAME_HIDDEN_OVERLAY_SECTIONS,
+    )
 }
 
-@Composable
-private fun MenuInfoRow(
-    label: String,
-    value: String
-) {
-    val palette = emulationMenuPalette()
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(neonShape(12.dp))
-            .background(palette.row)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = palette.textPrimary,
-            modifier = Modifier.weight(1f)
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-            color = MaterialTheme.colorScheme.primary
-        )
-    }
-}
 
 @Composable
 private fun formatPlayDuration(durationMs: Long): String {
@@ -1674,9 +1666,7 @@ private fun emulationMenuTabs(): List<EmulationMenuTabItem> = listOf(
     EmulationMenuTabItem(EmulationMenuTab.Game, stringResource(R.string.emulation_tab_game), Icons.Rounded.PlayArrow),
     EmulationMenuTabItem(EmulationMenuTab.SaveStates, stringResource(R.string.emulation_tab_savestates), Icons.Rounded.Save),
     EmulationMenuTabItem(EmulationMenuTab.Graphics, stringResource(R.string.settings_tab_graphics), Icons.Rounded.GraphicEq),
-    EmulationMenuTabItem(EmulationMenuTab.Overlay, stringResource(R.string.settings_tab_overlay), Icons.Rounded.Visibility),
     EmulationMenuTabItem(EmulationMenuTab.Audio, stringResource(R.string.settings_tab_audio), Icons.AutoMirrored.Rounded.VolumeUp),
-    EmulationMenuTabItem(EmulationMenuTab.Advanced, stringResource(R.string.settings_tab_advanced), Icons.Rounded.SettingsSuggest),
     EmulationMenuTabItem(EmulationMenuTab.Portals, stringResource(R.string.emulation_tab_portals), Icons.Rounded.Usb),
     EmulationMenuTabItem(EmulationMenuTab.Controls, stringResource(R.string.emulation_tab_controls), Icons.Rounded.Tune),
     EmulationMenuTabItem(

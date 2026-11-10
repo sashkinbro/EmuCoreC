@@ -746,6 +746,7 @@
     <string name="core_label_audio_format">Formát zvuku</string>
     <string name="core_label_audio_formats">Zvukové formáty</string>
     <string name="core_label_audio_provider">Zvukový backend</string>
+    <string name="core_label_audio_renderer">Zvukový renderer</string>
     <string name="core_label_auto">Auto</string>
     <string name="core_label_automatic">Automaticky</string>
     <string name="core_label_automatically_start_games_after_boot">Automaticky spouštět hry po spuštění</string>

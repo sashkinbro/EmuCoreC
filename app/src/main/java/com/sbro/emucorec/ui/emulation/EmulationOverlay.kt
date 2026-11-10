@@ -21,6 +21,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -163,6 +164,10 @@ fun EmulationOverlayHost(
     var controlsEditMode by remember { mutableStateOf(false) }
     var editorProfileRevision by remember { mutableIntStateOf(0) }
     var menuOpen by remember { mutableStateOf(false) }
+    // Kept outside the menu composable so closing the menu and opening it again lands on the same
+    // tab with the same scroll offset, like the EmuCoreX game menu does.
+    var menuTabName by rememberSaveable { mutableStateOf(EmulationMenuTab.Game.name) }
+    val menuScrollStates = remember { mutableMapOf<String, ScrollState>() }
     var menuButtonVisible by remember { mutableStateOf(false) }
     var userPaused by remember { mutableStateOf(false) }
     var exitDialogVisible by remember { mutableStateOf(false) }
@@ -643,6 +648,10 @@ fun EmulationOverlayHost(
                     saveStateBusy || saveRequesting, saveRequestSaving,
                     saveSlotsLoaded && Ps3Core.initialized && Ps3Core.instance.saveStatesSupported() && !launchingSaveState,
                     busyDeleting = saveRequestDeleting),
+                selectedTab = EmulationMenuTab.values().firstOrNull { it.name == menuTabName }
+                    ?: EmulationMenuTab.Game,
+                onSelectedTab = { menuTabName = it.name },
+                scrollState = menuScrollStates.getOrPut(menuTabName) { ScrollState(0) },
                 callbacks = menuCallbacks
             )
         }

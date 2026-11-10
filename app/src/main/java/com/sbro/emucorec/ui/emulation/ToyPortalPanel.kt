@@ -45,6 +45,8 @@ import androidx.compose.ui.unit.dp
 import com.sbro.emucorec.R
 import com.sbro.emucorec.core.EmulatorStorage
 import com.sbro.emucorec.core.Ps3Core
+import com.sbro.emucorec.ui.settings.InGameSettingsCard
+import com.sbro.emucorec.ui.theme.neon.neonShape
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -128,56 +130,59 @@ internal fun ToyPortalPanel() {
             delay(2000)
         }
     }
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            stringResource(R.string.emulation_portal_description),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf("Skylanders", "Disney Infinity", "LEGO Dimensions").forEachIndexed { index, title ->
-                FilterChip(selected = kind == index, onClick = { kind = index }, label = { Text(title) })
+    val palette = emulationMenuPalette()
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        InGameSettingsCard(title = stringResource(R.string.emulation_tab_portals)) {
+            Text(
+                stringResource(R.string.emulation_portal_description),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("Skylanders", "Disney Infinity", "LEGO Dimensions").forEachIndexed { index, title ->
+                    FilterChip(selected = kind == index, onClick = { kind = index }, label = { Text(title) })
+                }
             }
-        }
-        if (realPortals and (1 shl kind) != 0) {
-            Text(stringResource(R.string.emulation_portal_real_active))
-        } else {
-            repeat(listOf(8, 9, 7)[kind]) { position ->
-                val name = PortalFigures.placed[kind to position]
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
-                    contentColor = MaterialTheme.colorScheme.onSurface,
-                    shape = MaterialTheme.shapes.medium,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+            if (realPortals and (1 shl kind) != 0) {
+                Text(stringResource(R.string.emulation_portal_real_active))
+            } else {
+                repeat(listOf(8, 9, 7)[kind]) { position ->
+                    val name = PortalFigures.placed[kind to position]
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = palette.row,
+                        contentColor = palette.textPrimary,
+                        shape = neonShape(12.dp),
+                        border = BorderStroke(1.dp, palette.border),
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                stringResource(R.string.emulation_savestate_slot_label, position + 1),
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                            if (name != null) Text(
-                                name,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    stringResource(R.string.emulation_savestate_slot_label, position + 1),
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                                if (name != null) Text(
+                                    name,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = palette.textSecondary,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            TextButton(onClick = { selecting = kind to position }) { Text(stringResource(R.string.save_manager_import)) }
+                            if (name != null) TextButton(onClick = {
+                                if (runCatching { Ps3Core.instance.portalRemove(kind, position) }.getOrDefault(false)) PortalFigures.placed.remove(kind to position)
+                                else error = true
+                            }) { Text(stringResource(R.string.settings_gpu_driver_remove_short)) }
                         }
-                        TextButton(onClick = { selecting = kind to position }) { Text(stringResource(R.string.save_manager_import)) }
-                        if (name != null) TextButton(onClick = {
-                            if (runCatching { Ps3Core.instance.portalRemove(kind, position) }.getOrDefault(false)) PortalFigures.placed.remove(kind to position)
-                            else error = true
-                        }) { Text(stringResource(R.string.settings_gpu_driver_remove_short)) }
                     }
                 }
             }
+            if (error) Text(stringResource(R.string.emulation_portal_import_failed), color = MaterialTheme.colorScheme.error)
         }
-        if (error) Text(stringResource(R.string.emulation_portal_import_failed), color = MaterialTheme.colorScheme.error)
     }
     selecting?.takeUnless { creating }?.let { (selectedKind, position) ->
         val files = remember(selectedKind, revision) { PortalFigures.folder(context, selectedKind).listFiles()?.filter { PortalFigures.isFigureFile(selectedKind, it) }?.sortedBy { it.name }.orEmpty() }

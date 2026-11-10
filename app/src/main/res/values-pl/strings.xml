@@ -748,6 +748,7 @@
     <string name="core_label_audio_format">Format dźwięku</string>
     <string name="core_label_audio_formats">Formaty dźwięku</string>
     <string name="core_label_audio_provider">Interfejs dźwięku</string>
+    <string name="core_label_audio_renderer">Renderer dźwięku</string>
     <string name="core_label_auto">Auto</string>
     <string name="core_label_automatic">Automatyczny</string>
     <string name="core_label_automatically_start_games_after_boot">Automatycznie uruchamiaj gry po starcie</string>

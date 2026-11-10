@@ -53,7 +53,10 @@ class SettingsTabsUiContractTest {
         assertFalse("Raw core tab must not return to game manager", "GameManagerTab.Core" in manager)
         assertFalse("Raw core tab must not return to in-game menu", "EmulationMenuTab.Core" in menu)
         assertFalse("Global network settings do not belong in the live game menu", "EmulationMenuTab.Network" in menu)
-        assertTrue("CPU settings need their own Advanced category", "EmulationMenuTab.Advanced" in menu)
+        // The in-game menu was trimmed on purpose: CPU/Advanced and the overlay debug sections stay
+        // in Settings and the game manager, so they must not come back as their own in-game tabs.
+        assertFalse("Advanced settings stay in Settings and the game manager", "EmulationMenuTab.Advanced" in menu)
+        assertFalse("Overlay settings live in the game tab, not in a second tab", "EmulationMenuTab.Overlay" in menu)
         for (path in listOf("VFS@@$(EmulatorDir)", "Miscellaneous@@GDB Server")) {
             assertFalse("Filesystem and debug settings must stay outside the live menu: $path",
                 isCoreSettingVisibleOnSurface(path, Ps3CoreSettingsSurface.InGame))

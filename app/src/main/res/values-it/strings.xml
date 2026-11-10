@@ -748,6 +748,7 @@
     <string name="core_label_audio_format">Formato audio</string>
     <string name="core_label_audio_formats">Formati audio</string>
     <string name="core_label_audio_provider">Fornitore audio</string>
+    <string name="core_label_audio_renderer">Renderer audio</string>
     <string name="core_label_auto">Automatico</string>
     <string name="core_label_automatic">Automatico</string>
     <string name="core_label_automatically_start_games_after_boot">Avvia automaticamente i giochi dopo l\'avvio</string>
@@ -950,7 +951,7 @@
     <string name="core_label_ppu_accurate_non_java_mode">Modalità non Java accurata PPU</string>
     <string name="core_label_ppu_accurate_vector_nan_values">Valori NaN vettoriali accurati PPU</string>
     <string name="core_label_ppu_calling_history">Cronologia chiamate PPU</string>
-    <string name="core_label_ppu_debug">Debug dell\'PUPU</string>
+    <string name="core_label_ppu_debug">Debug PPU</string>
     <string name="core_label_ppu_decoder">Decodificatore PPU</string>
     <string name="core_label_ppu_profiler">Profilo PPU</string>
     <string name="core_label_ppu_reservation_priority_over_spus">Priorità di prenotazione PPU rispetto alle SPU</string>
@@ -1094,7 +1095,7 @@
     <string name="core_label_video">Video</string>
     <string name="core_label_vram_allocation_limit_mb">Limite di allocazione VRAM (MB)</string>
     <string name="core_label_vsync_mode">Modalità VSync</string>
-    <string name="core_label_vulkan">Vulcano</string>
+    <string name="core_label_vulkan">Vulkan</string>
     <string name="core_label_window_title_format">Formato del titolo della finestra</string>
     <string name="core_label_write_color_buffers">Scrivi buffer di colore</string>
     <string name="core_label_write_depth_buffer">Scrivi buffer di profondità</string>
@@ -1579,7 +1580,7 @@ Questa impostazione viene applicata solo quando il decodificatore SPU è imposta
     <string name="core_label_scee">SCEE</string>
     <string name="core_label_sceh">SCEH</string>
     <string name="core_label_scej">SCEJ</string>
-    <string name="core_label_scek">SCEC</string>
+    <string name="core_label_scek">SCEK</string>
     <string name="core_label_sch">SCH</string>
     <string name="core_label_spanish">Spagnolo</string>
     <string name="core_label_spanish_keyboard">Tastiera spagnola</string>
