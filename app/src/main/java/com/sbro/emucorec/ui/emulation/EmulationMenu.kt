@@ -100,6 +100,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
@@ -119,8 +120,10 @@ import com.sbro.emucorec.data.GameMenuLayoutStyle
 import com.sbro.emucorec.data.Ps3Trophy
 import com.sbro.emucorec.data.Ps3TrophyGrade
 import com.sbro.emucorec.data.Ps3TrophySet
+import com.sbro.emucorec.ui.common.COVER_ART_ASPECT_RATIO
 import com.sbro.emucorec.ui.common.LocalImage
 import com.sbro.emucorec.ui.common.SettingHelpButton
+import com.sbro.emucorec.ui.common.UrlImage
 import com.sbro.emucorec.ui.common.appFilterChipColors
 import com.sbro.emucorec.ui.settings.Ps3CoreSettingsCategory
 import com.sbro.emucorec.ui.settings.Ps3CoreSettingsSection
@@ -292,6 +295,7 @@ fun EmulationGameMenu(
     callbacks: EmulationMenuCallbacks,
     saveStates: SaveStateMenuState = SaveStateMenuState(),
     gameIconPath: String? = null,
+    gameCoverUrl: String? = null,
     // Hoisted so the menu reopens on the tab and scroll offset the player left it on.
     selectedTab: EmulationMenuTab = EmulationMenuTab.Game,
     onSelectedTab: (EmulationMenuTab) -> Unit = {},
@@ -323,7 +327,7 @@ fun EmulationGameMenu(
         onSelectTab = onSelectedTab,
         onClose = callbacks.onClose,
     ) {
-        MenuHeader(gameTitle, gameId, gameIconPath, sessionElapsedMs)
+        MenuHeader(gameTitle, gameId, gameIconPath, gameCoverUrl, sessionElapsedMs)
         if (selectedTab == EmulationMenuTab.Game) {
             MenuTopActions(paused = paused, callbacks = callbacks)
         }
@@ -630,7 +634,8 @@ private fun SaveStatesTab(saveStates: SaveStateMenuState, callbacks: EmulationMe
 
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Surface(modifier = Modifier.fillMaxWidth(), shape = neonShape(16.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)) {
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+            contentColor = palette.textPrimary) {
             Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(
@@ -648,9 +653,13 @@ private fun SaveStatesTab(saveStates: SaveStateMenuState, callbacks: EmulationMe
                     onNext = { callbacks.onSaveStateSlotSelected(slotOrder[selectedIndex + 1]) }
                 )
             }
-            SaveStatePreview(slot = slot, modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f))
-            Text(text = statusText, style = MaterialTheme.typography.bodySmall,
-                color = palette.textSecondary, modifier = Modifier.fillMaxWidth())
+            SaveStatePreview(
+                slot = slot,
+                modifier = Modifier.fillMaxWidth(),
+                slotLabel = saveStateSlotLabel(selected),
+                statusText = statusText,
+                isSaving = saveStates.busy && saveStates.busySaving
+            )
             }
         }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1335,14 +1344,17 @@ private fun MenuHeader(
     gameTitle: String,
     gameId: String,
     gameIconPath: String?,
+    gameCoverUrl: String?,
     sessionElapsedMs: Long
 ) {
     val displayTitle = gameTitle.ifBlank {
         gameId.ifBlank { stringResource(R.string.emulation_menu_unknown_game) }
     }
+    val palette = emulationMenuPalette()
     Surface(
         shape = neonShape(22.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.30f),
+        contentColor = palette.textPrimary,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
     ) {
         Row(
@@ -1354,9 +1366,33 @@ private fun MenuHeader(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // PS3 ICON0 is landscape artwork; preserve its native 16:9 ratio.
-            Box(modifier = Modifier.width(74.dp).aspectRatio(16f / 9f).clip(neonShape(14.dp))) {
-                LocalImage(gameIconPath, displayTitle, displayTitle, Modifier.fillMaxSize())
+            // Portrait box-art card, matching X: the catalog cover fitted inside a
+            // cover-ratio frame, with ICON0 only as the local fallback.
+            Box(
+                modifier = Modifier
+                    .width(74.dp)
+                    .aspectRatio(COVER_ART_ASPECT_RATIO)
+                    .clip(neonShape(14.dp))
+            ) {
+                if (!gameCoverUrl.isNullOrBlank()) {
+                    UrlImage(
+                        imageUrl = gameCoverUrl,
+                        contentDescription = displayTitle,
+                        fallbackLabel = displayTitle,
+                        fallbackPath = gameIconPath,
+                        modifier = Modifier.fillMaxSize(),
+                        decodeEdgePx = 240,
+                        contentScale = ContentScale.Fit
+                    )
+                } else {
+                    LocalImage(
+                        path = gameIconPath,
+                        contentDescription = displayTitle,
+                        fallbackLabel = displayTitle,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit
+                    )
+                }
             }
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
@@ -1394,7 +1430,7 @@ private fun MenuHeader(
 }
 
 @Composable
-private fun MenuSection(
+internal fun MenuSection(
     title: String,
     subtitle: String = "",
     description: String? = null,
@@ -1406,14 +1442,15 @@ private fun MenuSection(
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 4.dp),
+            modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                text = title,
+                // X's sidebar label: uppercase accent caption, tight tracking.
+                text = title.uppercase(),
                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold, letterSpacing = 1.sp),
-                color = palette.textSecondary,
+                color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.weight(1f)
             )
             description?.takeIf(String::isNotBlank)?.let {
@@ -1433,6 +1470,9 @@ private fun MenuSettingLabel(
     description: String?,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    // X sets choice/slider captions in labelLarge Bold but keeps toggle captions in
+    // bodyMedium Medium, so the same label helper has to offer both.
+    strong: Boolean = false,
 ) {
     val palette = emulationMenuPalette()
     Row(
@@ -1442,8 +1482,13 @@ private fun MenuSettingLabel(
     ) {
         Text(
             text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = palette.textPrimary.copy(alpha = if (enabled) 1f else 0.48f),
+            style = if (strong) {
+                MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+            } else {
+                MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
+            },
+            color = (if (strong) MaterialTheme.colorScheme.onSurfaceVariant else palette.textPrimary)
+                .copy(alpha = if (enabled) 1f else 0.48f),
             modifier = Modifier.weight(1f, fill = false)
         )
         description?.takeIf(String::isNotBlank)?.let {
@@ -1500,7 +1545,7 @@ private fun MenuSliderRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            MenuSettingLabel(label, description, Modifier.weight(1f), enabled)
+            MenuSettingLabel(label, description, Modifier.weight(1f), enabled, strong = true)
             Text(
                 text = valueText,
                 style = MaterialTheme.typography.labelMedium,
@@ -1521,7 +1566,7 @@ private fun MenuSliderRow(
 }
 
 @Composable
-private fun MenuChipRow(
+internal fun MenuChipRow(
     label: String,
     selected: Int,
     options: List<Pair<Int, String>>,
@@ -1531,7 +1576,7 @@ private fun MenuChipRow(
     onSelected: (Int) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (showLabel) MenuSettingLabel(label, description, Modifier.fillMaxWidth(), enabled)
+        if (showLabel) MenuSettingLabel(label, description, Modifier.fillMaxWidth(), enabled, strong = true)
         Row(
             modifier = Modifier.fillMaxWidth().horizontalBleed(LocalMenuScrollInset.current)
                 .horizontalScroll(rememberScrollState()).padding(horizontal = LocalMenuScrollInset.current),
@@ -1544,7 +1589,15 @@ private fun MenuChipRow(
                     onClick = { onSelected(value) },
                     enabled = enabled,
                     colors = appFilterChipColors(),
-                    label = { Text(text) }
+                    label = {
+                        Text(
+                            text = text,
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Clip
+                        )
+                    }
                 )
             }
         }
@@ -1561,35 +1614,37 @@ private fun MenuActionRow(
     enabled: Boolean = true
 ) {
     val palette = emulationMenuPalette()
+    val shape = neonShape(16.dp)
     val containerColor = if (destructive) {
-        MaterialTheme.colorScheme.error.copy(alpha = 0.14f)
+        MaterialTheme.colorScheme.error.copy(alpha = 0.15f)
     } else {
-        palette.row
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
     }
-    val tint = when {
-        !enabled -> palette.textSecondary.copy(alpha = 0.5f)
+    val iconTint = when {
+        !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
         destructive -> MaterialTheme.colorScheme.error
-        else -> palette.textPrimary
+        else -> MaterialTheme.colorScheme.primary
     }
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(neonShape(14.dp))
+            .clip(shape)
             .clickable(enabled = enabled, onClick = onClick),
-        shape = neonShape(14.dp),
+        shape = shape,
         color = containerColor,
-        border = BorderStroke(1.dp, palette.border)
+        contentColor = palette.textPrimary,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+            Icon(imageVector = icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(20.dp))
+            Spacer(modifier = Modifier.width(12.dp))
             Text(
                 text = title,
-                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-                color = tint,
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.ExtraBold),
+                color = if (destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f)
             )
             if (subtitle.isNotBlank()) SettingHelpButton(title = title, description = subtitle)

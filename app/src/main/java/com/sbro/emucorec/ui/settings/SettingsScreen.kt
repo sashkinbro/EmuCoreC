@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,6 +28,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -58,7 +60,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -78,6 +79,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -487,7 +489,9 @@ fun SettingToggleRow(
     onCheckedChange: (Boolean) -> Unit,
     onResetDefault: () -> Unit,
     enabled: Boolean = true,
-    compact: Boolean = false
+    compact: Boolean = false,
+    // X's settings-screen toggle rows lead with an icon tile; the compact in-game rows do not.
+    icon: ImageVector? = null
 ) {
     val context = LocalContext.current
     val resetToastMessage = stringResource(R.string.settings_reset_toast, title)
@@ -509,7 +513,7 @@ fun SettingToggleRow(
             ),
         shape = neonShape(if (compact) 16.dp else 18.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (compact) 0.35f else 0.22f),
-        border = BorderStroke(1.dp, if (compact) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.62f))
+        border = BorderStroke(1.dp, if (compact) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
     ) {
         Row(
             modifier = Modifier
@@ -517,6 +521,23 @@ fun SettingToggleRow(
                 .padding(horizontal = if (compact) 16.dp else SettingsRowInnerHorizontalPadding, vertical = if (compact) 12.dp else SettingsRowInnerVerticalPadding),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            if (icon != null && !compact) {
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(neonShape(12.dp))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = if (enabled) 0.10f else 0.05f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary.copy(alpha = if (enabled) 1f else 0.5f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(14.dp))
+            }
             Column(
                 modifier = Modifier
                     .weight(1f)

@@ -23,7 +23,6 @@ import androidx.compose.material.icons.rounded.Mouse
 import androidx.compose.material.icons.rounded.Restore
 import androidx.compose.material.icons.rounded.SettingsSuggest
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
@@ -743,10 +742,7 @@ private fun KeyboardMouseChoiceSection(
                     shape = neonChipShape(),
                     selected = selectedValue == value,
                     onClick = { onSelect(value) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    ),
+                    colors = appFilterChipColors(),
                     label = { Text(label) }
                 )
             }

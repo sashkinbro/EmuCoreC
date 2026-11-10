@@ -1,6 +1,7 @@
 package com.sbro.emucorec.ui.playtime
 
 import com.sbro.emucorec.ui.common.EmptyStateCard
+import com.sbro.emucorec.ui.common.appFilterChipColors
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -34,7 +35,6 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.SportsEsports
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -259,10 +259,7 @@ private fun GameSelector(
                     FilterChip(shape = neonChipShape(), 
                         selected = selectedTitleId == null,
                         onClick = { onSelect(null) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        ),
+                        colors = appFilterChipColors(),
                         label = { Text(stringResource(R.string.play_time_all_games), maxLines = 1, softWrap = false) },
                         leadingIcon = {
                             Icon(Icons.Rounded.QueryStats, contentDescription = null)

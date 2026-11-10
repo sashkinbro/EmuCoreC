@@ -55,7 +55,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.sbro.emucorec.ui.common.appFilterChipColors
 import com.sbro.emucorec.R
 import com.sbro.emucorec.core.Ps3CoreSettingOverrides
@@ -79,6 +78,7 @@ import org.json.JSONObject
 import java.util.Locale
 import kotlin.math.roundToLong
 import com.sbro.emucorec.ui.theme.neon.neonShape
+import com.sbro.emucorec.ui.theme.neon.neonButtonShape
 import com.sbro.emucorec.ui.theme.neon.neonChipShape
 
 enum class Ps3CoreSettingsScope { Global, Game }
@@ -370,31 +370,43 @@ fun Ps3CoreSettingsSection(
         if (userFacingSettings.any { it.pendingRestart } &&
             Ps3Runtime.state() != EmulatorState.Stopped
         ) {
-            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                Text(stringResource(R.string.ps3_core_pending_restart), style = MaterialTheme.typography.bodySmall)
-                Button(
-                    enabled = !restarting,
-                    onClick = {
-                        restarting = true
-                        coroutineScope.launch {
-                            if (!Ps3LaunchBridge.restartRunningGame(context)) {
-                                error = resources.getString(R.string.game_launch_failed)
-                                restarting = false
-                            }
+            // The button already names the outcome, so the caption that used to sit above it
+            // is gone; it inherited the menu's unset content colour and read as dark-on-dark.
+            // The action itself spans the content width instead of floating inset and pill-sized.
+            Button(
+                enabled = !restarting,
+                onClick = {
+                    restarting = true
+                    coroutineScope.launch {
+                        if (!Ps3LaunchBridge.restartRunningGame(context)) {
+                            error = resources.getString(R.string.game_launch_failed)
+                            restarting = false
                         }
-                    },
-                ) { Text(stringResource(R.string.ps3_core_apply_restart)) }
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp),
+                shape = neonButtonShape(),
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.ps3_core_apply_restart),
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                )
             }
         }
         userFacingSettings.groupBy { coreSettingsGroup(it.path) }
             .toSortedMap(compareBy(CoreSettingsGroup::ordinal)).forEach { (group, groupSettings) ->
             val sectionSettings = groupSettings.sortedWith(compareBy({ coreSettingOrder(it.path) }, Ps3CoreSetting::path))
             if (surface == Ps3CoreSettingsSurface.InGame) {
-                InGameSettingsCard(title = stringResource(group.titleRes)) {
+                // In-game the tabs already name the area and every row carries its own title,
+                // so the section labels were repeated noise and are not rendered at all.
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     sectionSettings.forEach { setting ->
                         Ps3CoreSettingRow(
                             setting = setting,
-                            inGame = surface == Ps3CoreSettingsSurface.InGame,
+                            inGame = true,
                             onWrite = { writeWithPermission(setting, it) },
                             onReset = {
                                 if (scope == Ps3CoreSettingsScope.Game) resetGameSetting(setting)
@@ -488,23 +500,6 @@ private fun MicrophoneTest(device: String) {
         }
         if (running) LinearProgressIndicator(progress = { level }, modifier = Modifier.fillMaxWidth())
         if (failed) Text(stringResource(R.string.ps3_core_setting_rejected, localizedCoreLabel("Microphone Devices")), color = MaterialTheme.colorScheme.error)
-    }
-}
-
-/** Flat section header: the menu surface already contains its setting rows. */
-@Composable
-internal fun InGameSettingsCard(title: String, content: @Composable () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold, letterSpacing = 1.sp),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 4.dp),
-        )
-        content()
     }
 }
 

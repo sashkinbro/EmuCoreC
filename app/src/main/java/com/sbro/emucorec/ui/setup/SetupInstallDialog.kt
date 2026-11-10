@@ -359,6 +359,6 @@ private fun StatusIconChip(
 private fun statusTint(status: InstallStatus) = when (status) {
     InstallStatus.Success -> MaterialTheme.colorScheme.primary
     InstallStatus.Error -> MaterialTheme.colorScheme.error
-    InstallStatus.Running -> MaterialTheme.colorScheme.secondary
+    InstallStatus.Running -> MaterialTheme.colorScheme.primary
     InstallStatus.Idle -> MaterialTheme.colorScheme.primary
 }

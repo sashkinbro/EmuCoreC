@@ -196,6 +196,7 @@ fun EmulationOverlayHost(
     var sessionElapsedMs by remember(activity) { mutableLongStateOf(activity.currentPlayTimeElapsedMs()) }
     val gameTitle = activity.currentGameTitle.ifBlank { gameId }
     val gameIconPath = activity.currentGameIconPath
+    val gameCoverUrl = activity.currentGameCoverUrl
     val hasPhysicalGamepad = activity.hasPhysicalGamepad
     val touchControlsActive = controlsEditMode || config.enableGamepadOverlay
     val showTouchControls = !menuOpen &&
@@ -631,6 +632,7 @@ fun EmulationOverlayHost(
             EmulationGameMenu(
                 gameTitle = gameTitle,
                 gameIconPath = gameIconPath,
+                gameCoverUrl = gameCoverUrl,
                 gameId = gameId,
                 config = config,
                 paused = effectivePaused,

@@ -1,6 +1,7 @@
 package com.sbro.emucorec.ui.achievements
 
 import com.sbro.emucorec.ui.common.EmptyStateCard
+import com.sbro.emucorec.ui.common.appFilterChipColors
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -43,7 +44,6 @@ import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -243,10 +243,7 @@ private fun TrophySetSelector(
                 FilterChip(shape = neonChipShape(), 
                     selected = selected,
                     onClick = { onSelect(set.communicationId) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    ),
+                    colors = appFilterChipColors(),
                     label = {
                         Text(
                             text = set.gameTitle,

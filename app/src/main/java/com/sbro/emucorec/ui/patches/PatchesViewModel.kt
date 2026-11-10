@@ -25,6 +25,8 @@ data class PatchesUiState(
     val patchesLoading: Boolean = false,
     val isDownloading: Boolean = false,
     val downloadResult: PatchRepository.DownloadResult? = null,
+    /** True once the catalogue was fetched in this screen, even when nothing new came in. */
+    val catalogueSynced: Boolean = false,
     val errorMessage: String? = null,
     val togglingPatchKeys: Set<String> = emptySet(),
 ) {
@@ -40,9 +42,36 @@ class PatchesViewModel(application: Application) : AndroidViewModel(application)
     val uiState: StateFlow<PatchesUiState> = _uiState.asStateFlow()
     private var refreshJob: Job? = null
     private var patchesJob: Job? = null
+    private var openSyncStarted = false
 
     init {
         refresh()
+    }
+
+    /**
+     * The screen used to open on "no patches" until the player pressed the download button,
+     * which is wrong for a first run: the catalogue can be fetched right away. Sync once per
+     * screen opening, and keep the automatic pass quiet unless it actually fails - the manual
+     * button still reports its result in the banner.
+     */
+    fun syncOnOpen() {
+        if (openSyncStarted) return
+        openSyncStarted = true
+        viewModelScope.launch {
+            _uiState.update { it.copy(isDownloading = true, downloadResult = null) }
+            val result = withContext(Dispatchers.IO) { patchRepository.downloadPatches() }
+            _uiState.update { state ->
+                state.copy(
+                    isDownloading = false,
+                    downloadResult = result as? PatchRepository.DownloadResult.Error,
+                    catalogueSynced = state.catalogueSynced ||
+                        result !is PatchRepository.DownloadResult.Error,
+                )
+            }
+            if (result !is PatchRepository.DownloadResult.Error) {
+                _uiState.value.selectedTitleId?.let(::loadPatches)
+            }
+        }
     }
 
     fun refresh(preferredTitleId: String? = null) {
@@ -97,7 +126,14 @@ class PatchesViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             _uiState.update { it.copy(isDownloading = true, downloadResult = null) }
             val result = withContext(Dispatchers.IO) { patchRepository.downloadPatches() }
-            _uiState.update { it.copy(isDownloading = false, downloadResult = result) }
+            _uiState.update {
+                it.copy(
+                    isDownloading = false,
+                    downloadResult = result,
+                    catalogueSynced = it.catalogueSynced ||
+                        result !is PatchRepository.DownloadResult.Error,
+                )
+            }
             val currentSerial = _uiState.value.selectedTitleId
             if (currentSerial != null && result is PatchRepository.DownloadResult.Success) {
                 loadPatches(currentSerial)

@@ -129,7 +129,7 @@ private fun AppLanguageOptionRow(
     val containerColor = if (selected) {
         MaterialTheme.colorScheme.primaryContainer
     } else {
-        MaterialTheme.colorScheme.surface
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.30f)
     }
     val contentColor = if (selected) {
         MaterialTheme.colorScheme.onPrimaryContainer
@@ -147,14 +147,12 @@ private fun AppLanguageOptionRow(
         modifier = Modifier.fillMaxWidth(),
         shape = neonShape(22.dp),
         color = containerColor,
-        tonalElevation = if (selected) 4.dp else 1.dp,
-        shadowElevation = if (selected) 5.dp else 2.dp,
         border = BorderStroke(
             1.dp,
             if (selected) {
                 MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)
             } else {
-                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.58f)
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
             }
         ),
         onClick = onClick

@@ -1,5 +1,3 @@
-@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-
 package com.sbro.emucorec.ui.emulation
 
 import android.content.Context
@@ -9,7 +7,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -21,13 +18,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import com.sbro.emucorec.ui.common.AppAlertDialog as AlertDialog
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Surface
-import com.sbro.emucorec.ui.common.appFilterChipColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -46,13 +41,19 @@ import androidx.compose.ui.unit.dp
 import com.sbro.emucorec.R
 import com.sbro.emucorec.core.EmulatorStorage
 import com.sbro.emucorec.core.Ps3Core
-import com.sbro.emucorec.ui.settings.InGameSettingsCard
 import com.sbro.emucorec.ui.theme.neon.neonShape
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+
+/** Chip order matches the native portal kind index. */
+private val PORTAL_KINDS = listOf(
+    0 to "Skylanders",
+    1 to "Disney Infinity",
+    2 to "LEGO Dimensions",
+)
 
 private object PortalFigures {
     val placed = mutableStateMapOf<Pair<Int, Int>, String>()
@@ -133,17 +134,19 @@ internal fun ToyPortalPanel() {
     }
     val palette = emulationMenuPalette()
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        InGameSettingsCard(title = stringResource(R.string.emulation_tab_portals)) {
-            Text(
-                stringResource(R.string.emulation_portal_description),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+        // Same header treatment as every other tab: the explanation lives behind the help
+        // button's dialog instead of a paragraph printed above the controls.
+        MenuSection(
+            title = stringResource(R.string.emulation_tab_portals),
+            description = stringResource(R.string.emulation_portal_description),
+        ) {
+            MenuChipRow(
+                label = stringResource(R.string.emulation_tab_portals),
+                selected = kind,
+                options = PORTAL_KINDS,
+                showLabel = false,
+                onSelected = { kind = it },
             )
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf("Skylanders", "Disney Infinity", "LEGO Dimensions").forEachIndexed { index, title ->
-                    FilterChip(colors = appFilterChipColors(), selected = kind == index, onClick = { kind = index }, label = { Text(title) })
-                }
-            }
             if (realPortals and (1 shl kind) != 0) {
                 Text(stringResource(R.string.emulation_portal_real_active))
             } else {

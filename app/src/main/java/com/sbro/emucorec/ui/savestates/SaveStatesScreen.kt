@@ -3,6 +3,7 @@
 package com.sbro.emucorec.ui.savestates
 
 import com.sbro.emucorec.ui.common.EmptyStateCard
+import com.sbro.emucorec.ui.common.appTonalButtonColors
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -388,6 +389,7 @@ private fun SaveStateSlotRow(
             ) {
                 FilledTonalButton(
                     shape = neonButtonShape(),
+                    colors = appTonalButtonColors(),
                     onClick = onLoad,
                     enabled = !busy,
                     modifier = Modifier.weight(1f)

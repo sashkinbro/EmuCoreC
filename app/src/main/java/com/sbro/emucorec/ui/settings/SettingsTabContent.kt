@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.Delete
@@ -170,6 +171,7 @@ private fun GeneralTab(
             onCheckedChange = viewModel::updateKeepScreenOn
         )
         Toggle(
+            icon = Icons.Rounded.Bolt,
             title = stringResource(R.string.settings_show_quick_bar),
             description = stringResource(R.string.settings_help_show_quick_bar),
             checked = uiState.showEmulationQuickBar,
@@ -241,7 +243,8 @@ private fun GpuDriverStatus(
             .fillMaxWidth()
             .padding(top = 4.dp),
         shape = neonShape(18.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f)
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
     ) {
         Column(modifier = Modifier.padding(horizontal = SettingsCardInnerPadding, vertical = SettingsCardInnerPadding)) {
             Text(
@@ -476,7 +479,8 @@ private fun StorageTab(
                     val displayName = com.sbro.emucorec.core.DocumentPathResolver.getDisplayName(context, folderUri)
                     Surface(
                         shape = neonShape(16.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -874,14 +878,14 @@ private fun SettingsStorageDialog(
                         color = if (location.selected) {
                             MaterialTheme.colorScheme.primaryContainer
                         } else {
-                            MaterialTheme.colorScheme.surfaceContainerHigh
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f)
                         },
                         border = BorderStroke(
                             1.dp,
                             if (location.selected) {
-                                MaterialTheme.colorScheme.secondary.copy(alpha = 0.42f)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.42f)
                             } else {
-                                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.52f)
+                                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
                             }
                         ),
                         onClick = { if (enabled) onSelected(location) }
@@ -1046,10 +1050,8 @@ private fun LinkItem(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = neonShape(18.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        tonalElevation = 1.dp,
-        shadowElevation = 2.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.30f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)),
         onClick = onClick,
         enabled = enabled,
     ) {
@@ -1089,8 +1091,23 @@ private fun LinkItem(
 }
 
 @Composable
-private fun Toggle(title: String, description: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit, onResetDefault: () -> Unit, enabled: Boolean = true) =
-    SettingToggleRow(title = title, description = description, checked = checked, onCheckedChange = onCheckedChange, onResetDefault = onResetDefault, enabled = enabled)
+private fun Toggle(
+    title: String,
+    description: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    onResetDefault: () -> Unit,
+    enabled: Boolean = true,
+    icon: ImageVector? = null
+) = SettingToggleRow(
+    title = title,
+    description = description,
+    checked = checked,
+    onCheckedChange = onCheckedChange,
+    onResetDefault = onResetDefault,
+    enabled = enabled,
+    icon = icon
+)
 
 @Composable
 private fun Chips(title: String, description: String, onResetDefault: () -> Unit, content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) =
@@ -1110,10 +1127,8 @@ private fun ActionRow(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = neonShape(18.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        tonalElevation = 1.dp,
-        shadowElevation = 2.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.62f))
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
     ) {
         Row(
             modifier = Modifier.padding(horizontal = SettingsCardInnerPadding, vertical = SettingsCardInnerPadding),
@@ -1153,10 +1168,8 @@ private fun VibrationTestRow(
             .fillMaxWidth()
             .padding(horizontal = SettingsSectionRowPadding),
         shape = neonShape(18.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        tonalElevation = 1.dp,
-        shadowElevation = 2.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.62f))
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
     ) {
         Row(
             modifier = Modifier.padding(horizontal = SettingsCardInnerPadding, vertical = SettingsCardInnerPadding),
@@ -1197,10 +1210,8 @@ private fun AppLanguageSettingRow(
             .fillMaxWidth()
             .padding(horizontal = SettingsSectionRowPadding),
         shape = neonShape(18.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        tonalElevation = 1.dp,
-        shadowElevation = 2.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.62f)),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.30f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)),
         onClick = onClick
     ) {
         Row(
@@ -1250,10 +1261,8 @@ private fun KeepScreenOnSettingRow(
             .fillMaxWidth()
             .padding(horizontal = SettingsSectionRowPadding),
         shape = neonShape(18.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        tonalElevation = 1.dp,
-        shadowElevation = 2.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.62f)),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)),
         onClick = { onCheckedChange(!keepScreenOn) }
     ) {
         Row(

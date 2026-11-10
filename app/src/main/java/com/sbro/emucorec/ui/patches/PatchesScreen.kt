@@ -1,6 +1,7 @@
 package com.sbro.emucorec.ui.patches
 
 import com.sbro.emucorec.ui.common.EmptyStateCard
+import com.sbro.emucorec.ui.common.appSwitchColors
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -39,7 +40,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -89,6 +89,12 @@ fun PatchesScreen(
 
     LaunchedEffect(initialTitleId) {
         initialTitleId?.takeIf(String::isNotBlank)?.let(viewModel::selectGame)
+    }
+
+    // First entry scans and refreshes the patch catalogue itself instead of waiting for a tap
+    // on the download button, which used to leave a fresh install showing "no patches".
+    LaunchedEffect(Unit) {
+        viewModel.syncOnOpen()
     }
 
     DisposableEffect(lifecycleOwner, initialTitleId) {
@@ -178,7 +184,7 @@ fun PatchesScreen(
             if (uiState.patches.isEmpty() && !uiState.patchesLoading) {
                 item {
                     NoPatchesHint(
-                        hasDownloaded = uiState.downloadResult != null,
+                        hasDownloaded = uiState.downloadResult != null || uiState.catalogueSynced,
                         onDownload = viewModel::downloadPatches
                     )
                 }
@@ -326,10 +332,10 @@ private fun PatchGamePicker(
                 Surface(
                     onClick = { onSelect(game.titleId) },
                     shape = neonShape(18.dp),
-                    color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+                    color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.30f),
                     border = BorderStroke(
                         1.dp,
-                        if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.68f) else MaterialTheme.colorScheme.outlineVariant
+                        if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.68f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
                     )
                 ) {
                     Row(
@@ -397,8 +403,7 @@ private fun PatchCard(
             .fillMaxWidth()
             .padding(horizontal = ScreenHorizontalPadding),
         shape = neonShape(18.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        tonalElevation = 1.dp,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
     ) {
         Column(
@@ -432,10 +437,7 @@ private fun PatchCard(
                     checked = patch.enabled,
                     enabled = enabled,
                     onCheckedChange = { onToggle() },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = MaterialTheme.colorScheme.primary,
-                        checkedTrackColor = MaterialTheme.colorScheme.primaryContainer
-                    )
+                    colors = appSwitchColors()
                 )
             }
 

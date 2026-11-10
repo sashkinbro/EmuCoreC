@@ -26,7 +26,8 @@ fun LocalImage(
     path: String?,
     contentDescription: String,
     fallbackLabel: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    contentScale: ContentScale = ContentScale.Crop
 ) {
     // Decoding used to run inline in a remember() on the composition thread at
     // full resolution: a library grid with many local icons decoded every tile
@@ -48,7 +49,7 @@ fun LocalImage(
             bitmap = bitmap!!.asImageBitmap(),
             contentDescription = contentDescription,
             modifier = modifier,
-            contentScale = ContentScale.Crop
+            contentScale = contentScale
         )
     } else {
         Box(

@@ -46,7 +46,8 @@ fun UrlImage(
     modifier: Modifier = Modifier,
     fallbackPath: String? = null,
     pinInMemory: Boolean = false,
-    decodeEdgePx: Int = DEFAULT_DECODED_EDGE_PX
+    decodeEdgePx: Int = DEFAULT_DECODED_EDGE_PX,
+    contentScale: ContentScale = ContentScale.Crop
 ) {
     val context = LocalContext.current
     val decodeEdge = decodeEdgePx.coerceAtLeast(64)
@@ -76,7 +77,7 @@ fun UrlImage(
             bitmap = bitmap.asImageBitmap(),
             contentDescription = contentDescription,
             modifier = modifier,
-            contentScale = ContentScale.Crop
+            contentScale = contentScale
         )
     } else {
         Box(

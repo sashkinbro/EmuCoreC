@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.sbro.emucorec.R
+import com.sbro.emucorec.ui.common.appTonalButtonColors
 import com.sbro.emucorec.ui.theme.neon.neonShape
 import com.sbro.emucorec.ui.theme.neon.neonButtonShape
 
@@ -55,7 +56,7 @@ fun InstallGameChoiceDialog(
                     Icon(Icons.Rounded.Inventory2, null)
                     Text(stringResource(R.string.setup_pkg_button), modifier = Modifier.padding(start = 8.dp))
                 }
-                FilledTonalButton(shape = neonButtonShape(), onClick = onInstallLicense, modifier = Modifier.fillMaxWidth()) {
+                FilledTonalButton(shape = neonButtonShape(), colors = appTonalButtonColors(), onClick = onInstallLicense, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Rounded.VpnKey, null)
                     Text(stringResource(R.string.setup_pkg_license_button), modifier = Modifier.padding(start = 8.dp))
                 }

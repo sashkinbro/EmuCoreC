@@ -1,8 +1,7 @@
-@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-
 package com.sbro.emucorec.ui.feedback
 
 import com.sbro.emucorec.ui.common.EmptyStateCard
+import com.sbro.emucorec.ui.common.horizontalBleed
 import androidx.compose.material.icons.rounded.SportsEsports
 import android.net.Uri
 import android.widget.Toast
@@ -11,10 +10,12 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -83,6 +84,10 @@ import com.sbro.emucorec.ui.theme.neon.neonButtonShape
 
 private data class FeedbackCategory(val id: String, val label: String)
 
+/** Feedback cards pad their content by 16dp; the chip rows bleed by the same amount. */
+private val FeedbackChipInset = 16.dp
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun FeedbackScreen(onBackClick: () -> Unit) {
     val context = LocalContext.current
@@ -224,9 +229,16 @@ fun FeedbackScreen(onBackClick: () -> Unit) {
                 title = stringResource(R.string.feedback_category_title),
                 modifier = Modifier.widthIn(max = 780.dp)
             ) {
-                FlowRow(
+                // One horizontally scrolling row with the inset applied inside the scroll
+                // content (not on the container), matching the settings chip rows.
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalBleed(FeedbackChipInset)
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = FeedbackChipInset),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     categories.forEach { item ->
                         FilterChip(colors = appFilterChipColors(), shape = neonChipShape(),
@@ -276,9 +288,14 @@ fun FeedbackScreen(onBackClick: () -> Unit) {
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    FlowRow(
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalBleed(FeedbackChipInset)
+                            .horizontalScroll(rememberScrollState())
+                            .padding(horizontal = FeedbackChipInset),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         games.take(16).forEach { game ->
                             FilterChip(colors = appFilterChipColors(), shape = neonChipShape(),

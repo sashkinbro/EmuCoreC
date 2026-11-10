@@ -117,6 +117,7 @@ internal fun GameMenuLayoutHost(
                         .fillMaxHeight(),
                     shape = neonShape(24.dp),
                     color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
+                    contentColor = MaterialTheme.colorScheme.onSurface,
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)),
                     shadowElevation = 12.dp
                 ) {
@@ -159,6 +160,7 @@ internal fun GameMenuLayoutHost(
                         .fillMaxHeight(),
                     shape = neonShapeCorners(topStart = 30.dp, topEnd = 30.dp, bottomStart = 18.dp, bottomEnd = 18.dp),
                     color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
+                    contentColor = MaterialTheme.colorScheme.onSurface,
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.50f)),
                     shadowElevation = 14.dp
                 ) {
@@ -199,6 +201,7 @@ internal fun GameMenuLayoutHost(
                         .widthIn(min = 300.dp, max = 352.dp),
                     shape = neonShape(18.dp),
                     color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+                    contentColor = MaterialTheme.colorScheme.onSurface,
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
                     shadowElevation = 10.dp
                 ) {
@@ -243,6 +246,10 @@ private fun GameMenuContentSurface(
         modifier = modifier,
         shape = shape,
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+        // A translucent surface no longer matches a scheme colour, so Surface cannot derive
+        // the content colour and would inherit the framework default black: text without an
+        // explicit colour (captions, hints) rendered dark-on-dark inside the game menu.
+        contentColor = MaterialTheme.colorScheme.onSurface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
     ) {
         GameMenuContentColumn(

@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import com.sbro.emucorec.R
 import com.sbro.emucorec.ui.common.ScreenTopBar
 import com.sbro.emucorec.ui.common.SectionCard
+import com.sbro.emucorec.ui.common.appTonalButtonColors
 import com.sbro.emucorec.ui.theme.ScreenContentBottomPadding
 import com.sbro.emucorec.ui.theme.ScreenHorizontalPadding
 import com.sbro.emucorec.ui.theme.neon.neonShape
@@ -84,7 +85,7 @@ fun SetupScreen(
         SectionCard(title = stringResource(R.string.setup_pkg_license_step_title)) {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 SetupInfoRow(Icons.Rounded.VpnKey, stringResource(R.string.setup_pkg_license_step_body))
-                FilledTonalButton(shape = neonButtonShape(), onClick = onInstallLicense, modifier = Modifier.fillMaxWidth()) {
+                FilledTonalButton(shape = neonButtonShape(), colors = appTonalButtonColors(), onClick = onInstallLicense, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.setup_pkg_license_button))
                 }
             }

@@ -70,6 +70,9 @@ class Emulator : AppCompatActivity(), InputManager.InputDeviceListener {
         private set
     var currentGameIconPath by mutableStateOf<String?>(null)
         private set
+    /** Library cover for the in-game menu header; null when the catalog has none. */
+    var currentGameCoverUrl by mutableStateOf<String?>(null)
+        private set
     private var _currentGameId by mutableStateOf("")
     val currentGameId: String get() = _currentGameId
 
@@ -165,6 +168,7 @@ class Emulator : AppCompatActivity(), InputManager.InputDeviceListener {
         preparingGame = true
         currentGameTitle = ""
         currentGameIconPath = null
+        currentGameCoverUrl = null
         playTimeAccumulatedMs = 0L
         refreshGamepadRuntimeInputSettings()
         refreshKeyboardMouseRuntimeSettings()
@@ -318,6 +322,7 @@ class Emulator : AppCompatActivity(), InputManager.InputDeviceListener {
                 if (!surfaceView.holder.surface.isValid || isFinishing || generation != bootGeneration) return@post
                 currentGameTitle = metadata?.title.orEmpty().ifBlank { requestedId }
                 currentGameIconPath = metadata?.iconPath
+                currentGameCoverUrl = metadata?.catalogCoverUrl
                 val width = surfaceView.width.coerceAtLeast(1)
                 val height = surfaceView.height.coerceAtLeast(1)
                 Ps3Runtime.attachSurface(

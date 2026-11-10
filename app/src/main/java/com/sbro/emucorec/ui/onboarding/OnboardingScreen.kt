@@ -773,7 +773,7 @@ private fun OnboardingStorageDialog(
                         border = androidx.compose.foundation.BorderStroke(
                             1.dp,
                             if (location.selected) {
-                                MaterialTheme.colorScheme.secondary.copy(alpha = 0.42f)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.42f)
                             } else {
                                 MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.52f)
                             }

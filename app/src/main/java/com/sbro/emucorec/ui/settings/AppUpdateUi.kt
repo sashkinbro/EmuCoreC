@@ -78,7 +78,7 @@ fun AppUpdateTab(
         shape = neonShape(24.dp),
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 3.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -139,7 +139,8 @@ fun AppUpdateTab(
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = neonShape(18.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)),
                         onClick = { selectedRelease = release }
                     ) {
                         Column(
@@ -192,7 +193,7 @@ private fun ReleaseDetailsDialog(release: AppUpdateRelease, onDismiss: () -> Uni
                 color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 6.dp,
                 shadowElevation = 12.dp,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.62f))
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
             ) {
                 Column(
                     modifier = Modifier
@@ -339,8 +340,8 @@ private fun UpdateMetric(label: String, value: String, modifier: Modifier = Modi
     Surface(
         modifier = modifier,
         shape = neonShape(18.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.62f))
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(
@@ -397,8 +398,8 @@ private fun UpdateDialogSection(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = neonShape(20.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.62f))
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
     ) {
         Column(
             modifier = Modifier.padding(PaddingValues(14.dp)),
