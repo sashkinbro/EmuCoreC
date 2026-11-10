@@ -91,7 +91,6 @@ fun SaveStatesScreen(
     val topInset = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
     val backClick = rememberDebouncedClick(onClick = onBackClick)
     var pendingDelete by remember { mutableStateOf<Pair<SaveStatesGame, SaveStateSlot>?>(null) }
-    var pendingLoad by remember { mutableStateOf<Pair<SaveStatesGame, SaveStateSlot>?>(null) }
 
     val deletedMessage = stringResource(R.string.emulation_savestate_deleted_toast)
     val failedMessage = stringResource(R.string.emulation_savestate_failed_toast)
@@ -195,30 +194,11 @@ fun SaveStatesScreen(
                     running = false,
                     busyKey = uiState.busyKey,
                     loadUnavailableMessage = launchUnavailableMessage,
-                    onLoad = { slot ->
-                        pendingLoad = game to slot
-                    },
+                    onLoad = { slot -> loadState(game, slot) },
                     onDelete = { slot -> pendingDelete = game to slot }
                 )
             }
         }
-    }
-
-    pendingLoad?.let { (game, slot) ->
-        AlertDialog(
-            onDismissRequest = { pendingLoad = null },
-            title = { Text(stringResource(R.string.emulation_savestate_confirm_load_title)) },
-            text = { Text(stringResource(R.string.emulation_savestate_confirm_load_body, saveStateSlotName(slot))) },
-            confirmButton = {
-                TextButton(onClick = {
-                    pendingLoad = null
-                    loadState(game, slot)
-                }) { Text(stringResource(R.string.emulation_savestate_load_action)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingLoad = null }) { Text(stringResource(R.string.common_cancel)) }
-            }
-        )
     }
 
     pendingDelete?.let { (game, slot) ->

@@ -83,7 +83,6 @@ import com.sbro.emucorec.ui.common.EmuCoreLoadingAnimation
 import com.sbro.emucorec.ui.common.rememberDebouncedClick
 import com.sbro.emucorec.ui.common.COVER_ART_ASPECT_RATIO
 import com.sbro.emucorec.ui.common.igdbCoverUrl
-import com.sbro.emucorec.ui.common.rememberDelayedLoading
 import com.sbro.emucorec.ui.theme.CardContentPadding
 import com.sbro.emucorec.ui.theme.LocalCustomizationSettings
 import com.sbro.emucorec.ui.theme.ScreenContentBottomPadding
@@ -235,7 +234,17 @@ fun LibraryScreen(
                     .background(MaterialTheme.colorScheme.background.copy(alpha = 0.72f))
             )
         }
-        val showLoading = rememberDelayedLoading(uiState.isLoading && !uiState.hasLoadedOnce)
+        // X shows the loader as the whole content area on a first scan, centred on the screen,
+        // instead of a spinner below a header that still reads "0 games".
+        val showLoading = uiState.isLoading && !uiState.hasLoadedOnce
+        if (showLoading) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                EmuCoreLoadingAnimation(size = 80.dp)
+            }
+        } else {
         LazyColumn(
             state = libraryState,
             modifier = Modifier
@@ -328,18 +337,7 @@ fun LibraryScreen(
             }
         }
 
-        if (showLoading) {
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 48.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    EmuCoreLoadingAnimation()
-                }
-            }
-        } else if (uiState.items.isEmpty() && (!uiState.isLoading || uiState.hasLoadedOnce)) {
+        if (uiState.items.isEmpty() && (!uiState.isLoading || uiState.hasLoadedOnce)) {
             item {
                 EmptyStateCard(
                     icon = if (uiState.query.isBlank()) Icons.Rounded.FolderOpen else Icons.Rounded.Search,
@@ -682,6 +680,7 @@ fun LibraryScreen(
                     }
                 }
             }
+        }
         }
         }
     }
