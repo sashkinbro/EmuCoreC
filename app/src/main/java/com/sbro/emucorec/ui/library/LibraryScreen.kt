@@ -124,7 +124,7 @@ fun LibraryScreen(
     var layoutMode by rememberSaveable {
         mutableStateOf(
             LibraryLayoutMode.entries.firstOrNull { it.name == layoutPreferences.layoutMode }
-                ?: LibraryLayoutMode.LIST
+                ?: LibraryLayoutMode.GRID
         )
     }
     val optionsPreferences = remember(context) { LibraryOptionsPreferences(context) }

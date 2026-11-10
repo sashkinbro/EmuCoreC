@@ -17,6 +17,6 @@ class LibraryLayoutPreferences(context: Context) {
     companion object {
         private const val PREFERENCES_NAME = "emucorec_library_prefs"
         private const val KEY_LAYOUT_MODE = "layout_mode"
-        const val DEFAULT_LAYOUT_MODE = "LIST"
+        const val DEFAULT_LAYOUT_MODE = "GRID"
     }
 }
