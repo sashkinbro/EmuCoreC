@@ -1,5 +1,6 @@
 package com.sbro.emucorec.ui.profile
 
+import com.sbro.emucorec.ui.common.EmptyStateCard
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -164,9 +165,9 @@ fun MyListsScreen(
                             onLayoutMode = viewModel::setLayoutMode
                         )
                     }
-                    item {
+                    if (!cloudCardHidden) item {
                         AnimatedVisibility(
-                            visible = !cloudCardHidden,
+                            visible = true,
                             enter = fadeIn(animationSpec = tween(180)) +
                                 expandVertically(animationSpec = tween(240)),
                             exit = fadeOut(animationSpec = tween(140)) +
@@ -252,9 +253,9 @@ fun MyListsScreen(
                             onLayoutMode = viewModel::setLayoutMode
                         )
                     }
-                    item(span = { GridItemSpan(maxLineSpan) }) {
+                    if (!cloudCardHidden) item(span = { GridItemSpan(maxLineSpan) }) {
                         AnimatedVisibility(
-                            visible = !cloudCardHidden,
+                            visible = true,
                             enter = fadeIn(animationSpec = tween(180)) +
                                 expandVertically(animationSpec = tween(240)),
                             exit = fadeOut(animationSpec = tween(140)) +
@@ -514,51 +515,11 @@ private fun MyListsCloudCard(
 
 @Composable
 private fun MyListsEmptyState() {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = neonShape(28.dp),
-        color = MaterialTheme.colorScheme.surface
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 28.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Surface(
-                modifier = Modifier.size(62.dp),
-                shape = neonShape(22.dp),
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.10f))
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Rounded.Person,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(34.dp)
-                    )
-                }
-            }
-            Text(
-                text = stringResource(R.string.my_lists_empty_title),
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Text(
-                text = stringResource(R.string.my_lists_empty_body),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .widthIn(max = 360.dp)
-            )
-        }
-    }
+    EmptyStateCard(
+        icon = Icons.Rounded.Person,
+        title = stringResource(R.string.my_lists_empty_title),
+        body = stringResource(R.string.my_lists_empty_body),
+    )
 }
 
 @Composable

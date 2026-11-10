@@ -127,17 +127,17 @@ private fun AppLanguageOptionRow(
     onClick: () -> Unit
 ) {
     val containerColor = if (selected) {
-        MaterialTheme.colorScheme.secondaryContainer
+        MaterialTheme.colorScheme.primaryContainer
     } else {
         MaterialTheme.colorScheme.surface
     }
     val contentColor = if (selected) {
-        MaterialTheme.colorScheme.onSecondaryContainer
+        MaterialTheme.colorScheme.onPrimaryContainer
     } else {
         MaterialTheme.colorScheme.onSurface
     }
     val secondaryColor = if (selected) {
-        MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.74f)
+        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.74f)
     } else {
         MaterialTheme.colorScheme.onSurfaceVariant
     }

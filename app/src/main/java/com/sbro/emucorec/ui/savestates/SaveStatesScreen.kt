@@ -2,6 +2,7 @@
 
 package com.sbro.emucorec.ui.savestates
 
+import com.sbro.emucorec.ui.common.EmptyStateCard
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -30,7 +31,7 @@ import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Save
-import androidx.compose.material3.AlertDialog
+import com.sbro.emucorec.ui.common.AppAlertDialog as AlertDialog
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -183,7 +184,7 @@ fun SaveStatesScreen(
                 }
             }
 
-            uiState.games.isEmpty() -> item {
+            uiState.games.isEmpty() && !uiState.isLoading -> item {
                 EmptySaveStatesCard()
             }
 
@@ -420,38 +421,11 @@ private fun SaveStateSlotRow(
 
 @Composable
 private fun EmptySaveStatesCard() {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = neonShape(20.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f))
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 34.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Save,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(34.dp)
-            )
-            Text(
-                text = stringResource(R.string.savestate_manager_empty_title),
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = stringResource(R.string.savestate_manager_empty_body),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-        }
-    }
+    EmptyStateCard(
+        icon = Icons.Rounded.Save,
+        title = stringResource(R.string.savestate_manager_empty_title),
+        body = stringResource(R.string.savestate_manager_empty_body),
+    )
 }
 
 @Composable

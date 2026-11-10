@@ -51,7 +51,7 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
-import androidx.compose.material3.AlertDialog
+import com.sbro.emucorec.ui.common.AppAlertDialog as AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -166,8 +166,8 @@ fun EmulationOverlayHost(
     var menuOpen by remember { mutableStateOf(false) }
     // Kept outside the menu composable so closing the menu and opening it again lands on the same
     // tab with the same scroll offset, like the EmuCoreX game menu does.
-    var menuTabName by rememberSaveable { mutableStateOf(EmulationMenuTab.Game.name) }
-    val menuScrollStates = remember { mutableMapOf<String, ScrollState>() }
+    var menuTabName by rememberSaveable(gameId) { mutableStateOf(EmulationMenuTab.Game.name) }
+    val menuScrollStates = remember(gameId) { mutableMapOf<String, ScrollState>() }
     var menuButtonVisible by remember { mutableStateOf(false) }
     var userPaused by remember { mutableStateOf(false) }
     var exitDialogVisible by remember { mutableStateOf(false) }
@@ -187,18 +187,15 @@ fun EmulationOverlayHost(
     val globalKeyboardMouseSettings by KeyboardMouseManager.globalSettings.collectAsState()
     val keyboardMousePreferences = remember(activity) { AppPreferences(activity) }
     val saveStateScope = rememberCoroutineScope()
-    val saveStates = remember(activity, gameId) { SaveStateController(NativeSaveStateBackend()) }
     val saveRepository = remember(activity) { SaveStateRepository(activity) }
+    val saveStates = remember(activity, gameId) {
+        SaveStateController(NativeSaveStateBackend { saveRepository.listSlots(gameId) })
+    }
     val saveStateBusy by saveStates.busy.collectAsState()
     val saveSlots by saveStates.slots.collectAsState()
     var sessionElapsedMs by remember(activity) { mutableLongStateOf(activity.currentPlayTimeElapsedMs()) }
-    var gameTitle by remember(activity, gameId) { mutableStateOf(gameId) }
-    var gameIconPath by remember(activity, gameId) { mutableStateOf<String?>(null) }
-    LaunchedEffect(activity, gameId) {
-        val game = withContext(Dispatchers.IO) { InstalledGameRepository().findByTitleId(activity, gameId) }
-        gameTitle = game?.title?.takeIf(String::isNotBlank) ?: gameId
-        gameIconPath = game?.iconPath
-    }
+    val gameTitle = activity.currentGameTitle.ifBlank { gameId }
+    val gameIconPath = activity.currentGameIconPath
     val hasPhysicalGamepad = activity.hasPhysicalGamepad
     val touchControlsActive = controlsEditMode || config.enableGamepadOverlay
     val showTouchControls = !menuOpen &&
@@ -335,7 +332,10 @@ fun EmulationOverlayHost(
     }
 
     LaunchedEffect(menuOpen, gameId) {
-        if (menuOpen) withContext(Dispatchers.IO) { runCatching { saveStates.refresh() } }
+        if (menuOpen) withContext(Dispatchers.IO) {
+            runCatching { com.sbro.emucorec.ui.settings.preloadCoreSettings(activity) }
+            runCatching { saveStates.refresh() }
+        }
     }
 
     LaunchedEffect(activity, gameId) {
@@ -555,6 +555,7 @@ fun EmulationOverlayHost(
                 }
             },
             onExit = { exitDialogVisible = true },
+            onClose = { menuOpen = false },
             onEditControls = {
                 persistConfig { it.copy(enableGamepadOverlay = true) }
                 menuOpen = false
@@ -616,23 +617,16 @@ fun EmulationOverlayHost(
         AnimatedVisibility(
             visible = menuOpen,
             enter = if (useSidePanel) {
-                slideInHorizontally(initialOffsetX = { it }) + fadeIn(tween(220))
+                slideInHorizontally(initialOffsetX = { it }) + fadeIn(tween(300))
             } else {
                 androidx.compose.animation.slideInVertically(initialOffsetY = { it }) + fadeIn(tween(220))
             },
             exit = if (useSidePanel) {
-                slideOutHorizontally(targetOffsetX = { it }) + fadeOut(tween(180))
+                slideOutHorizontally(targetOffsetX = { it }) + fadeOut(tween(250))
             } else {
                 androidx.compose.animation.slideOutVertically(targetOffsetY = { it }) + fadeOut(tween(180))
             },
-            modifier = Modifier
-                .align(if (useSidePanel) Alignment.CenterEnd else Alignment.BottomCenter)
-                .padding(
-                    start = if (useSidePanel) 0.dp else 16.dp,
-                    top = 16.dp,
-                    end = 16.dp,
-                    bottom = 16.dp
-                )
+            modifier = Modifier.fillMaxSize()
         ) {
             EmulationGameMenu(
                 gameTitle = gameTitle,
@@ -714,6 +708,12 @@ fun EmulationOverlayHost(
             indeterminate = true,
             scrimAlpha = if (launchingSaveState) 1f else 0.78f,
             messageRes = R.string.emulation_savestate_startup_loading,
+        )
+
+        LaunchStateLoadingOverlay(
+            state = LaunchStateLoadingState(activity.preparingGame),
+            indeterminate = true,
+            messageRes = R.string.emulation_game_preparing,
         )
 
         if (showKeyboardMouseSettings) {

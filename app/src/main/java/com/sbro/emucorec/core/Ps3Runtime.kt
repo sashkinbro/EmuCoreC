@@ -82,10 +82,11 @@ object Ps3Runtime {
             return false
         }
 
-        Ps3Core.initialized = true
         com.sbro.emucorec.data.BundledPatches.ensureInstalled(appContext, root)
         MicrophoneDevices.initialize(appContext)
         runCatching { FirmwareState.load() }
+        // Publish readiness only after all first-run resources are in place.
+        Ps3Core.initialized = true
         ensurePumpsRunning()
         true
     }

@@ -75,9 +75,13 @@ internal fun LaunchStateLoadingOverlay(
                 )
                 if (indeterminate) {
                     LinearProgressIndicator(
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
                         modifier = Modifier.fillMaxWidth().testTag("launch_state_loading_progress")
                     )
                 } else LinearProgressIndicator(
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
                     progress = { state.progress },
                     modifier = Modifier
                         .fillMaxWidth()

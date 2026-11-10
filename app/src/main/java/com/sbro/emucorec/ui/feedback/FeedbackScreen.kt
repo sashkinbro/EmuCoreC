@@ -2,6 +2,8 @@
 
 package com.sbro.emucorec.ui.feedback
 
+import com.sbro.emucorec.ui.common.EmptyStateCard
+import androidx.compose.material.icons.rounded.SportsEsports
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -33,7 +35,7 @@ import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Collections
 import androidx.compose.material.icons.rounded.UploadFile
-import androidx.compose.material3.AlertDialog
+import com.sbro.emucorec.ui.common.AppAlertDialog as AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
@@ -45,6 +47,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import com.sbro.emucorec.ui.common.appFilterChipColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -226,7 +229,7 @@ fun FeedbackScreen(onBackClick: () -> Unit) {
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     categories.forEach { item ->
-                        FilterChip(shape = neonChipShape(), 
+                        FilterChip(colors = appFilterChipColors(), shape = neonChipShape(),
                             selected = category == item.id,
                             onClick = { category = item.id },
                             label = { Text(item.label) }
@@ -278,7 +281,7 @@ fun FeedbackScreen(onBackClick: () -> Unit) {
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         games.take(16).forEach { game ->
-                            FilterChip(shape = neonChipShape(), 
+                            FilterChip(colors = appFilterChipColors(), shape = neonChipShape(),
                                 selected = selectedGameId == game.titleId,
                                 onClick = {
                                     selectedGameId = if (selectedGameId == game.titleId) null else game.titleId
@@ -295,11 +298,7 @@ fun FeedbackScreen(onBackClick: () -> Unit) {
                         }
                     }
                 } else {
-                    Text(
-                        text = stringResource(R.string.feedback_game_library_empty),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    EmptyStateCard(icon = Icons.Rounded.SportsEsports, title = stringResource(R.string.feedback_game_library_empty))
                 }
                 OutlinedTextField(
                     value = message,
@@ -337,7 +336,7 @@ fun FeedbackScreen(onBackClick: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Button(shape = neonButtonShape(), 
+                Button(shape = neonButtonShape(),
                     onClick = { showAttachmentSourceDialog = true },
                     enabled = !isInspectingAttachments && attachments.size < FeedbackLimits.MAX_ATTACHMENTS,
                     modifier = Modifier.fillMaxWidth()
@@ -373,7 +372,7 @@ fun FeedbackScreen(onBackClick: () -> Unit) {
             }
         }
         item {
-            Button(shape = neonButtonShape(), 
+            Button(shape = neonButtonShape(),
                 onClick = submitFeedback,
                 enabled = !isQueueing && !isInspectingAttachments && FeedbackUploadScheduler.isConfigured,
                 modifier = Modifier.fillMaxWidth().widthIn(max = 780.dp).height(52.dp)
@@ -399,7 +398,7 @@ fun FeedbackScreen(onBackClick: () -> Unit) {
             title = { Text(stringResource(R.string.feedback_attachment_source_title)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(shape = neonButtonShape(), 
+                    Button(shape = neonButtonShape(),
                         onClick = {
                             showAttachmentSourceDialog = false
                             mediaPicker.launch(
@@ -412,7 +411,7 @@ fun FeedbackScreen(onBackClick: () -> Unit) {
                         Spacer(Modifier.size(8.dp))
                         Text(stringResource(R.string.feedback_add_media))
                     }
-                    OutlinedButton(shape = neonButtonShape(), 
+                    OutlinedButton(shape = neonButtonShape(),
                         onClick = {
                             showAttachmentSourceDialog = false
                             filePicker.launch(arrayOf("*/*"))

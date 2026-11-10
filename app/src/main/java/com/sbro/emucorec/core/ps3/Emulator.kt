@@ -17,6 +17,8 @@ import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.annotation.Keep
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -62,6 +64,12 @@ import kotlin.math.roundToInt
 /** PS3 emulation activity: RPCS3 surface, RPCS3 lifecycle, and the existing EmuCoreC overlay. */
 @android.annotation.SuppressLint("RestrictedApi")
 class Emulator : AppCompatActivity(), InputManager.InputDeviceListener {
+    var preparingGame by mutableStateOf(true)
+        private set
+    var currentGameTitle by mutableStateOf("")
+        private set
+    var currentGameIconPath by mutableStateOf<String?>(null)
+        private set
     private var _currentGameId by mutableStateOf("")
     val currentGameId: String get() = _currentGameId
 
@@ -154,6 +162,9 @@ class Emulator : AppCompatActivity(), InputManager.InputDeviceListener {
         _currentGameId = gameIdFromIntent(intent)
         bootStarted.set(false)
         bootSucceeded = false
+        preparingGame = true
+        currentGameTitle = ""
+        currentGameIconPath = null
         playTimeAccumulatedMs = 0L
         refreshGamepadRuntimeInputSettings()
         refreshKeyboardMouseRuntimeSettings()
@@ -293,14 +304,20 @@ class Emulator : AppCompatActivity(), InputManager.InputDeviceListener {
         // generation makes sure only the newest one actually starts a title,
         // and the last requested launch always wins.
         val generation = synchronized(bootGate) { ++bootGeneration }
+        val requestedIntent = Intent(intent)
+        val requestedId = gameIdFromIntent(requestedIntent)
 
         bootThread = thread(name = "emucorec-ps3-boot") {
-            if (!Ps3Runtime.ensureInitialized(this)) {
-                showBootFailure("EmuCoreC core is missing or could not be initialized")
+            if (!runCatching { Ps3Runtime.ensureInitialized(this) }.getOrDefault(false)) {
+                showBootFailure(getString(R.string.ps3_core_settings_unavailable), generation)
                 return@thread
             }
+            val requestedPath = gamePathFromIntent(requestedIntent)
+            val metadata = runCatching { InstalledGameRepository().findByTitleId(this, requestedId) }.getOrNull()
             surfaceView.post {
-                if (!surfaceView.holder.surface.isValid || isFinishing) return@post
+                if (!surfaceView.holder.surface.isValid || isFinishing || generation != bootGeneration) return@post
+                currentGameTitle = metadata?.title.orEmpty().ifBlank { requestedId }
+                currentGameIconPath = metadata?.iconPath
                 val width = surfaceView.width.coerceAtLeast(1)
                 val height = surfaceView.height.coerceAtLeast(1)
                 Ps3Runtime.attachSurface(
@@ -310,6 +327,9 @@ class Emulator : AppCompatActivity(), InputManager.InputDeviceListener {
                     surfaceView.display?.refreshRate?.toDouble()
                         ?.takeIf { it.isFinite() && it >= 20.0 } ?: 60.0,
                 )
+                // Android preparation ends here. Native boot owns its PPU/SPU progress
+                // and may keep its call active while the guest is already running.
+                preparingGame = false
                 bootThread = thread(name = "emucorec-ps3-game") {
                     val result = synchronized(bootGate) {
                         if (finishPending || isFinishing || generation != bootGeneration) {
@@ -317,18 +337,20 @@ class Emulator : AppCompatActivity(), InputManager.InputDeviceListener {
                             // this thread was starting: never boot a stale title.
                             return@thread
                         }
-                        Ps3Runtime.boot(this, gamePathFromIntent(intent), currentGameIdOrIntent())
+                        runCatching { Ps3Runtime.boot(this, requestedPath, requestedId) }
+                            .onFailure { Log.e(TAG, "PS3 boot threw", it) }
+                            .getOrDefault(BootResult.GenericError)
                     }
                     if (result != BootResult.NoErrors && result != BootResult.AlreadyAdded) {
-                        showBootFailure(result.name)
+                        showBootFailure(result.name, generation)
                     } else {
-                        bootSucceeded = true
-                        runCatching { Ps3Core.instance.getTitleId() }
-                            .getOrDefault("")
-                            .takeIf(String::isNotBlank)
-                            ?.let(::setCurrentGameId)
+                        val nativeId = runCatching { Ps3Core.instance.getTitleId() }.getOrDefault("")
                         runOnUiThread {
-                            if (!lifecyclePaused && !isFinishing) startPlayTimeSessionIfNeeded()
+                            if (generation != bootGeneration || finishPending || isFinishing) return@runOnUiThread
+                            preparingGame = false
+                            bootSucceeded = true
+                            nativeId.takeIf(String::isNotBlank)?.let(::setCurrentGameId)
+                            if (!lifecyclePaused) startPlayTimeSessionIfNeeded()
                         }
                     }
                 }
@@ -336,10 +358,11 @@ class Emulator : AppCompatActivity(), InputManager.InputDeviceListener {
         }
     }
 
-    private fun showBootFailure(reason: String) {
+    private fun showBootFailure(reason: String, generation: Int) {
         Log.e(TAG, "PS3 boot failed: $reason")
         runOnUiThread {
-            if (!isFinishing) {
+            if (generation == bootGeneration && !finishPending && !isFinishing) {
+                preparingGame = false
                 Toast.makeText(this, "${getString(R.string.game_launch_failed)} ($reason)", Toast.LENGTH_LONG).show()
                 finish()
             }
@@ -353,8 +376,13 @@ class Emulator : AppCompatActivity(), InputManager.InputDeviceListener {
         setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
         val preferences = AppPreferences(this@Emulator)
         setContent {
+            val customizationPreferences = remember { com.sbro.emucorec.data.CustomizationPreferences(this@Emulator) }
+            val customization by customizationPreferences.settings.collectAsState()
+            DisposableEffect(customizationPreferences) {
+                onDispose { customizationPreferences.close() }
+            }
             val themeMode by preferences.themeModeFlow.collectAsState(initial = preferences.themeMode)
-            EmuCoreCTheme(themeMode = themeMode, enableCrtOverlay = false) {
+            EmuCoreCTheme(themeMode = themeMode, customization = customization, enableCrtOverlay = false) {
                 EmulationOverlayHost(activity = this@Emulator)
             }
         }
@@ -416,7 +444,7 @@ class Emulator : AppCompatActivity(), InputManager.InputDeviceListener {
 
     fun getRunningGameTitle(): String {
         val id = currentGameIdOrIntent()
-        return InstalledGameRepository().findByTitleId(this, id)?.title.orEmpty()
+        return currentGameTitle.ifBlank { id }
     }
 
     fun setMenuPaused(paused: Boolean) {
@@ -592,8 +620,7 @@ class Emulator : AppCompatActivity(), InputManager.InputDeviceListener {
         if (gameId.isBlank()) return
         if (playTimeSessionId != null && playTimeSessionTitleId.equals(gameId, true)) return
         finishPlayTimeSessionIfNeeded()
-        val title = InstalledGameRepository().findByTitleId(this, gameId)?.title
-            ?.takeIf(String::isNotBlank) ?: gameId
+        val title = currentGameTitle.ifBlank { gameId }
         val session = PlayTimeRepository(this).startSession(gameId, title) ?: return
         playTimeSessionId = session.id
         playTimeSessionTitleId = gameId
@@ -610,8 +637,7 @@ class Emulator : AppCompatActivity(), InputManager.InputDeviceListener {
             val durationMs = (endedAt - playTimeSessionStartedAt).coerceAtLeast(0L)
             val titleId = playTimeSessionTitleId
             if (titleId.isNotBlank() && durationMs > 0L) {
-                val title = InstalledGameRepository().findByTitleId(this, titleId)?.title
-                    ?.takeIf { it.isNotBlank() } ?: titleId
+                val title = currentGameTitle.ifBlank { titleId }
                 ProfilePlayTimeSyncer.recordAndSync(applicationContext, titleId, title, durationMs)
             }
         }

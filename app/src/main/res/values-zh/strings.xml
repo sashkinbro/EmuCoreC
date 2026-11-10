@@ -102,10 +102,10 @@
     <string name="settings_help_content_description">開啟設定說明</string>
     <string name="settings_help_dialog_label">设置指南</string>
     <string name="settings_help_dialog_tip">每次只更改一个选项，然后测试同一段游戏场景，这样才能看清真正改善了什么。</string>
-    <string name="settings_help_gamepad_overlay">在未使用實體控制器時顯示螢幕控制項。\n\n用于让触摸或手柄输入更符合你的玩法。如果控制已经正常，请避免随意更改，极端数值可能让瞄准、菜单或触摸功能更难使用。</string>
-    <string name="settings_help_overlay_scale">變更螢幕控制項的大小。\n\n用于让触摸或手柄输入更符合你的玩法。如果控制已经正常，请避免随意更改，极端数值可能让瞄准、菜单或触摸功能更难使用。</string>
-    <string name="settings_help_overlay_opacity">變更螢幕控制項的透明度。\n\n用于让触摸或手柄输入更符合你的玩法。如果控制已经正常，请避免随意更改，极端数值可能让瞄准、菜单或触摸功能更难使用。</string>
-    <string name="settings_help_analog_multiplier">變更類比搖桿靈敏度。\n\n用于让触摸或手柄输入更符合你的玩法。如果控制已经正常，请避免随意更改，极端数值可能让瞄准、菜单或触摸功能更难使用。</string>
+    <string name="settings_help_gamepad_overlay" formatted="false">在游戏画面上显示触摸手柄。使用实体手柄或遮挡重要画面时可将其隐藏；游戏菜单仍可通过返回操作打开。</string>
+    <string name="settings_help_overlay_scale" formatted="false">同时改变所有触摸控件的大小。增大便于点击，缩小可显示更多游戏画面。单个按钮的位置和大小请在触摸控件编辑器中调整。</string>
+    <string name="settings_help_overlay_opacity" formatted="false">改变触摸控件的可见程度：100% 为完全不透明，较低值可透出更多游戏画面。仅改变外观；透明按钮仍会响应触摸。</string>
+    <string name="settings_help_analog_multiplier" formatted="false">将实体模拟摇杆的移动量乘以此值后再传给游戏。大于 1.0 会更早达到最大偏转；小于 1.0 会降低最大输入。中央死区和按键映射单独设置。</string>
     <string name="settings_reset_toast">%1$s 已重設為預設值</string>
     <string name="settings_app_language">應用程式語言</string>
     <string name="settings_app_language_system">系統預設</string>
@@ -1120,7 +1120,7 @@
     <string name="core_help_video_anisotropic_filter_override" formatted="false">较高的值会增加倾斜表面上纹理的清晰度，但会消耗 GPU 资源。
 现代 GPU 可以很好地处理此设置，即使是 16 倍也是如此。
 如果您想使用真实 PS3 所使用的原始设置，请将其保留为“自动”。</string>
-    <string name="core_help_video_aspect_ratio" formatted="false">除非您有 4:3 显示器，否则请将其保留为 16:9。</string>
+    <string name="core_help_video_aspect_ratio" formatted="false">选择游戏图像的宽高比。使用游戏支持的比例，通常为 16:9。其他比例可能拉伸图像；铺满屏幕的拉伸功能另行设置。</string>
     <string name="core_help_audio_rsxaudio_avport" formatted="false">控制使用哪个 avport 来采样音频数据。</string>
     <string name="core_help_audio_desired_audio_buffer_duration" formatted="false">目标缓冲区持续时间（以毫秒为单位）。
 较高的值使缓冲算法的工作更容易，但可能会引入明显的音频延迟。</string>
@@ -1137,15 +1137,14 @@
 手动设置将使用您选择的格式，而自动设置将让游戏从所有可用格式中进行选择。</string>
     <string name="core_help_audio_audio_provider" formatted="false">控制使用哪个 PS3 音频 API。
 游戏使用 CellAudio，而 VSH 需要 RSXAudio。</string>
-    <string name="core_help_audio_renderer" formatted="false">Cubeb 采用跨平台方法并支持音频缓冲，因此是推荐的选项。
-如果不可用，可以使用 FAudio 代替。</string>
+    <string name="core_help_audio_renderer" formatted="false">选择音频输出后端。除非排查无声或声音异常，否则保留平台默认值。更换后端需要重启游戏；Null 会关闭声音。</string>
     <string name="core_help_input_output_background_input_enabled" formatted="false">当游戏窗口未聚焦时允许键盘和键盘输入。</string>
     <string name="core_help_net_bind_address" formatted="false">要绑定到的接口 IP 地址。
 仅适用于自定义配置。</string>
     <string name="core_help_input_output_buzz_emulated_controller" formatted="false">嗡嗡声！支持。
 如果游戏需要 Buzz!，请选择 1 或 2 个控制器。控制器，而你没有真正的控制器。
 如果游戏支持 DualShock 或者您有真正的 Buzz，请选择 Null！控制器。</string>
-    <string name="core_help_input_output_camera" formatted="false">选择 Qt Camera 以使用操作系统的默认摄像头设备。</string>
+    <string name="core_help_input_output_camera" formatted="false">Android 支持模拟 PS3 摄像头连接但不提供真实图像，或不连接摄像头。实际摄像头采集尚未实现；Fake 可通过部分连接检查，但不会提供实时视频。</string>
     <string name="core_help_input_output_camera_flip" formatted="false">水平、垂直或在两个轴上翻转相机图像。</string>
     <string name="core_help_input_output_camera_id" formatted="false">选择您想在游戏过程中使用的相机。</string>
     <string name="core_help_input_output_camera_type" formatted="false">根据游戏的不同，您可能需要选择特定的相机类型。</string>
@@ -1157,14 +1156,8 @@
 可以通过单击“设置为现在”重置为当前挂钟时间。</string>
     <string name="core_help_audio_convert_to_16_bit" formatted="false">使用 16 位音频样本而不是默认的 32 位浮点。
 如果您没有声音或声音完全损坏，请使用有缺陷的音频驱动程序。</string>
-    <string name="core_help_video_custom_anaglyph_matrices_matrix_left" formatted="false">设置 3D 立体渲染模式（仅在默认分辨率为 720p 的自定义配置中可用）。
-浮雕对每只眼睛使用不同的颜色，然后可以用某些眼镜进行过滤。
-VR 查看器应用程序更普遍支持并排。
-Over-Under 更接近原生立体声输出，但不太受支持。</string>
-    <string name="core_help_video_custom_anaglyph_matrices_matrix_right" formatted="false">设置 3D 立体渲染模式（仅在默认分辨率为 720p 的自定义配置中可用）。
-浮雕对每只眼睛使用不同的颜色，然后可以用某些眼镜进行过滤。
-VR 查看器应用程序更普遍支持并排。
-Over-Under 更接近原生立体声输出，但不太受支持。</string>
+    <string name="core_help_video_custom_anaglyph_matrices_matrix_left" formatted="false">立体红蓝输出中此眼使用的自定义 3×3 颜色转换矩阵。仅针对特定彩色眼镜或校准调整；不合适的值会扭曲颜色。不影响普通 2D 输出。</string>
+    <string name="core_help_video_custom_anaglyph_matrices_matrix_right" formatted="false">立体红蓝输出中此眼使用的自定义 3×3 颜色转换矩阵。仅针对特定彩色眼镜或校准调整；不合适的值会扭曲颜色。不影响普通 2D 输出。</string>
     <string name="core_help_system_date_format" formatted="false">选择 PS3 的日期格式。</string>
     <string name="core_help_core_debug_console_mode" formatted="false">增加可用系统内存量以匹配 DECR 控制台等。
 导致某些软件的行为与零售硬件上的行为不同。</string>
@@ -1241,11 +1234,7 @@ Over-Under 更接近原生立体声输出，但不太受支持。</string>
 ·汽车是现有行为，偏向于深度。
 当启用颜色写入而未启用深度写入时，Prefer Color 会保留颜色绑定。修复了某些延迟渲染器（例如 Starhawk）中缺失的几何体，但代价是跳过该绘制的深度测试。
 目前“首选深度”与“自动”相同。</string>
-    <string name="core_help_video_frame_limit" formatted="false">关闭是最快的选项。
-使用帧限制器会增加额外的开销并减慢游戏速度。但是，如果帧率太高，某些游戏会崩溃。
-仅当自动无法正常工作时才应使用 PS3 原生，因为它可能会引入帧节奏问题。
-Infinite 添加了一个正反馈循环，每帧添加另一个 vblank 信号，从而使更多游戏的 fps 不受限制。
-需要其他帧限制的经验丰富的用户应使用配置文件中的“第二帧限制”设置。</string>
+    <string name="core_help_video_frame_limit" formatted="false">限制游戏每秒帧数。PS3 Native 遵循主机时序；固定值可能改变游戏速度或物理效果。取消限制可能增加发热，或导致依赖帧率上限的游戏出错。</string>
     <string name="core_help_video_fidelityfx_cas_sharpening_intensity" formatted="false">控制 FidelityFX 超分辨率应用的锐化强度。较高的值将提供更清晰的输出，但可能会引入伪影。</string>
     <string name="core_help_input_output_ghltar_emulated_controller" formatted="false">Guitar Hero Live (GHL) 吉他控制器支持。
 如果游戏需要 GHL 吉他控制器而您没有真正的吉他控制器，请选择 1 或 2 个控制器。
@@ -1287,9 +1276,7 @@ Basic 在这些情况下将起作用。</string>
 游戏可以使用缓存文件夹临时存储系统内存之外的数据。它不用于长期储存。
 
 此设置仅在全局配置中可用。</string>
-    <string name="core_help_core_max_llvm_compile_threads" formatted="false">限制用于初始 PPU 和 SPU 模块编译的最大线程数。
-降低此值可以提高其他打开的应用程序的性能。
-默认使用所有可用线程。</string>
+    <string name="core_help_core_max_llvm_compile_threads" formatted="false">初始 PPU/SPU 编译的最大并行任务数。0 根据 CPU 和可用内存自动调度。较小的手动值可能减慢编译；较大的值会增加内存占用和发热。</string>
     <string name="core_help_core_max_cpu_preempt_count" formatted="false">降低 CPU 使用率和功耗，延长移动设备的电池寿命。 （0表示禁用）
 值越高，效果越明显，但可能会导致音频或性能问题。建议使用 50 或更小的值。
 此选项强制 FPS 限制，因为它在帧速率稳定时处于活动状态。
@@ -1302,10 +1289,7 @@ Basic 在这些情况下将起作用。</string>
     <string name="core_help_core_mfc_debug" formatted="false">创建 MFC 日志。
 只对开发者有用。
 切勿使用此功能。</string>
-    <string name="core_help_audio_microphone_devices" formatted="false">大多数游戏都应使用标准。
-SingStar 模拟 SingStar 设备，应与 SingStar 游戏一起使用。
-Real SingStar 只能与运行 SingStar 游戏的 REAL SingStar 设备一起使用。
-Rocksmith 应与 Rocksmith 加密狗一起使用。</string>
+    <string name="core_help_audio_microphone_devices" formatted="false">选择模拟麦克风使用的实际录音设备。需要 Android 麦克风权限。麦克风类型决定游戏看到的 PS3 配件；此项决定配件的音频来源。</string>
     <string name="core_help_audio_microphone_type" formatted="false">大多数游戏都应使用标准。
 SingStar 模拟 SingStar 设备，应与 SingStar 游戏一起使用。
 Real SingStar 只能与运行 SingStar 游戏的 REAL SingStar 设备一起使用。
@@ -1356,10 +1340,10 @@ FidelityFX 目前不支持立体 3D 输出。</string>
     <string name="core_help_video_performance_overlay_show_header" formatted="false">在性能叠加层顶部显示应用、构建和核心版本，并在底部显示 CPU 和 GPU 行。</string>
     <string name="core_help_video_performance_overlay_font_size_px" formatted="false">设置性能叠加层的字体大小（以像素为单位）。</string>
     <string name="core_help_video_performance_overlay_framerate_datapoints" formatted="false">设置帧速率图中使用的数据点数量。</string>
-    <string name="core_help_video_performance_overlay_framerate_graph_detail_level" formatted="false">控制性能叠加层上显示的信息量。</string>
+    <string name="core_help_video_performance_overlay_framerate_graph_detail_level" formatted="false">选择 FPS 图表显示的注释与统计。更多细节有助于检查帧输出是否均匀，但不会提高游戏性能。</string>
     <string name="core_help_video_performance_overlay_enable_framerate_graph" formatted="false">启用或禁用帧速率图。</string>
     <string name="core_help_video_performance_overlay_frametime_datapoints" formatted="false">设置帧时间图中使用的数据点数量。</string>
-    <string name="core_help_video_performance_overlay_frametime_graph_detail_level" formatted="false">控制性能叠加层上显示的信息量。</string>
+    <string name="core_help_video_performance_overlay_frametime_graph_detail_level" formatted="false">选择帧时间图表显示的注释与统计。峰值表示帧间隔不均匀；仅改变图表显示，不改变游戏时序。</string>
     <string name="core_help_video_performance_overlay_enable_frametime_graph" formatted="false">启用或禁用帧时间图。</string>
     <string name="core_help_video_performance_overlay_horizontal_margin" formatted="false">设置相对于屏幕象限到屏幕边框的水平距离（以% 为单位）。</string>
     <string name="core_help_video_performance_overlay_vertical_margin" formatted="false">设置相对于屏幕象限到屏幕边框的垂直距离（以 % 为单位）。</string>
@@ -1373,10 +1357,7 @@ FidelityFX 目前不支持立体 3D 输出。</string>
     <string name="core_help_core_ppu_debug" formatted="false">创建 PPU 日志。
 只对开发者有用。
 切勿使用此功能。</string>
-    <string name="core_help_core_ppu_decoder" formatted="false">在首次运行游戏之前，使用 LLVM 重新编译器重新编译并缓存游戏的 PPU 代码。
-这是迄今为止最快的选项，应该始终使用。
-如果您遇到兼容性问题，请使用其中一种解释器并重试。
-如果不确定，请使用此选项。</string>
+    <string name="core_help_core_ppu_decoder" formatted="false">选择 PPU 代码的执行方式。LLVM 通常更快，并在代码或相关设置改变前复用已编译模块。仅在排查特定兼容性问题时尝试解释器。</string>
     <string name="core_help_core_ppu_reservation_priority_over_spus" formatted="false">当 SPU 使用预留时，为 PPU 提供执行优势。
 仅建议少数游戏使用此设置以提高性能。
 由于潜在的性能下降，请勿在未经建议的情况下使用它。</string>
@@ -1396,8 +1377,8 @@ FidelityFX 目前不支持立体 3D 输出。</string>
     <string name="core_help_net_psn_status" formatted="false">如果设置为 RPCN，如果游戏支持，RPCS3 将使用 RPCN 服务器作为 PSN 连接。
 如果设置为“模拟”，RPCS3 将尝试伪造 PSN 连接，但任何使用 PSN 功能的实际尝试都可能会导致错误或崩溃。
 模拟仅在自定义配置中可用。</string>
-    <string name="core_help_video_read_color_buffers" formatted="false">使用虚拟机内存初始化渲染目标内存。</string>
-    <string name="core_help_video_read_depth_buffer" formatted="false">使用虚拟机内存初始化渲染目标内存。</string>
+    <string name="core_help_video_read_color_buffers" formatted="false">绘制前从模拟的 PS3 内存读取颜色数据。若游戏通过 CPU 修改渲染目标，可修复缺失的图像或效果；额外传输可能降低速度。</string>
+    <string name="core_help_video_read_depth_buffer" formatted="false">绘制前从模拟的 PS3 内存读取深度数据。用于存在深度相关图形错误的游戏；额外传输可能降低性能。</string>
     <string name="core_help_video_record_with_overlays" formatted="false">启用叠加录制。
 这也会影响屏幕截图。</string>
     <string name="core_help_video_relaxed_zcull_sync" formatted="false">更改 ZCULL 报告同步行为。尝试找到最适合您游戏的选项。对于大多数游戏，建议使用近似模式。
@@ -1416,10 +1397,7 @@ FidelityFX 目前不支持立体 3D 输出。</string>
 基本分辨率始终为 1280x720。
 如果您想使用正常的分辨率选项，请将此值设置为 100%。
 低于 100% 的值通常不会提高性能。</string>
-    <string name="core_help_video_screen_size_in_inches" formatted="false">设置 3D 立体渲染模式（仅在默认分辨率为 720p 的自定义配置中可用）。
-浮雕对每只眼睛使用不同的颜色，然后可以用某些眼镜进行过滤。
-VR 查看器应用程序更普遍支持并排。
-Over-Under 更接近原生立体声输出，但不太受支持。</string>
+    <string name="core_help_video_screen_size_in_inches" formatted="false">通过 PS3 视频 API 向游戏报告屏幕对角线尺寸，单位为英寸。用于游戏的立体显示校准；不会改变 Android 分辨率或图像缩放。</string>
     <string name="core_help_input_output_load_sdl_gamecontroller_mappings" formatted="false">加载 SDL GameController 数据库以提高游戏手柄兼容性。仅在 SDL 焊盘处理程序中使用。</string>
     <string name="core_help_core_set_daz_and_ftz" formatted="false">设置特殊 MXCSR 标志以调试 SSE 操作中的错误。
 以牺牲准确性为代价来提高 PPU 性能。</string>
@@ -1431,9 +1409,7 @@ Over-Under 更接近原生立体声输出，但不太受支持。</string>
 这可以用于提高可读性和/或美观性。</string>
     <string name="core_help_video_shader_loading_dialog_allow_custom_background" formatted="false">在本机着色器加载对话框/加载屏幕期间显示背景图像。
 默认情况下，使用的图像将为/PS3_GAME/PIC1.PNG。</string>
-    <string name="core_help_video_shader_mode" formatted="false">这是推荐的选项。
-如果在缓存中找不到着色器，则在编译之前不会为该着色器渲染任何内容。
-您可能会遇到图形弹出的情况。</string>
+    <string name="core_help_video_shader_mode" formatted="false">控制缺失 GPU 着色器的准备方式。异步模式减少停顿，但效果可能暂时缺失。着色器解释器可减少这种缺失，代价是更多启动工作和 GPU 负载。</string>
     <string name="core_help_video_shader_precision" formatted="false">控制生成的着色器的精度级别。低精度会生成更快的代码，具体取决于硬件，但有时会产生轻微的视觉故障或闪烁。</string>
     <string name="core_help_miscellaneous_show_analog_limiter_toggle_hint" formatted="false">使用本机覆盖层显示模拟限制器切换提示。</string>
     <string name="core_help_miscellaneous_show_autosave_autoload_hint" formatted="false">使用本机覆盖显示自动保存/自动加载提示。</string>
@@ -1454,15 +1430,11 @@ Over-Under 更接近原生立体声输出，但不太受支持。</string>
 可能会以意想不到的方式影响性能。</string>
     <string name="core_help_core_spu_block_size" formatted="false">该选项控制 SPU 分析器，特别是编译单元的大小。 Mega 和 Giga 模式可以通过将较小的单元捆绑在一起、减少编译单元的数量但增加其大小来提高性能。
 使用安全模式以获得最大兼容性。</string>
-    <string name="core_help_core_spu_cache" formatted="false">在运行之前使用 LLVM 重新编译器重新编译并缓存游戏的 SPU 代码，这会增加额外的启动时间。
-这是最快的选项，具有非常好的兼容性。
-如果遇到问题，请使用 ASMJIT 重新编译器。</string>
+    <string name="core_help_core_spu_cache" formatted="false">保存发现的 SPU 程序，并在游戏开始前预热缓存，减少后续启动的重复编译。新的代码仍可能在游玩时编译；关闭缓存可能增加卡顿。</string>
     <string name="core_help_core_spu_debug" formatted="false">创建 SPU 日志。
 只对开发者有用。
 切勿使用此功能。</string>
-    <string name="core_help_core_spu_decoder" formatted="false">在运行之前使用 LLVM 重新编译器重新编译并缓存游戏的 SPU 代码，这会增加额外的启动时间。
-这是最快的选项，具有非常好的兼容性。
-如果遇到问题，请使用 ASMJIT 重新编译器。</string>
+    <string name="core_help_core_spu_decoder" formatted="false">选择 SPU 代码的执行方式。LLVM 生成原生代码以提高速度；解释器主要用于兼容性检查，可能慢很多。更换解码器可能需要重新构建缓存。</string>
     <string name="core_help_core_spu_loop_detection" formatted="false">尝试检测 SPU 内核中的循环条件并将其用作调度提示。
 提高性能并降低 CPU 使用率。
 在极少数情况下可能会导致严重的音频卡顿。</string>
@@ -1505,9 +1477,7 @@ Over-Under 更接近原生立体声输出，但不太受支持。</string>
     <string name="core_help_miscellaneous_use_native_user_interface" formatted="false">允许在游戏窗口中使用可与游戏控制器交互的本机 HUD。
 禁用时，将使用常规 Qt 对话框。
 目前，屏幕键盘仅支持英文按键布局。</string>
-    <string name="core_help_video_vulkan_use_re_bar_for_gpu_uploads" formatted="false">启用后，Vulkan 将尝试使用 PCI-e 可调整大小的条地址空间来上传时序敏感数据的 GPU。
-当基本帧速率较低时，这会在 NVIDIA 卡上带来巨大的性能提升。
-对于帧速率非常高的游戏，此选项可能会导致所有 GPU 供应商的性能变差。</string>
+    <string name="core_help_video_vulkan_use_re_bar_for_gpu_uploads" formatted="false">为对时延敏感的 Vulkan 上传选择 CPU 可访问的一致性内存。Android 使用共享系统 RAM，而非桌面 PCIe Re-BAR 硬件。性能取决于 GPU 驱动，请比较相同场景。</string>
     <string name="core_help_miscellaneous_use_recursive_scan" formatted="false">从选定的文件夹中扫描游戏时，启用对子文件夹的递归扫描。
 禁用后，仅在选定的文件夹中扫描游戏。</string>
     <string name="core_help_video_vblank_ntsc_fixup" formatted="false">对于 59.94Hz 等值，将 VBLANK 的速率乘以 1000/1001。
@@ -1530,7 +1500,7 @@ Over-Under 更接近原生立体声输出，但不太受支持。</string>
     <string name="core_help_video_write_color_buffers" formatted="false">如果您在游戏中缺少图形或灯光损坏，请启用此选项。
 在某些情况下可能会降低性能并导致卡顿。
 恶魔之魂所需。</string>
-    <string name="core_help_video_write_depth_buffer" formatted="false">将深度缓冲区值写入虚拟机内存。</string>
+    <string name="core_help_video_write_depth_buffer" formatted="false">把渲染得到的深度写回模拟的 PS3 内存。部分游戏的效果或可见性检查需要此数据。GPU 回读可能开销较大，因此仅针对具体图形问题启用。</string>
     <string name="core_help_core_spu_xfloat_accuracy" formatted="false">SPU 浮点矢量处理的控制精度。
 以性能为代价修复各种游戏中的错误。
 仅当 SPU 解码器设置为动态或 LLVM 时，才应用此设置。</string>
@@ -2110,4 +2080,31 @@ Over-Under 更接近原生立体声输出，但不太受支持。</string>
     <string name="customization_font_help" formatted="false">選擇應用程式字型，或匯入 TTF 或 OTF 字型檔。「系統」會使用裝置字型。</string>
     <string name="customization_text_size_help" formatted="false">縮放整個應用程式的文字。較大的文字可能使部分標籤換行。</string>
     <string name="settings_customization_drawer_help" formatted="false">選擇導覽抽屜的外觀。預覽會在選取前顯示各種樣式。</string>
+    <string name="emulation_game_preparing">正在准备游戏…</string>
+    <string name="settings_group_display_scaling">显示与缩放</string>
+    <string name="settings_group_rendering_compatibility">渲染兼容性</string>
+    <string name="settings_group_shaders_cache">着色器与缓存</string>
+    <string name="settings_group_audio_output">音频输出</string>
+    <string name="settings_group_audio_buffering">音频缓冲</string>
+    <string name="settings_group_input_devices">输入设备</string>
+    <string name="settings_group_cpu_compilation">CPU 与编译</string>
+    <string name="settings_group_diagnostics">诊断</string>
+    <string name="home_library_options">游戏库选项</string>
+    <string name="home_view_list">以清單顯示</string>
+    <string name="home_view_grid">以網格顯示</string>
+    <string name="home_search">搜尋遊戲</string>
+    <string name="home_search_clear">清除搜尋</string>
+    <string name="home_sort_title_asc">标题 A-Z</string>
+    <string name="home_sort_title_desc">标题 Z-A</string>
+    <string name="home_sort_recent_desc">最近更新</string>
+    <string name="home_sort_recent_asc">最早更新</string>
+    <string name="home_sort_size_desc">檔案最大</string>
+    <string name="home_sort_size_asc">檔案最小</string>
+    <string name="emulation_close_menu">关闭菜单</string>
+    <string name="emulation_play_time_badge">游戏时长 %1$s</string>
+    <string name="emulation_menu_subtitle">在不離開遊戲的情況下管理目前的會話。</string>
+    <string name="home_empty_search_title">沒有結果</string>
+    <string name="home_empty_search_subtitle">請嘗試其他名稱或更改排序方式。</string>
+    <string name="save_manager_no_results_body">请尝试其他游戏名称或存档文件夹名称。</string>
+    <string name="profile_no_recent_events">暂无近期动态。</string>
 </resources>

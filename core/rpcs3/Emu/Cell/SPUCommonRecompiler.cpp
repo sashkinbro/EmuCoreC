@@ -1140,7 +1140,6 @@ std::deque<spu_program> spu_cache::get()
 
 	m_file.seek(0);
 
-	// TODO: signal truncated or otherwise broken file
 	while (true)
 	{
 		struct block_info_t
@@ -1150,8 +1149,16 @@ std::deque<spu_program> spu_cache::get()
 			be_t<u32> addr;
 		} block_info{};
 
+		const u64 record_start = m_file.pos();
 		if (!m_file.read(block_info))
 		{
+			// An interrupted append must not hide every program saved after it on
+			// subsequent boots. Preserve the valid prefix and remove the partial tail.
+			if (m_file.size() != record_start)
+			{
+				spu_log.warning("SPU cache: repairing incomplete header at %u", record_start);
+				m_file.trunc(record_start);
+			}
 			break;
 		}
 
@@ -1161,6 +1168,8 @@ std::deque<spu_program> spu_cache::get()
 
 		if (utils::add_saturate<u32>(addr, size * 4) > SPU_LS_SIZE)
 		{
+			spu_log.warning("SPU cache: repairing invalid record at %u", record_start);
+			m_file.trunc(record_start);
 			break;
 		}
 
@@ -1168,6 +1177,8 @@ std::deque<spu_program> spu_cache::get()
 
 		if (!m_file.read(func, size))
 		{
+			spu_log.warning("SPU cache: repairing incomplete program at %u", record_start);
+			m_file.trunc(record_start);
 			break;
 		}
 
@@ -1358,12 +1369,16 @@ void spu_cache::initialize(bool build_existing_cache)
 		}
 
 		worker_count = std::min<u32>(rpcs3::utils::get_max_threads(), ::narrow<u32>(add_count));
+
 	}
 
 	atomic_t<u32> pending_progress = 0;
 	atomic_t<bool> showing_progress = false;
 
-	if (!g_progr_ptotal)
+	spu_log.success("SPU cache startup: %u saved programs, %u discovered functions, %u workers (%s)",
+		func_list.size(), total_precompile, worker_count, loc);
+
+	if (total_funcs && !g_progr_ptotal)
 	{
 		g_progr_ptotal += total_funcs;
 		showing_progress.release(true);

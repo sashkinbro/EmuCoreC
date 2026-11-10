@@ -1,5 +1,7 @@
 package com.sbro.emucorec.ui.settings
 
+import com.sbro.emucorec.ui.common.appSwitchColors
+
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -25,6 +27,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -50,18 +53,20 @@ import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Vibration
 import com.sbro.emucorec.core.InstallStateBus
 import com.sbro.emucorec.data.AppPreferences
-import androidx.compose.material3.AlertDialog
+import com.sbro.emucorec.ui.common.AppAlertDialog as AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import com.sbro.emucorec.ui.common.appFilterChipColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -73,6 +78,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
@@ -84,6 +91,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sbro.emucorec.R
 import com.sbro.emucorec.core.Ps3CoreConfig
+import com.sbro.emucorec.ui.common.StickyTabHeader
+import com.sbro.emucorec.ui.common.stickyTabTopInset
+import com.sbro.emucorec.ui.common.rememberStickyTabHeaderPinned
 import com.sbro.emucorec.ui.common.NavigationBackButton
 import com.sbro.emucorec.ui.common.SettingHelpButton
 import com.sbro.emucorec.ui.common.rememberDebouncedClick
@@ -94,7 +104,7 @@ import com.sbro.emucorec.ui.theme.neon.neonButtonShape
 
 private val SettingsRowHorizontalPadding = ScreenHorizontalPadding
 private val SettingsRowInnerHorizontalPadding = 14.dp
-private val SettingsRowInnerVerticalPadding = 14.dp
+private val SettingsRowInnerVerticalPadding = 10.dp
 
 enum class SettingsTab(@param:StringRes val titleRes: Int, val icon: ImageVector) {
     General(R.string.settings_tab_general, Icons.Rounded.Tune),
@@ -110,7 +120,7 @@ enum class SettingsTab(@param:StringRes val titleRes: Int, val icon: ImageVector
     About(R.string.settings_tab_about, Icons.Rounded.Info),
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun SettingsScreen(
     initialTab: SettingsTab = SettingsTab.General,
@@ -178,42 +188,45 @@ fun SettingsScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // The top bar and the tab row stay put; only the tab's content scrolls,
-        // and it starts at the top on every tab switch. Previously all three
-        // shared one scroll position, so a tab opened at whatever offset the
-        // previous one was left at -- which is what looked broken.
-        val contentScrollState = rememberScrollState()
+        val listState = rememberLazyListState()
+        val stickyInset = stickyTabTopInset()
+        val tabsPinned = rememberStickyTabHeaderPinned(listState, "settings-tabs")
+        var previousTab by remember { mutableStateOf(selectedTab) }
         LaunchedEffect(selectedTab) {
-            contentScrollState.scrollTo(0)
+            if (previousTab != selectedTab) {
+                previousTab = selectedTab
+                // Keep an expanded header expanded; otherwise start below the pinned tabs.
+                listState.scrollToItem(if (listState.firstVisibleItemIndex == 0) 0 else 1)
+            }
         }
-        Column(
+        LazyColumn(
+            state = listState,
             modifier = Modifier
+                .testTag("settings-scroll")
                 .fillMaxSize()
-                .navigationBarsPadding()
+                .padding(top = stickyInset)
+                .navigationBarsPadding(),
+            contentPadding = PaddingValues(bottom = 110.dp)
         ) {
-            SettingsCompactTopBar(
-                title = stringResource(R.string.settings_title),
-                subtitle = stringResource(selectedTab.titleRes),
-                topInset = topInset,
-                onBackClick = backClick,
-                onResetSettingsClick = { showResetDialog = true }
-            )
-
-            SettingsTabRow(
-                selectedTab = selectedTab,
-                onSelected = { selectedTab = it }
-            )
-
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .verticalScroll(contentScrollState)
-                    .padding(top = 12.dp, bottom = 110.dp),
-                verticalArrangement = Arrangement.spacedBy(18.dp)
-            ) {
+            item(key = "settings-header") {
+                Box(Modifier.testTag("settings-header")) {
+                    SettingsCompactTopBar(
+                        title = stringResource(R.string.settings_title),
+                        subtitle = stringResource(selectedTab.titleRes),
+                        topInset = (topInset - stickyInset).coerceAtLeast(0.dp),
+                        onBackClick = backClick,
+                        onResetSettingsClick = { showResetDialog = true }
+                    )
+                }
+            }
+            stickyHeader(key = "settings-tabs") {
+                StickyTabHeader(showDivider = tabsPinned, modifier = Modifier.testTag("settings-tabs")) {
+                    SettingsTabRow(selectedTab = selectedTab, onSelected = { selectedTab = it })
+                }
+            }
+            item(key = "settings-content-$selectedTab") {
                 Column(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(18.dp)
                 ) {
                     SettingsTabContent(
@@ -244,7 +257,7 @@ fun SettingsScreen(
                 title = { Text(stringResource(R.string.settings_reset_defaults_title)) },
                 text = { Text(stringResource(R.string.settings_reset_defaults_message)) },
                 confirmButton = {
-                    Button(shape = neonButtonShape(), 
+                    Button(shape = neonButtonShape(),
                         onClick = {
                             showResetDialog = false
                             resetSettingsClick()
@@ -273,7 +286,7 @@ fun SettingsScreen(
                 title = { Text(stringResource(R.string.settings_backup_restore_title)) },
                 text = { Text(stringResource(R.string.settings_backup_restore_message)) },
                 confirmButton = {
-                    Button(shape = neonButtonShape(), 
+                    Button(shape = neonButtonShape(),
                         onClick = {
                             showRestoreBackupDialog = false
                             restorePicker.launch(arrayOf("application/json", "text/json", "*/*"))
@@ -387,23 +400,10 @@ private fun SettingsHeaderIconButton(
     onClick: () -> Unit,
     content: @Composable () -> Unit
 ) {
-    Surface(
-        modifier = Modifier.size(40.dp),
-        shape = neonShape(14.dp),
-        color = MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        tonalElevation = 3.dp,
-        shadowElevation = 5.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)),
-        onClick = rememberDebouncedClick(onClick = onClick)
-    ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            content()
-        }
-    }
+    IconButton(
+        onClick = rememberDebouncedClick(onClick = onClick),
+        modifier = Modifier.size(40.dp)
+    ) { content() }
 }
 
 @Composable
@@ -446,17 +446,10 @@ private fun SettingsTabRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items(items = tabs, key = { it.name }) { tab ->
-            FilterChip(shape = neonChipShape(), 
+            FilterChip(shape = neonChipShape(),
                 selected = selectedTab == tab,
                 onClick = { onSelected(tab) },
-                colors = FilterChipDefaults.filterChipColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    labelColor = MaterialTheme.colorScheme.onSurface,
-                    iconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    selectedLeadingIconColor = MaterialTheme.colorScheme.onSecondaryContainer
-                ),
+                colors = appFilterChipColors(),
                 label = { Text(stringResource(tab.titleRes), maxLines = 1, softWrap = false) },
                 leadingIcon = {
                     Icon(
@@ -493,7 +486,8 @@ fun SettingToggleRow(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     onResetDefault: () -> Unit,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    compact: Boolean = false
 ) {
     val context = LocalContext.current
     val resetToastMessage = stringResource(R.string.settings_reset_toast, title)
@@ -513,16 +507,14 @@ fun SettingToggleRow(
                     }
                 }
             ),
-        shape = neonShape(18.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        tonalElevation = 1.dp,
-        shadowElevation = 2.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.62f))
+        shape = neonShape(if (compact) 16.dp else 18.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (compact) 0.35f else 0.22f),
+        border = BorderStroke(1.dp, if (compact) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.62f))
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = SettingsRowInnerHorizontalPadding, vertical = SettingsRowInnerVerticalPadding),
+                .padding(horizontal = if (compact) 16.dp else SettingsRowInnerHorizontalPadding, vertical = if (compact) 12.dp else SettingsRowInnerVerticalPadding),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(
@@ -536,18 +528,18 @@ fun SettingToggleRow(
                 ) {
                     Text(
                         text = title,
-                        style = MaterialTheme.typography.bodyLarge,
+                        style = if (compact) MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium) else MaterialTheme.typography.bodyLarge,
                         color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                         modifier = Modifier.weight(1f, fill = false)
                     )
                     SettingHelpButton(title = title, description = description)
                 }
             }
-            Switch(
+            Switch(colors = appSwitchColors(),
                 checked = checked,
-                onCheckedChange = onCheckedChange,
+                onCheckedChange = if (compact) null else onCheckedChange,
                 enabled = enabled,
-                modifier = Modifier.padding(start = 4.dp)
+                modifier = Modifier.padding(start = 4.dp).then(if (compact) Modifier.scale(0.85f) else Modifier)
             )
         }
     }

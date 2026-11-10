@@ -1,5 +1,6 @@
 package com.sbro.emucorec.ui.catalog
 
+import com.sbro.emucorec.ui.common.EmptyStateCard
 import android.annotation.SuppressLint
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.animation.AnimatedVisibility
@@ -186,6 +187,8 @@ fun CatalogScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
+ Column {
+
                         ScreenTopBar(
                             title = stringResource(R.string.catalog_title),
                             onBackClick = guardedBackClick,
@@ -204,27 +207,29 @@ fun CatalogScreen(
                                 )
                             }
                         )
-                    }
+                    
 
-                    item(span = { GridItemSpan(maxLineSpan) }) {
                         AnimatedVisibility(
                             visible = isSearchPanelVisible,
                             enter = fadeIn(animationSpec = tween(160)) + expandVertically(animationSpec = tween(220)),
                             exit = fadeOut(animationSpec = tween(120)) + shrinkVertically(animationSpec = tween(180))
                         ) {
+ Box(Modifier.padding(top = 12.dp)) {
                             CatalogSearchPanel(
                                 query = uiState.query,
                                 onQueryChange = viewModel::updateQuery
                             )
-                        }
-                    }
+                        
+ }
+}
+                    
 
-                    item(span = { GridItemSpan(maxLineSpan) }) {
                         AnimatedVisibility(
                             visible = isFiltersPanelVisible,
                             enter = fadeIn(animationSpec = tween(160)) + expandVertically(animationSpec = tween(220)),
                             exit = fadeOut(animationSpec = tween(120)) + shrinkVertically(animationSpec = tween(180))
                         ) {
+ Box(Modifier.padding(top = 12.dp)) {
                             CatalogFiltersPanel(
                                 hasActiveFilters = hasActiveFilters,
                                 selectedGenre = uiState.selectedGenre,
@@ -243,8 +248,12 @@ fun CatalogScreen(
                                 onMinRating = viewModel::updateMinRating,
                                 onClear = viewModel::clearFilters
                             )
-                        }
-                    }
+                        
+ }
+}
+                    
+ }
+ }
 
                     if (uiState.results.isEmpty()) {
                         item(span = { GridItemSpan(maxLineSpan) }) {
@@ -871,32 +880,8 @@ private fun CatalogProfileDialog(
 }
 
 @Composable
-private fun CatalogMessageCard(
-    title: String,
-    body: String,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        modifier = modifier,
-        shape = neonShape(22.dp),
-        color = MaterialTheme.colorScheme.surface
-    ) {
-        Column(
-            modifier = Modifier.padding(CardContentPadding),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = body,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
+private fun CatalogMessageCard(title: String, body: String, modifier: Modifier = Modifier) {
+    EmptyStateCard(icon = Icons.Rounded.Search, title = title, body = body, modifier = modifier)
 }
 
 @Composable

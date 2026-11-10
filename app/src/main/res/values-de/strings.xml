@@ -102,10 +102,10 @@
     <string name="settings_help_content_description">Einstellungs-Hilfe öffnen</string>
     <string name="settings_help_dialog_label">Einstellungshilfe</string>
     <string name="settings_help_dialog_tip">Ändere immer nur eine Option und teste dieselbe Spielsituation, damit du echte Verbesserungen erkennst.</string>
-    <string name="settings_help_gamepad_overlay">Zeigt Bildschirmsteuerungen an, wenn du keinen physischen Controller verwendest.\n\nNutze dies, damit Touch- oder Controller-Eingaben besser zu deiner Spielweise passen. Ändere es nicht, wenn sich die Steuerung bereits richtig anfühlt, da extreme Werte Zielen, Menüs oder Touch-Funktionen erschweren können.</string>
-    <string name="settings_help_overlay_scale">Ändert die Größe der Bildschirmsteuerungen.\n\nNutze dies, damit Touch- oder Controller-Eingaben besser zu deiner Spielweise passen. Ändere es nicht, wenn sich die Steuerung bereits richtig anfühlt, da extreme Werte Zielen, Menüs oder Touch-Funktionen erschweren können.</string>
-    <string name="settings_help_overlay_opacity">Ändert die Transparenz der Bildschirmsteuerungen.\n\nNutze dies, damit Touch- oder Controller-Eingaben besser zu deiner Spielweise passen. Ändere es nicht, wenn sich die Steuerung bereits richtig anfühlt, da extreme Werte Zielen, Menüs oder Touch-Funktionen erschweren können.</string>
-    <string name="settings_help_analog_multiplier">Ändert die Empfindlichkeit des Analogsticks.\n\nNutze dies, damit Touch- oder Controller-Eingaben besser zu deiner Spielweise passen. Ändere es nicht, wenn sich die Steuerung bereits richtig anfühlt, da extreme Werte Zielen, Menüs oder Touch-Funktionen erschweren können.</string>
+    <string name="settings_help_gamepad_overlay" formatted="false">Zeigt das Touch-Gamepad über dem Spiel. Bei Verwendung eines Controllers oder verdeckten Bildbereichen ausblenden. Das Spielmenü bleibt über Zurück erreichbar.</string>
+    <string name="settings_help_overlay_scale" formatted="false">Ändert die Größe aller Touch-Steuerelemente gemeinsam. Für leichteres Antippen vergrößern oder für mehr sichtbares Spiel verkleinern. Einzelne Tasten lassen sich im Touch-Editor verschieben und skalieren.</string>
+    <string name="settings_help_overlay_opacity" formatted="false">Ändert die Sichtbarkeit der Touch-Tasten: 100% ist vollständig undurchsichtig, kleinere Werte zeigen mehr vom Spiel. Nur die Darstellung ändert sich; transparente Tasten reagieren weiterhin auf Berührungen.</string>
+    <string name="settings_help_analog_multiplier" formatted="false">Multipliziert die Bewegung physischer Analogsticks vor der Übertragung ins Spiel. Über 1,0 wird der volle Ausschlag früher erreicht; unter 1,0 sinkt die maximale Eingabe. Totzone und Tastenbelegung werden separat eingestellt.</string>
     <string name="settings_reset_toast">%1$s auf Standard zurückgesetzt</string>
     <string name="settings_app_language">App-Sprache</string>
     <string name="settings_app_language_system">Systemstandard</string>
@@ -1121,7 +1121,7 @@ Wenn Sie sich nicht sicher sind, ändern Sie diese Einstellung nicht.</string>
     <string name="core_help_video_anisotropic_filter_override" formatted="false">Höhere Werte erhöhen die Schärfe von Texturen auf geneigten Oberflächen auf Kosten der GPU-Ressourcen.
 Moderne GPUs kommen mit dieser Einstellung selbst bei 16x problemlos zurecht.
 Behalten Sie die Einstellung „Automatisch“ bei, wenn Sie die ursprüngliche Einstellung einer echten PS3 verwenden möchten.</string>
-    <string name="core_help_video_aspect_ratio" formatted="false">Behalten Sie 16:9 bei, es sei denn, Sie haben einen 4:3-Monitor.</string>
+    <string name="core_help_video_aspect_ratio" formatted="false">Wählt das Seitenverhältnis des Spielbildes. Das vom Spiel unterstützte Verhältnis verwenden, meistens 16:9. Andere Werte können das Bild verzerren; Bildschirmstreckung wird separat eingestellt.</string>
     <string name="core_help_audio_rsxaudio_avport" formatted="false">Steuert, welcher Avport zum Abtasten von Audiodaten verwendet wird.</string>
     <string name="core_help_audio_desired_audio_buffer_duration" formatted="false">Zielpufferdauer in Millisekunden.
 Höhere Werte erleichtern die Arbeit des Pufferalgorithmus, können jedoch zu spürbarer Audiolatenz führen.</string>
@@ -1138,15 +1138,14 @@ Das Ändern dieser Werte erfordert einen Neustart des Spiels.
 Bei der manuellen Einstellung werden Ihre ausgewählten Formate verwendet, während bei der automatischen Einstellung das Spiel aus allen verfügbaren Formaten auswählen kann.</string>
     <string name="core_help_audio_audio_provider" formatted="false">Steuert, welche PS3-Audio-API verwendet wird.
 Spiele verwenden CellAudio, während VSH RSXAudio erfordert.</string>
-    <string name="core_help_audio_renderer" formatted="false">Cubeb verwendet einen plattformübergreifenden Ansatz und unterstützt Audiopufferung, daher ist dies die empfohlene Option.
-Wenn es nicht verfügbar ist, könnte stattdessen FAudio verwendet werden.</string>
+    <string name="core_help_audio_renderer" formatted="false">Wählt das Audio-Ausgabesystem. Plattformstandard beibehalten, außer bei fehlendem oder gestörtem Ton. Ein Wechsel erfordert einen Spielneustart; Null schaltet den Ton aus.</string>
     <string name="core_help_input_output_background_input_enabled" formatted="false">Ermöglicht Pad- und Tastatureingaben, während das Spielfenster nicht fokussiert ist.</string>
     <string name="core_help_net_bind_address" formatted="false">Schnittstellen-IP-Adresse für die Bindung.
 Nur in benutzerdefinierten Konfigurationen verfügbar.</string>
     <string name="core_help_input_output_buzz_emulated_controller" formatted="false">Buzz! Unterstützung.
 Wählen Sie 1 oder 2 Controller aus, wenn das Spiel Buzz! erfordert. Controller und Sie haben keine echten Controller.
 Wählen Sie „Null“, wenn das Spiel DualShock unterstützt oder Sie über echtes Buzz! verfügen. Controller.</string>
-    <string name="core_help_input_output_camera" formatted="false">Wählen Sie „Qt-Kamera“, um das Standardkameragerät Ihres Betriebssystems zu verwenden.</string>
+    <string name="core_help_input_output_camera" formatted="false">Android unterstützt eine vorgetäuschte PS3-Kameraverbindung ohne echtes Kamerabild oder keine Kamera. Physische Kameraaufnahme ist nicht implementiert; Fake kann einige Verbindungsprüfungen erfüllen, liefert aber kein Livevideo.</string>
     <string name="core_help_input_output_camera_flip" formatted="false">Spiegelt das Kamerabild entweder horizontal, vertikal oder auf beiden Achsen.</string>
     <string name="core_help_input_output_camera_id" formatted="false">Wählen Sie die Kamera aus, die Sie während des Spiels verwenden möchten.</string>
     <string name="core_help_input_output_camera_type" formatted="false">Je nach Spiel müssen Sie möglicherweise einen bestimmten Kameratyp auswählen.</string>
@@ -1158,14 +1157,8 @@ Wenn dieser Modus deaktiviert ist, erlauben einige Spiele möglicherweise keinen
 Kann durch Klicken auf „Auf Jetzt einstellen“ auf die aktuelle Uhrzeit zurückgesetzt werden.</string>
     <string name="core_help_audio_convert_to_16_bit" formatted="false">Verwendet 16-Bit-Audio-Samples anstelle des standardmäßigen 32-Bit-Gleitkommas.
 Verwenden Sie es mit fehlerhaften Audiotreibern, wenn Sie keinen oder keinen Ton mehr haben.</string>
-    <string name="core_help_video_custom_anaglyph_matrices_matrix_left" formatted="false">Legt den 3D-Stereo-Rendering-Modus fest (nur in benutzerdefinierten Konfigurationen mit einer Standardauflösung von 720p verfügbar).
-Anaglyph verwendet für jedes Auge unterschiedliche Farben, die dann mit bestimmten Brillen gefiltert werden können.
-Side-by-Side wird häufiger von VR-Viewer-Apps unterstützt.
-Over-Under kommt der nativen Stereoausgabe näher, wird aber weniger häufig unterstützt.</string>
-    <string name="core_help_video_custom_anaglyph_matrices_matrix_right" formatted="false">Legt den 3D-Stereo-Rendering-Modus fest (nur in benutzerdefinierten Konfigurationen mit einer Standardauflösung von 720p verfügbar).
-Anaglyph verwendet für jedes Auge unterschiedliche Farben, die dann mit bestimmten Brillen gefiltert werden können.
-Side-by-Side wird häufiger von VR-Viewer-Apps unterstützt.
-Over-Under kommt der nativen Stereoausgabe näher, wird aber weniger häufig unterstützt.</string>
+    <string name="core_help_video_custom_anaglyph_matrices_matrix_left" formatted="false">Eigene 3×3-Farbmatrix für dieses Auge bei Anaglyph-3D. Nur für bestimmte Farbbrillen oder zur Kalibrierung anpassen; ungeeignete Werte verfälschen Farben. Normale 2D-Ausgabe bleibt unverändert.</string>
+    <string name="core_help_video_custom_anaglyph_matrices_matrix_right" formatted="false">Eigene 3×3-Farbmatrix für dieses Auge bei Anaglyph-3D. Nur für bestimmte Farbbrillen oder zur Kalibrierung anpassen; ungeeignete Werte verfälschen Farben. Normale 2D-Ausgabe bleibt unverändert.</string>
     <string name="core_help_system_date_format" formatted="false">Wählen Sie das Datumsformat der PS3 aus.</string>
     <string name="core_help_core_debug_console_mode" formatted="false">Erhöht die Menge des nutzbaren Systemspeichers, um einer DECR-Konsole und mehr zu entsprechen.
 Führt dazu, dass sich manche Software anders verhält als auf Einzelhandelshardware.</string>
@@ -1242,11 +1235,7 @@ Diese Option führt zu Leistungseinbußen und dem Risiko visueller Artefakte, ka
 · Auto ist das vorhandene Verhalten, das auf die Tiefe ausgerichtet ist.
 „Farbe bevorzugen“ behält die Farbbindung bei, wenn Farbschreiben aktiviert ist und Tiefenschreiben nicht. Behebt fehlende Geometrie in einigen verzögerten Renderern (z. B. Starhawk), was dazu führt, dass der Tiefentest für diese Zeichnung übersprungen wird.
 „Tiefe bevorzugen“ ist vorerst dasselbe wie „Auto“.</string>
-    <string name="core_help_video_frame_limit" formatted="false">Aus ist die schnellste Option.
-Die Verwendung des Frame-Limiters führt zu zusätzlichem Overhead und verlangsamt das Spiel. Allerdings stürzen einige Spiele ab, wenn die Framerate zu hoch ist.
-PS3 nativ sollte nur verwendet werden, wenn Auto nicht richtig funktioniert, da es zu Frame-Pacing-Problemen kommen kann.
-Infinite fügt eine positive Rückkopplungsschleife hinzu, die pro Frame ein weiteres Vblank-Signal hinzufügt, sodass mehr Spiele unbegrenzt fps möglich sind.
-Erfahrene Benutzer, die andere Frame-Limits benötigen, sollten die Einstellung „Second Frame Limit“ in der Konfigurationsdatei verwenden.</string>
+    <string name="core_help_video_frame_limit" formatted="false">Begrenzt die Spielbilder pro Sekunde. PS3 Native folgt dem Konsolentakt; feste Werte können Spielgeschwindigkeit oder Physik verändern. Ohne Limit können Wärme und Fehler in Spielen mit erwartetem Limit zunehmen.</string>
     <string name="core_help_video_fidelityfx_cas_sharpening_intensity" formatted="false">Steuern Sie die von FidelityFX Super Resolution angewendete Schärfungsstärke. Höhere Werte führen zu einer schärferen Ausgabe, können jedoch zu Artefakten führen.</string>
     <string name="core_help_input_output_ghltar_emulated_controller" formatted="false">Guitar Hero Live (GHL) Gitarren-Controller-Unterstützung.
 Wählen Sie 1 oder 2 Controller aus, wenn das Spiel GHL-Gitarren-Controller erfordert und Sie keine echten Gitarren-Controller haben.
@@ -1288,9 +1277,7 @@ Werte über 100 % können die Audioqualität beeinträchtigen.</string>
 Spiele können den Cache-Ordner verwenden, um Daten vorübergehend außerhalb des Systemspeichers zu speichern. Es dient nicht der Langzeitlagerung.
 
 Diese Einstellung ist nur in der globalen Konfiguration verfügbar.</string>
-    <string name="core_help_core_max_llvm_compile_threads" formatted="false">Begrenzt die maximale Anzahl von Threads, die für die anfängliche PPU- und SPU-Modulkompilierung verwendet werden.
-Verringern Sie diesen Wert, um die Leistung anderer geöffneter Anwendungen zu steigern.
-Standardmäßig werden alle verfügbaren Threads verwendet.</string>
+    <string name="core_help_core_max_llvm_compile_threads" formatted="false">Maximale parallele Aufgaben bei der anfänglichen PPU/SPU-Kompilierung. 0 wählt automatisch anhand von CPU und verfügbarem Speicher. Ein kleinerer manueller Wert kann langsamer kompilieren; ein größerer erhöht Speicherbedarf und Wärme.</string>
     <string name="core_help_core_max_cpu_preempt_count" formatted="false">Reduziert die CPU-Auslastung und den Stromverbrauch und verbessert die Akkulaufzeit auf Mobilgeräten. (0 bedeutet deaktiviert)
 Höhere Werte bewirken einen ausgeprägteren Effekt, können jedoch zu Audio- oder Leistungsproblemen führen. Ein Wert von 50 oder weniger wird empfohlen.
 Diese Option erzwingt ein FPS-Limit, da sie aktiv ist, wenn die Framerate stabil ist.
@@ -1303,10 +1290,7 @@ Reduziert die Leistung erheblich! Wenn Sie unsicher sind, verwenden Sie diese Op
     <string name="core_help_core_mfc_debug" formatted="false">Erstellt MFC-Protokolle.
 Nur für Entwickler nützlich.
 Verwenden Sie dies niemals.</string>
-    <string name="core_help_audio_microphone_devices" formatted="false">Für die meisten Spiele sollte Standard verwendet werden.
-SingStar emuliert ein SingStar-Gerät und sollte mit SingStar-Spielen verwendet werden.
-Real SingStar sollte nur mit einem ECHTEN SingStar-Gerät mit SingStar-Spielen verwendet werden.
-Rocksmith sollte mit einem Rocksmith-Dongle verwendet werden.</string>
+    <string name="core_help_audio_microphone_devices" formatted="false">Wählt das physische Aufnahmegerät für das emulierte Mikrofon. Android-Mikrofonberechtigung erforderlich. Der Mikrofontyp legt das sichtbare PS3-Zubehör fest; diese Option wählt dessen Audioquelle.</string>
     <string name="core_help_audio_microphone_type" formatted="false">Für die meisten Spiele sollte Standard verwendet werden.
 SingStar emuliert ein SingStar-Gerät und sollte mit SingStar-Spielen verwendet werden.
 Real SingStar sollte nur mit einem ECHTEN SingStar-Gerät mit SingStar-Spielen verwendet werden.
@@ -1357,10 +1341,10 @@ Obwohl es derzeit auch das Spiel pausiert, wird nicht empfohlen, sich darauf zu 
     <string name="core_help_video_performance_overlay_show_header" formatted="false">Zeigt die App-, Build- und Kernversion oben sowie die CPU- und GPU-Zeilen unten im Leistungs-Overlay an.</string>
     <string name="core_help_video_performance_overlay_font_size_px" formatted="false">Legt die Schriftgröße des Leistungs-Overlays fest (gemessen in Pixel).</string>
     <string name="core_help_video_performance_overlay_framerate_datapoints" formatted="false">Legt die Anzahl der im Framerate-Diagramm verwendeten Datenpunkte fest.</string>
-    <string name="core_help_video_performance_overlay_framerate_graph_detail_level" formatted="false">Steuert die Menge der auf dem Leistungs-Overlay angezeigten Informationen.</string>
+    <string name="core_help_video_performance_overlay_framerate_graph_detail_level" formatted="false">Wählt Beschriftungen und Statistiken am FPS-Diagramm. Mehr Details helfen bei der Beurteilung gleichmäßiger Bildausgabe, erhöhen aber nicht die Spielleistung.</string>
     <string name="core_help_video_performance_overlay_enable_framerate_graph" formatted="false">Aktiviert oder deaktiviert das Framerate-Diagramm.</string>
     <string name="core_help_video_performance_overlay_frametime_datapoints" formatted="false">Legt die Anzahl der im Frametime-Diagramm verwendeten Datenpunkte fest.</string>
-    <string name="core_help_video_performance_overlay_frametime_graph_detail_level" formatted="false">Steuert die Menge der auf dem Leistungs-Overlay angezeigten Informationen.</string>
+    <string name="core_help_video_performance_overlay_frametime_graph_detail_level" formatted="false">Wählt Beschriftungen und Statistiken am Bildzeitdiagramm. Spitzen zeigen ungleichmäßige Bildausgabe; verändert nur die Diagrammdarstellung und nicht das Spieltiming.</string>
     <string name="core_help_video_performance_overlay_enable_frametime_graph" formatted="false">Aktiviert oder deaktiviert das Frametime-Diagramm.</string>
     <string name="core_help_video_performance_overlay_horizontal_margin" formatted="false">Legt den horizontalen Abstand zum Bildschirmrand relativ zum Bildschirmquadranten fest (gemessen in %).</string>
     <string name="core_help_video_performance_overlay_vertical_margin" formatted="false">Legt den vertikalen Abstand zum Bildschirmrand relativ zum Bildschirmquadranten fest (gemessen in %).</string>
@@ -1374,10 +1358,7 @@ Die Aktualisierungsrate des Leistungs-Overlays hat keinen Einfluss auf die Frame
     <string name="core_help_core_ppu_debug" formatted="false">Erstellt PPU-Protokolle.
 Nur für Entwickler nützlich.
 Verwenden Sie dies niemals.</string>
-    <string name="core_help_core_ppu_decoder" formatted="false">Kompiliert und speichert den PPU-Code des Spiels einmal mit dem LLVM-Recompiler neu, bevor er zum ersten Mal ausgeführt wird.
-Dies ist bei weitem die schnellste Option und sollte immer verwendet werden.
-Sollten Kompatibilitätsprobleme auftreten, greifen Sie auf einen der Interpreter zurück und versuchen Sie es erneut.
-Wenn Sie unsicher sind, nutzen Sie diese Option.</string>
+    <string name="core_help_core_ppu_decoder" formatted="false">Bestimmt, wie PPU-Code ausgeführt wird. LLVM ist meist schneller und verwendet Module erneut, bis sich Code oder wichtige Einstellungen ändern. Einen Interpreter nur bei einem konkreten Kompatibilitätsproblem ausprobieren.</string>
     <string name="core_help_core_ppu_reservation_priority_over_spus" formatted="false">Geben Sie PPUs einen Ausführungsvorteil, wenn die SPUs Reservierungen verwenden.
 Diese Einstellung wird nur für einige wenige Spiele empfohlen, um die Leistung zu verbessern.
 Verwenden Sie es NICHT ohne vorherige Anweisung, da dies zu Leistungseinbußen führen kann.</string>
@@ -1397,8 +1378,8 @@ Diese Option wird deaktiviert, wenn die aktuelle Plattform die Anzeige-Ruhezusta
     <string name="core_help_net_psn_status" formatted="false">Bei Einstellung auf RPCN verwendet RPCS3 den RPCN-Server als PSN-Verbindung, sofern das Spiel unterstützt wird.
 Bei der Einstellung „Simuliert“ versucht RPCS3, die PSN-Verbindung vorzutäuschen, aber jeder tatsächliche Versuch, die PSN-Funktionalität zu nutzen, kann zu Fehlern oder Abstürzen führen.
 Simuliert ist nur in benutzerdefinierten Konfigurationen verfügbar.</string>
-    <string name="core_help_video_read_color_buffers" formatted="false">Initialisiert den Renderzielspeicher mithilfe des VM-Speichers.</string>
-    <string name="core_help_video_read_depth_buffer" formatted="false">Initialisiert den Renderzielspeicher mithilfe des VM-Speichers.</string>
+    <string name="core_help_video_read_color_buffers" formatted="false">Liest Farbdaten vor dem Zeichnen aus dem emulierten PS3-Speicher. Kann fehlende Bilder oder Effekte beheben, wenn das Spiel Renderziele über die CPU ändert; zusätzliche Übertragungen können verlangsamen.</string>
+    <string name="core_help_video_read_depth_buffer" formatted="false">Liest Tiefendaten vor dem Zeichnen aus dem emulierten PS3-Speicher. Für Spiele mit tiefenbezogenen Grafikfehlern verwenden; zusätzliche Übertragungen können die Leistung reduzieren.</string>
     <string name="core_help_video_record_with_overlays" formatted="false">Ermöglicht die Aufnahme mit Overlays.
 Dies betrifft auch Screenshots.</string>
     <string name="core_help_video_relaxed_zcull_sync" formatted="false">Ändert das Synchronisierungsverhalten des ZCULL-Berichts. Experimentieren Sie, um die beste Option für Ihr Spiel zu finden. Für die meisten Spiele wird der ungefähre Modus empfohlen.
@@ -1417,10 +1398,7 @@ In seltenen Fällen werden einige Spiele aufgrund von Emulationsfehlern nur mit 
 Die Basisauflösung beträgt immer 1280x720.
 Stellen Sie diesen Wert auf 100 % ein, wenn Sie die normalen Auflösungsoptionen verwenden möchten.
 Werte unter 100 % verbessern die Leistung normalerweise nicht.</string>
-    <string name="core_help_video_screen_size_in_inches" formatted="false">Legt den 3D-Stereo-Rendering-Modus fest (nur in benutzerdefinierten Konfigurationen mit einer Standardauflösung von 720p verfügbar).
-Anaglyph verwendet für jedes Auge unterschiedliche Farben, die dann mit bestimmten Brillen gefiltert werden können.
-Side-by-Side wird häufiger von VR-Viewer-Apps unterstützt.
-Over-Under kommt der nativen Stereoausgabe näher, wird aber weniger häufig unterstützt.</string>
+    <string name="core_help_video_screen_size_in_inches" formatted="false">Meldet Spielen die Bildschirmdiagonale in Zoll über die PS3-Video-API. Für Spiele mit Stereokalibrierung; ändert weder Android-Auflösung noch Bildskalierung.</string>
     <string name="core_help_input_output_load_sdl_gamecontroller_mappings" formatted="false">Lädt die SDL GameController-Datenbank für eine verbesserte Gamepad-Kompatibilität. Wird nur im SDL-Pad-Handler verwendet.</string>
     <string name="core_help_core_set_daz_and_ftz" formatted="false">Setzt spezielle MXCSR-Flags, um Fehler in SSE-Vorgängen zu debuggen.
 Beschleunigt die PPU-Leistung auf Kosten der Genauigkeit.</string>
@@ -1432,9 +1410,7 @@ Dies kann zur Verbesserung der Lesbarkeit und/oder Ästhetik verwendet werden.</
 Dies kann zur Verbesserung der Lesbarkeit und/oder Ästhetik verwendet werden.</string>
     <string name="core_help_video_shader_loading_dialog_allow_custom_background" formatted="false">Zeigt ein Hintergrundbild während des Dialogs/Ladebildschirms zum Laden des nativen Shaders an.
 Standardmäßig ist das verwendete Bild /PS3_GAME/PIC1.PNG.</string>
-    <string name="core_help_video_shader_mode" formatted="false">Dies ist die empfohlene Option.
-Wenn im Cache kein Shader gefunden wird, wird für diesen Shader nichts gerendert, bis er kompiliert wurde.
-Es kann zu Pop-in-Effekten bei Grafiken kommen.</string>
+    <string name="core_help_video_shader_mode" formatted="false">Bestimmt die Vorbereitung fehlender GPU-Shader. Asynchrone Modi verringern Pausen, können aber vorübergehend fehlende Effekte zeigen. Der Shader-Interpreter verringert solche Lücken mit mehr Startaufwand und GPU-Last.</string>
     <string name="core_help_video_shader_precision" formatted="false">Steuert den Präzisionsgrad der generierten Shader. Geringe Präzision generiert je nach Hardware viel schnelleren Code, kann jedoch manchmal zu geringfügigen visuellen Störungen oder Flimmern führen.</string>
     <string name="core_help_miscellaneous_show_analog_limiter_toggle_hint" formatted="false">Zeigt einen Hinweis zum Umschalten des analogen Limiters mithilfe des nativen Overlays an.</string>
     <string name="core_help_miscellaneous_show_autosave_autoload_hint" formatted="false">Zeigt den Hinweis zum automatischen Speichern/Autoladen mithilfe des nativen Overlays an.</string>
@@ -1455,15 +1431,11 @@ Dies kann bei Kalibrierungsbildschirmen sehr hilfreich sein.</string>
 Kann die Leistung auf unerwartete Weise beeinträchtigen.</string>
     <string name="core_help_core_spu_block_size" formatted="false">Diese Option steuert den SPU-Analysator, insbesondere die Größe der kompilierten Einheiten. Die Mega- und Giga-Modi können die Leistung verbessern, indem sie kleinere Einheiten zusammenbinden, wodurch die Anzahl der kompilierten Einheiten verringert, aber ihre Größe erhöht wird.
 Verwenden Sie den abgesicherten Modus für maximale Kompatibilität.</string>
-    <string name="core_help_core_spu_cache" formatted="false">Kompiliert und speichert den SPU-Code des Spiels mit dem LLVM-Recompiler vor der Ausführung neu und speichert ihn im Cache, was zusätzliche Startzeit bedeutet.
-Dies ist die schnellste Option mit sehr guter Kompatibilität.
-Wenn Probleme auftreten, verwenden Sie den ASMJIT-Recompiler.</string>
+    <string name="core_help_core_spu_cache" formatted="false">Speichert erkannte SPU-Programme und bereitet ihren Cache vor dem Spielen vor. Das verringert erneute Kompilierung bei späteren Starts. Neuer Code kann weiterhin während des Spiels kompiliert werden; ohne Cache können mehr Ruckler auftreten.</string>
     <string name="core_help_core_spu_debug" formatted="false">Erstellt SPU-Protokolle.
 Nur für Entwickler nützlich.
 Verwenden Sie dies niemals.</string>
-    <string name="core_help_core_spu_decoder" formatted="false">Kompiliert und speichert den SPU-Code des Spiels mit dem LLVM-Recompiler vor der Ausführung neu und speichert ihn im Cache, was zusätzliche Startzeit bedeutet.
-Dies ist die schnellste Option mit sehr guter Kompatibilität.
-Wenn Probleme auftreten, verwenden Sie den ASMJIT-Recompiler.</string>
+    <string name="core_help_core_spu_decoder" formatted="false">Bestimmt, wie SPU-Code ausgeführt wird. LLVM erzeugt nativen Code für höhere Geschwindigkeit; Interpreter dienen vor allem der Kompatibilitätsprüfung und können deutlich langsamer sein. Ein Decoderwechsel kann einen neuen Cache erfordern.</string>
     <string name="core_help_core_spu_loop_detection" formatted="false">Versuchen Sie, Schleifenbedingungen in SPU-Kerneln zu erkennen und sie als Planungshinweise zu verwenden.
 Verbessert die Leistung und reduziert die CPU-Auslastung.
 Kann in seltenen Fällen zu starkem Audio-Stottern führen.</string>
@@ -1506,9 +1478,7 @@ Ein echter Plattenspieler-Controller kann gleichzeitig mit einem emulierten Plat
     <string name="core_help_miscellaneous_use_native_user_interface" formatted="false">Ermöglicht die Verwendung eines nativen HUD im Spielfenster, das mit Gamecontrollern interagieren kann.
 Wenn deaktiviert, werden stattdessen reguläre Qt-Dialoge verwendet.
 Derzeit unterstützt die Bildschirmtastatur nur das englische Tastenlayout.</string>
-    <string name="core_help_video_vulkan_use_re_bar_for_gpu_uploads" formatted="false">Wenn diese Option aktiviert ist, versucht Vulkan, den PCI-e-Adressraum mit veränderbarer Größe für GPU-Uploads zeitkritischer Daten zu verwenden.
-Dies führt zu einem enormen Leistungsgewinn auf NVIDIA-Karten, wenn die Basis-Framerate niedrig ist.
-Bei Spielen mit sehr hohen Frameraten kann diese Option bei allen GPU-Anbietern zu einer schlechteren Leistung führen.</string>
+    <string name="core_help_video_vulkan_use_re_bar_for_gpu_uploads" formatted="false">Wählt kohärenten CPU-sichtbaren Speicher für zeitkritische Vulkan-Uploads. Android verwendet gemeinsam genutzten RAM statt Desktop-PCIe-Re-BAR-Hardware. Die Leistung hängt vom GPU-Treiber ab; dieselbe Szene zum Vergleich verwenden.</string>
     <string name="core_help_miscellaneous_use_recursive_scan" formatted="false">Ermöglicht die Verwendung des rekursiven Scans für Unterordner beim Scannen von Spielen aus dem ausgewählten Ordner.
 Wenn diese Option deaktiviert ist, werden Spiele nur im ausgewählten Ordner gescannt.</string>
     <string name="core_help_video_vblank_ntsc_fixup" formatted="false">Multipliziert die Rate von VBLANK mit 1000/1001 für Werte wie 59,94 Hz.
@@ -1531,7 +1501,7 @@ Wenn Sie dies ändern und/oder die Framerate hinzufügen, kann dies dazu führen
     <string name="core_help_video_write_color_buffers" formatted="false">Aktivieren Sie diese Option, wenn im Spiel Grafiken fehlen oder die Beleuchtung defekt ist.
 Kann die Leistung beeinträchtigen und in manchen Fällen zu Stottern führen.
 Erforderlich für Dämonenseelen.</string>
-    <string name="core_help_video_write_depth_buffer" formatted="false">Schreibt Tiefenpufferwerte in den VM-Speicher.</string>
+    <string name="core_help_video_write_depth_buffer" formatted="false">Schreibt berechnete Tiefenwerte in den emulierten PS3-Speicher zurück. Manche Spiele benötigen sie für Effekte oder Sichtbarkeitsprüfungen. Nur bei einem konkreten Grafikproblem aktivieren, da GPU-Rücklesen teuer sein kann.</string>
     <string name="core_help_core_spu_xfloat_accuracy" formatted="false">Kontrollieren Sie die Genauigkeit der SPU-Float-Vektorverarbeitung.
 Behebt Fehler in verschiedenen Spielen auf Kosten der Leistung.
 Diese Einstellung wird nur angewendet, wenn der SPU-Decoder auf „Dynamisch“ oder „LLVM“ eingestellt ist.</string>
@@ -2111,4 +2081,31 @@ Diese Einstellung wird nur angewendet, wenn der SPU-Decoder auf „Dynamisch“ 
     <string name="customization_font_help" formatted="false">Wähle die App-Schrift oder importiere eine TTF- oder OTF-Datei. System verwendet die Geräteschrift.</string>
     <string name="customization_text_size_help" formatted="false">Skaliere den Text in der gesamten App. Größerer Text kann einige Beschriftungen auf mehrere Zeilen umbrechen.</string>
     <string name="settings_customization_drawer_help" formatted="false">Wähle das Aussehen der Navigationsleiste. Die Vorschau zeigt jeden Stil vor der Auswahl.</string>
+    <string name="emulation_game_preparing">Spiel wird vorbereitet…</string>
+    <string name="settings_group_display_scaling">Anzeige und Skalierung</string>
+    <string name="settings_group_rendering_compatibility">Darstellungskompatibilität</string>
+    <string name="settings_group_shaders_cache">Shader und Cache</string>
+    <string name="settings_group_audio_output">Audioausgabe</string>
+    <string name="settings_group_audio_buffering">Audiopufferung</string>
+    <string name="settings_group_input_devices">Eingabegeräte</string>
+    <string name="settings_group_cpu_compilation">CPU und Kompilierung</string>
+    <string name="settings_group_diagnostics">Diagnose</string>
+    <string name="home_library_options">Bibliotheksoptionen</string>
+    <string name="home_view_list">Als Liste anzeigen</string>
+    <string name="home_view_grid">Als Raster anzeigen</string>
+    <string name="home_search">Spiele suchen</string>
+    <string name="home_search_clear">Suche löschen</string>
+    <string name="home_sort_title_asc">Titel A-Z</string>
+    <string name="home_sort_title_desc">Titel Z-A</string>
+    <string name="home_sort_recent_desc">Zuletzt aktualisiert</string>
+    <string name="home_sort_recent_asc">Älteste aktualisiert</string>
+    <string name="home_sort_size_desc">Größte</string>
+    <string name="home_sort_size_asc">Kleinste</string>
+    <string name="emulation_close_menu">Menü schließen</string>
+    <string name="emulation_play_time_badge">Spielzeit %1$s</string>
+    <string name="emulation_menu_subtitle">Verwalte die aktuelle Sitzung, ohne das Spiel zu verlassen.</string>
+    <string name="home_empty_search_title">Keine Ergebnisse</string>
+    <string name="home_empty_search_subtitle">Versuche einen anderen Namen oder ändere die Sortierung.</string>
+    <string name="save_manager_no_results_body">Versuche einen anderen Spieltitel oder Speicherordnernamen.</string>
+    <string name="profile_no_recent_events">Noch keine aktuellen Ereignisse.</string>
 </resources>

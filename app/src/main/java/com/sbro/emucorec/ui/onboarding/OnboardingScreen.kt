@@ -712,8 +712,8 @@ private fun OnboardingStorageChip(
         colors = FilterChipDefaults.filterChipColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             labelColor = MaterialTheme.colorScheme.onSurface,
-            selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-            selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
+            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
         ),
         label = { Text(storageLocationLabel(location, index)) }
     )
@@ -766,7 +766,7 @@ private fun OnboardingStorageDialog(
                         modifier = Modifier.fillMaxWidth(),
                         shape = neonShape(18.dp),
                         color = if (location.selected) {
-                            MaterialTheme.colorScheme.secondaryContainer
+                            MaterialTheme.colorScheme.primaryContainer
                         } else {
                             MaterialTheme.colorScheme.surfaceContainerHigh
                         },
@@ -788,7 +788,7 @@ private fun OnboardingStorageDialog(
                                 text = storageLocationLabel(location, index),
                                 style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
                                 color = if (location.selected) {
-                                    MaterialTheme.colorScheme.onSecondaryContainer
+                                    MaterialTheme.colorScheme.onPrimaryContainer
                                 } else {
                                     MaterialTheme.colorScheme.onSurface
                                 }
@@ -797,7 +797,7 @@ private fun OnboardingStorageDialog(
                                 text = location.ps3Path,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = if (location.selected) {
-                                    MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.78f)
+                                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.78f)
                                 } else {
                                     MaterialTheme.colorScheme.onSurfaceVariant
                                 }

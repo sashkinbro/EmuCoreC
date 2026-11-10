@@ -20,13 +20,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AlertDialog
+import com.sbro.emucorec.ui.common.AppAlertDialog as AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Surface
+import com.sbro.emucorec.ui.common.appFilterChipColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -140,7 +141,7 @@ internal fun ToyPortalPanel() {
             )
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf("Skylanders", "Disney Infinity", "LEGO Dimensions").forEachIndexed { index, title ->
-                    FilterChip(selected = kind == index, onClick = { kind = index }, label = { Text(title) })
+                    FilterChip(colors = appFilterChipColors(), selected = kind == index, onClick = { kind = index }, label = { Text(title) })
                 }
             }
             if (realPortals and (1 shl kind) != 0) {

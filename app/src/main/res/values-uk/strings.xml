@@ -104,10 +104,10 @@
     <string name="settings_help_content_description">Відкрити довідку з налаштування</string>
     <string name="settings_help_dialog_label">Підказка налаштування</string>
     <string name="settings_help_dialog_tip">Змінюйте по одній настройці й перевіряйте ту саму сцену гри, щоб точно бачити, що стало краще.</string>
-    <string name="settings_help_gamepad_overlay">Показує екранні елементи керування, коли ви не використовуєте фізичний контролер.\n\nВикористовуйте це, щоб сенсорне або геймпадне керування краще підходило під ваш стиль гри. Не змінюйте без потреби, якщо керування вже зручне: занадто сильні значення можуть ускладнити прицілювання, меню або сенсорні функції.</string>
-    <string name="settings_help_overlay_scale">Змінює розмір екранних елементів керування.\n\nВикористовуйте це, щоб сенсорне або геймпадне керування краще підходило під ваш стиль гри. Не змінюйте без потреби, якщо керування вже зручне: занадто сильні значення можуть ускладнити прицілювання, меню або сенсорні функції.</string>
-    <string name="settings_help_overlay_opacity">Змінює прозорість екранних елементів керування.\n\nВикористовуйте це, щоб сенсорне або геймпадне керування краще підходило під ваш стиль гри. Не змінюйте без потреби, якщо керування вже зручне: занадто сильні значення можуть ускладнити прицілювання, меню або сенсорні функції.</string>
-    <string name="settings_help_analog_multiplier">Змінює чутливість аналогових стіків.\n\nВикористовуйте це, щоб сенсорне або геймпадне керування краще підходило під ваш стиль гри. Не змінюйте без потреби, якщо керування вже зручне: занадто сильні значення можуть ускладнити прицілювання, меню або сенсорні функції.</string>
+    <string name="settings_help_gamepad_overlay" formatted="false">Показує сенсорний геймпад поверх гри. Сховайте його, якщо користуєтеся фізичним контролером або кнопки закривають важливі частини екрана. Ігрове меню доступне через кнопку «Назад».</string>
+    <string name="settings_help_overlay_scale" formatted="false">Змінює розмір усіх сенсорних кнопок разом. Збільште для зручнішого натискання або зменште, щоб бачити більше гри. Окремі кнопки переміщуються та масштабуються в редакторі керування.</string>
+    <string name="settings_help_overlay_opacity" formatted="false">Визначає видимість сенсорних кнопок: 100% — повністю непрозорі, менші значення краще відкривають зображення гри. Змінюється лише вигляд; прозорі кнопки продовжують реагувати на дотики.</string>
+    <string name="settings_help_analog_multiplier" formatted="false">Множить відхилення фізичних аналогових стіків перед передаванням у гру. Значення понад 1,0 швидше дає повне відхилення; менше 1,0 обмежує максимальний сигнал. Мертва зона біля центру та призначення кнопок налаштовуються окремо.</string>
     <string name="settings_reset_toast">%1$s скинуто до стандартного значення</string>
     <string name="settings_app_language">Мова додатка</string>
     <string name="settings_app_language_system">Системна за замовчуванням</string>
@@ -1125,7 +1125,7 @@
     <string name="core_help_video_anisotropic_filter_override" formatted="false">Вищі значення збільшують чіткість текстур на похилих поверхнях за рахунок ресурсів GPU.
 Сучасні графічні процесори чудово справляються з цим параметром, навіть при 16x.
 Зберігайте це значення Automatic, якщо ви хочете використовувати оригінальне налаштування, яке використовується справжньою PS3.</string>
-    <string name="core_help_video_aspect_ratio" formatted="false">Залиште це на 16:9, якщо у вас немає монітора 4:3.</string>
+    <string name="core_help_video_aspect_ratio" formatted="false">Обирає пропорції зображення гри. Використовуйте підтримуване грою співвідношення, зазвичай 16:9. Інше значення може спотворити картинку; розтягування на дисплей налаштовується окремо.</string>
     <string name="core_help_audio_rsxaudio_avport" formatted="false">Контролює, з якого порту використовується вибірка аудіоданих.</string>
     <string name="core_help_audio_desired_audio_buffer_duration" formatted="false">Тривалість цільового буфера в мілісекундах.
 Вищі значення полегшують роботу алгоритму буферизації, але можуть викликати помітну затримку звуку.</string>
@@ -1142,15 +1142,14 @@
 Ручне налаштування використовуватиме вибрані формати, а автоматичне налаштування дозволить грі вибрати з усіх доступних форматів.</string>
     <string name="core_help_audio_audio_provider" formatted="false">Контролює, який API аудіо PS3 використовується.
 Ігри використовують CellAudio, тоді як VSH вимагає RSXAudio.</string>
-    <string name="core_help_audio_renderer" formatted="false">Cubeb використовує кросплатформний підхід і підтримує буферизацію аудіо, тому це рекомендований варіант.
-Якщо він недоступний, замість нього можна використовувати FAudio.</string>
+    <string name="core_help_audio_renderer" formatted="false">Обирає механізм виведення звуку. Залиште типовий для платформи, якщо не усуваєте відсутній або спотворений звук. Зміна потребує перезапуску гри; Null вимикає звук.</string>
     <string name="core_help_input_output_background_input_enabled" formatted="false">Дозволяє вводити дані з панелі та клавіатури, коли вікно гри розфокусовано.</string>
     <string name="core_help_net_bind_address" formatted="false">IP-адреса інтерфейсу для прив’язки.
 Доступно лише в індивідуальних конфігураціях.</string>
     <string name="core_help_input_output_buzz_emulated_controller" formatted="false">Buzz! підтримка.
 Виберіть 1 або 2 контролери, якщо для гри потрібен Buzz! контролери, і у вас немає справжніх контролерів.
 Виберіть Null, якщо гра підтримує DualShock або якщо у вас справжній Buzz! контролери.</string>
-    <string name="core_help_input_output_camera" formatted="false">Виберіть Qt Camera, щоб використовувати камеру за замовчуванням у вашій операційній системі.</string>
+    <string name="core_help_input_output_camera" formatted="false">На Android доступні імітація підключення камери PS3 без реального зображення або відсутність камери. Знімання фізичною камерою не реалізоване; Fake може пройти деякі перевірки підключення, але не надає відео.</string>
     <string name="core_help_input_output_camera_flip" formatted="false">Перевертає зображення камери по горизонталі, вертикалі або по обох осях.</string>
     <string name="core_help_input_output_camera_id" formatted="false">Виберіть камеру, яку ви хочете використовувати під час гри.</string>
     <string name="core_help_input_output_camera_type" formatted="false">Залежно від гри вам може знадобитися вибрати певний тип камери.</string>
@@ -1162,14 +1161,8 @@
 Можна скинути поточний час настінного годинника, натиснувши «Установити зараз».</string>
     <string name="core_help_audio_convert_to_16_bit" formatted="false">Використовує 16-бітні зразки звуку замість стандартного 32-бітного числа з плаваючою комою.
 Використовуйте з помилковими аудіодрайверами, якщо у вас немає звуку або він повністю зламаний.</string>
-    <string name="core_help_video_custom_anaglyph_matrices_matrix_left" formatted="false">Встановлює режим 3D-стереорендерінгу (доступний лише в настроюваних конфігураціях із роздільною здатністю за замовчуванням 720p).
-Anaglyph використовує різні кольори для кожного ока, які потім можна фільтрувати за допомогою певних окулярів.
-Side-by-Side частіше підтримується програмами перегляду VR.
-Over-Under ближче до рідного стереовиходу, але підтримується рідше.</string>
-    <string name="core_help_video_custom_anaglyph_matrices_matrix_right" formatted="false">Встановлює режим 3D-стереорендерінгу (доступний лише в настроюваних конфігураціях із роздільною здатністю за замовчуванням 720p).
-Anaglyph використовує різні кольори для кожного ока, які потім можна фільтрувати за допомогою певних окулярів.
-Side-by-Side частіше підтримується програмами перегляду VR.
-Over-Under ближче до рідного стереовиходу, але підтримується рідше.</string>
+    <string name="core_help_video_custom_anaglyph_matrices_matrix_left" formatted="false">Власна матриця перетворення кольорів 3×3 для цього ока в анагліфному 3D. Змінюйте для певних кольорових окулярів або калібрування; невдалі значення спотворюють кольори. На звичайне 2D не впливає.</string>
+    <string name="core_help_video_custom_anaglyph_matrices_matrix_right" formatted="false">Власна матриця перетворення кольорів 3×3 для цього ока в анагліфному 3D. Змінюйте для певних кольорових окулярів або калібрування; невдалі значення спотворюють кольори. На звичайне 2D не впливає.</string>
     <string name="core_help_system_date_format" formatted="false">Виберіть формат дати PS3.</string>
     <string name="core_help_core_debug_console_mode" formatted="false">Збільшує обсяг використовуваної системної пам\'яті відповідно до консолі DECR тощо.
 Спричиняє іншу поведінку програмного забезпечення, ніж роздрібне обладнання.</string>
@@ -1246,11 +1239,7 @@ Over-Under ближче до рідного стереовиходу, але п�
 · Авто — це існуюча поведінка, упереджена в бік глибини.
 · Prefer Color зберігає прив’язку кольорів, коли кольоровий запис увімкнено, а глибинний запис — ні. Виправляє відсутню геометрію в деяких відкладених рендерерах (наприклад, Starhawk) за рахунок пропуску перевірки глибини для цього малюнка.
 · Переважна глибина наразі така сама, як Авто.</string>
-    <string name="core_help_video_frame_limit" formatted="false">Вимкнути – найшвидший варіант.
-Використання обмежувача кадрів додасть додаткових витрат і сповільнить гру. Однак деякі ігри виходять з ладу, якщо частота кадрів занадто висока.
-Нативну версію PS3 слід використовувати, лише якщо Auto не працює належним чином, оскільки це може спричинити проблеми з кадровою частотою.
-Infinite додає цикл позитивного зворотного зв’язку, який додає ще один сигнал vblank на кадр, що дозволяє більше ігор мати необмежену кількість кадрів в секунду.
-Досвідчені користувачі, яким потрібні інші обмеження кадрів, повинні використовувати параметр «Обмеження другого кадру» у файлі конфігурації.</string>
+    <string name="core_help_video_frame_limit" formatted="false">Обмежує кількість кадрів гри за секунду. PS3 Native дотримується ритму консолі; фіксовані значення можуть змінити швидкість гри або фізику. Без обмеження можливі сильніший нагрів і помилки ігор, що очікують ліміт.</string>
     <string name="core_help_video_fidelityfx_cas_sharpening_intensity" formatted="false">Контролюйте силу різкості, що застосовує FidelityFX Super Resolution. Вищі значення дадуть чіткіші результати, але можуть викликати артефакти.</string>
     <string name="core_help_input_output_ghltar_emulated_controller" formatted="false">Підтримка гітарного контролера Guitar Hero Live (GHL).
 Виберіть 1 або 2 контролери, якщо для гри потрібні контролери GHL Guitar, а у вас немає справжніх контролерів для гітари.
@@ -1292,9 +1281,7 @@ Infinite додає цикл позитивного зворотного зв’
 Ігри можуть використовувати папку кешу для тимчасового зберігання даних поза межами системної пам’яті. Для тривалого зберігання не використовується.
 
 Цей параметр доступний лише в глобальній конфігурації.</string>
-    <string name="core_help_core_max_llvm_compile_threads" formatted="false">Обмежує максимальну кількість потоків, які використовуються для початкової компіляції модулів PPU та SPU.
-Знизьте це значення, щоб підвищити продуктивність інших відкритих програм.
-За умовчанням використовуються всі доступні потоки.</string>
+    <string name="core_help_core_max_llvm_compile_threads" formatted="false">Максимальна кількість паралельних завдань початкової компіляції PPU/SPU. 0 вмикає автоматичний розподіл за ресурсами CPU та пам’яті. Менше ручне значення може сповільнити компіляцію; більше збільшує витрати RAM і нагрівання.</string>
     <string name="core_help_core_max_cpu_preempt_count" formatted="false">Зменшує використання процесора та енергоспоживання, подовжуючи час роботи акумулятора на мобільних пристроях. (0 означає вимкнено)
 Вищі значення спричиняють більш виражений ефект, але можуть спричинити проблеми зі звуком або продуктивністю. Рекомендується значення 50 або менше.
 Цей параметр примусово встановлює обмеження FPS, оскільки він активний, коли частота кадрів стабільна.
@@ -1307,10 +1294,7 @@ Infinite додає цикл позитивного зворотного зв’
     <string name="core_help_core_mfc_debug" formatted="false">Створює журнали MFC.
 Корисно лише розробникам.
 Ніколи не використовуйте це.</string>
-    <string name="core_help_audio_microphone_devices" formatted="false">Для більшості ігор слід використовувати стандарт.
-SingStar емулює пристрій SingStar і його слід використовувати з іграми SingStar.
-Real SingStar слід використовувати лише зі СПРАВЖНІМ пристроєм SingStar з іграми SingStar.
-Rocksmith слід використовувати з ключем Rocksmith.</string>
+    <string name="core_help_audio_microphone_devices" formatted="false">Обирає фізичний пристрій запису для емульованого мікрофона. Потрібен дозвіл Android на мікрофон. Тип мікрофона визначає аксесуар PS3, який бачить гра; цей параметр обирає джерело звуку.</string>
     <string name="core_help_audio_microphone_type" formatted="false">Для більшості ігор слід використовувати стандарт.
 SingStar емулює пристрій SingStar і його слід використовувати з іграми SingStar.
 Real SingStar слід використовувати лише зі СПРАВЖНІМ пристроєм SingStar з іграми SingStar.
@@ -1361,10 +1345,10 @@ FidelityFX наразі не працює зі стереозвуком 3D.</str
     <string name="core_help_video_performance_overlay_show_header" formatted="false">Показує версію додатку, збірки та ядра зверху, а також рядки CPU та GPU внизу накладання продуктивності.</string>
     <string name="core_help_video_performance_overlay_font_size_px" formatted="false">Встановлює розмір шрифту накладання продуктивності (вимірюється в пікселях).</string>
     <string name="core_help_video_performance_overlay_framerate_datapoints" formatted="false">Встановлює кількість точок даних, які використовуються на графіку частоти кадрів.</string>
-    <string name="core_help_video_performance_overlay_framerate_graph_detail_level" formatted="false">Контролює кількість інформації, що відображається на накладенні продуктивності.</string>
+    <string name="core_help_video_performance_overlay_framerate_graph_detail_level" formatted="false">Визначає підписи та статистику біля графіка FPS. Детальніший графік допомагає оцінити рівномірність кадрів, але не підвищує продуктивність гри.</string>
     <string name="core_help_video_performance_overlay_enable_framerate_graph" formatted="false">Вмикає або вимикає графік частоти кадрів.</string>
     <string name="core_help_video_performance_overlay_frametime_datapoints" formatted="false">Встановлює кількість точок даних, які використовуються на графіку часу кадру.</string>
-    <string name="core_help_video_performance_overlay_frametime_graph_detail_level" formatted="false">Контролює кількість інформації, що відображається на накладенні продуктивності.</string>
+    <string name="core_help_video_performance_overlay_frametime_graph_detail_level" formatted="false">Визначає підписи та статистику біля графіка часу кадру. Піки показують нерівномірність відтворення; параметр змінює лише графік, а не час роботи гри.</string>
     <string name="core_help_video_performance_overlay_enable_frametime_graph" formatted="false">Вмикає або вимикає графік часу кадру.</string>
     <string name="core_help_video_performance_overlay_horizontal_margin" formatted="false">Встановлює відстань по горизонталі до межі екрана відносно квадранта екрана (вимірюється у %).</string>
     <string name="core_help_video_performance_overlay_vertical_margin" formatted="false">Встановлює відстань по вертикалі до межі екрана відносно квадранта екрана (вимірюється у %).</string>
@@ -1378,10 +1362,7 @@ FidelityFX наразі не працює зі стереозвуком 3D.</str
     <string name="core_help_core_ppu_debug" formatted="false">Створює журнали PPU.
 Корисно лише розробникам.
 Ніколи не використовуйте це.</string>
-    <string name="core_help_core_ppu_decoder" formatted="false">Перекомпілює та кешує код PPU гри за допомогою рекомпілятора LLVM один раз перед першим запуском.
-Це, безумовно, найшвидший варіант, яким завжди слід користуватися.
-Якщо у вас виникнуть проблеми з сумісністю, поверніться до одного з інтерпретаторів і повторіть спробу.
-Якщо не впевнені, скористайтеся цією опцією.</string>
+    <string name="core_help_core_ppu_decoder" formatted="false">Визначає спосіб виконання коду PPU. LLVM зазвичай працює швидше та повторно використовує модулі, поки код або важливі налаштування не зміняться. Спробуйте інтерпретатор лише для конкретної проблеми сумісності.</string>
     <string name="core_help_core_ppu_reservation_priority_over_spus" formatted="false">Надайте PPU перевагу у виконанні, коли SPU використовують резервування.
 Це налаштування рекомендовано лише для кількох ігор для покращення продуктивності.
 НЕ використовуйте його без попередньої поради через можливе погіршення продуктивності.</string>
@@ -1401,8 +1382,8 @@ FidelityFX наразі не працює зі стереозвуком 3D.</str
     <string name="core_help_net_psn_status" formatted="false">Якщо встановлено RPCN, RPCS3 використовуватиме сервер RPCN як з’єднання PSN, якщо гра підтримується.
 Якщо встановлено Симуляція, RPCS3 намагатиметься підробити з’єднання PSN, але будь-яка фактична спроба використання функцій PSN може призвести до помилок або збоїв.
 Симуляція доступна лише в настроюваних конфігураціях.</string>
-    <string name="core_help_video_read_color_buffers" formatted="false">Ініціалізує цільову пам\'ять візуалізації за допомогою пам\'яті vm.</string>
-    <string name="core_help_video_read_depth_buffer" formatted="false">Ініціалізує цільову пам\'ять візуалізації за допомогою пам\'яті vm.</string>
+    <string name="core_help_video_read_color_buffers" formatted="false">Читає дані кольору з емульованої пам’яті PS3 перед малюванням. Може виправити відсутні зображення або ефекти, коли гра змінює цілі відтворення через CPU; додаткові передавання можуть знизити швидкість.</string>
+    <string name="core_help_video_read_depth_buffer" formatted="false">Читає дані глибини з емульованої пам’яті PS3 перед малюванням. Потрібне окремим іграм із помилками глибини; додаткові передавання можуть знизити продуктивність.</string>
     <string name="core_help_video_record_with_overlays" formatted="false">Дозволяє записувати з накладаннями.
 Це також впливає на скріншоти.</string>
     <string name="core_help_video_relaxed_zcull_sync" formatted="false">Змінює поведінку синхронізації звіту ZCULL. Експериментуйте, щоб знайти найкращий варіант для вашої гри. Орієнтовний режим рекомендований для більшості ігор.
@@ -1421,10 +1402,7 @@ FidelityFX наразі не працює зі стереозвуком 3D.</str
 Базова роздільна здатність завжди 1280x720.
 Встановіть це значення на 100%, якщо ви хочете використовувати звичайні параметри роздільної здатності.
 Значення, нижчі за 100%, зазвичай не покращують продуктивність.</string>
-    <string name="core_help_video_screen_size_in_inches" formatted="false">Встановлює режим 3D-стереорендерінгу (доступний лише в настроюваних конфігураціях із роздільною здатністю за замовчуванням 720p).
-Anaglyph використовує різні кольори для кожного ока, які потім можна фільтрувати за допомогою певних окулярів.
-Side-by-Side частіше підтримується програмами перегляду VR.
-Over-Under ближче до рідного стереовиходу, але підтримується рідше.</string>
+    <string name="core_help_video_screen_size_in_inches" formatted="false">Повідомляє іграм діагональ екрана в дюймах через відео-API PS3. Використовується під час калібрування стереоскопічного зображення; не змінює роздільність Android або масштаб картинки.</string>
     <string name="core_help_input_output_load_sdl_gamecontroller_mappings" formatted="false">Завантажує базу даних SDL GameController для покращеної сумісності геймпада. Використовується лише в обробнику панелі SDL.</string>
     <string name="core_help_core_set_daz_and_ftz" formatted="false">Встановлює спеціальні позначки MXCSR для налагодження помилок в операціях SSE.
 Прискорює продуктивність PPU ціною точності.</string>
@@ -1436,9 +1414,7 @@ Over-Under ближче до рідного стереовиходу, але п�
 Це може бути використано для покращення читабельності та/або естетики.</string>
     <string name="core_help_video_shader_loading_dialog_allow_custom_background" formatted="false">Показує фонове зображення під час діалогового вікна/екрану завантаження рідного шейдера.
 За замовчуванням використовуваним зображенням буде /PS3_GAME/PIC1.PNG.</string>
-    <string name="core_help_video_shader_mode" formatted="false">Це рекомендований варіант.
-Якщо шейдер не знайдено в кеші, нічого не буде відтворено для цього шейдера, доки він не буде скомпільований.
-У вас може виникнути спливаюче вікно графіки.</string>
+    <string name="core_help_video_shader_mode" formatted="false">Визначає підготовку відсутніх шейдерів GPU. Асинхронні режими зменшують паузи, але ефекти можуть тимчасово не відображатися. Інтерпретатор шейдерів зменшує такі пропуски ціною додаткової роботи під час запуску й навантаження GPU.</string>
     <string name="core_help_video_shader_precision" formatted="false">Контролює рівень точності згенерованих шейдерів. Низька точність генерує набагато швидший код залежно від апаратного забезпечення, але іноді може генерувати незначні візуальні збої або мерехтіння.</string>
     <string name="core_help_miscellaneous_show_analog_limiter_toggle_hint" formatted="false">Показує підказку перемикання аналогового обмежувача за допомогою рідного накладання.</string>
     <string name="core_help_miscellaneous_show_autosave_autoload_hint" formatted="false">Показує підказку автозбереження/автозавантаження за допомогою власного накладання.</string>
@@ -1459,15 +1435,11 @@ Over-Under ближче до рідного стереовиходу, але п�
 Може вплинути на продуктивність несподіваним чином.</string>
     <string name="core_help_core_spu_block_size" formatted="false">Цей параметр керує аналізатором SPU, зокрема розміром скомпільованих одиниць. Режими Mega та Giga можуть підвищити продуктивність шляхом об’єднання менших одиниць, зменшення кількості скомпільованих одиниць, але збільшення їх розміру.
 Використовуйте безпечний режим для максимальної сумісності.</string>
-    <string name="core_help_core_spu_cache" formatted="false">Перекомпілює та кешує SPU-код гри за допомогою рекомпілятора LLVM перед запуском, що додає додатковий час запуску.
-Це найшвидший варіант із дуже хорошою сумісністю.
-Якщо у вас виникли проблеми, скористайтеся рекомпілятором ASMJIT.</string>
+    <string name="core_help_core_spu_cache" formatted="false">Зберігає виявлені програми SPU та готує їхній кеш перед грою. Це зменшує повторну компіляцію під час наступних запусків. Новий код може компілюватися під час гри; вимкнення кешу може посилити ривки.</string>
     <string name="core_help_core_spu_debug" formatted="false">Створює журнали SPU.
 Корисно лише розробникам.
 Ніколи не використовуйте це.</string>
-    <string name="core_help_core_spu_decoder" formatted="false">Перекомпілює та кешує SPU-код гри за допомогою рекомпілятора LLVM перед запуском, що додає додатковий час запуску.
-Це найшвидший варіант із дуже хорошою сумісністю.
-Якщо у вас виникли проблеми, скористайтеся рекомпілятором ASMJIT.</string>
+    <string name="core_help_core_spu_decoder" formatted="false">Визначає спосіб виконання коду SPU. LLVM компілює машинний код для вищої швидкості; інтерпретатори переважно потрібні для перевірки сумісності й можуть бути значно повільнішими. Зміна декодера може потребувати перебудови кешу.</string>
     <string name="core_help_core_spu_loop_detection" formatted="false">Спробуйте виявити умови циклу в ядрах SPU і використовувати їх як підказки щодо планування.
 Покращує продуктивність і зменшує використання ЦП.
 У рідкісних випадках може викликати серйозне заїкання звуку.</string>
@@ -1510,9 +1482,7 @@ Over-Under ближче до рідного стереовиходу, але п�
     <string name="core_help_miscellaneous_use_native_user_interface" formatted="false">Дозволяє використовувати рідний HUD у вікні гри, який може взаємодіяти з ігровими контролерами.
 Якщо вимкнено, натомість використовуються звичайні діалогові вікна Qt.
 Наразі екранна клавіатура підтримує лише англійську розкладку клавіш.</string>
-    <string name="core_help_video_vulkan_use_re_bar_for_gpu_uploads" formatted="false">Якщо ввімкнено, Vulkan намагатиметься використовувати адресний простір панелі зі змінним розміром PCI-e для завантаження чутливих до часу даних у GPU.
-Це дає суттєвий приріст продуктивності на картах NVIDIA, коли базова частота кадрів низька.
-Для ігор із дуже високою частотою кадрів цей параметр може призвести до гіршої продуктивності для всіх постачальників GPU.</string>
+    <string name="core_help_video_vulkan_use_re_bar_for_gpu_uploads" formatted="false">Обирає узгоджену доступну CPU пам’ять для чутливих до затримок завантажень Vulkan. На Android використовується спільна RAM, а не настільне обладнання PCIe Re-BAR. Результат залежить від драйвера GPU; порівнюйте ту саму сцену.</string>
     <string name="core_help_miscellaneous_use_recursive_scan" formatted="false">Вмикає рекурсивне сканування вкладених папок під час сканування ігор із вибраної папки.
 Якщо вимкнено, ігри скануються лише у вибраній папці.</string>
     <string name="core_help_video_vblank_ntsc_fixup" formatted="false">Множить швидкість VBLANK на 1000/1001 для таких значень, як 59,94 Гц.
@@ -1535,7 +1505,7 @@ Over-Under ближче до рідного стереовиходу, але п�
     <string name="core_help_video_write_color_buffers" formatted="false">Увімкніть цю опцію, якщо у грі відсутня графіка або пошкоджене освітлення.
 У деяких випадках може погіршити продуктивність і викликати заїкання.
 Необхідний для Demon\'s Souls.</string>
-    <string name="core_help_video_write_depth_buffer" formatted="false">Записує значення буфера глибини до пам’яті vm.</string>
+    <string name="core_help_video_write_depth_buffer" formatted="false">Записує обчислену глибину назад в емульовану пам’ять PS3. Деякі ігри використовують її для ефектів і перевірок видимості. Вмикайте для конкретної графічної проблеми, оскільки зчитування з GPU може бути повільним.</string>
     <string name="core_help_core_spu_xfloat_accuracy" formatted="false">Контроль точності обробки плаваючих векторів SPU.
 Виправляє помилки в різних іграх за рахунок підвищення продуктивності.
 Цей параметр застосовується, лише якщо для декодера SPU встановлено значення Dynamic або LLVM.</string>
@@ -2116,4 +2086,31 @@ Over-Under ближче до рідного стереовиходу, але п�
     <string name="customization_font_help" formatted="false">Виберіть шрифт застосунку або імпортуйте файл TTF чи OTF. Системний варіант використовує шрифт пристрою.</string>
     <string name="customization_text_size_help" formatted="false">Змінюйте масштаб тексту в усьому застосунку. Більший текст може переносити деякі написи на кілька рядків.</string>
     <string name="settings_customization_drawer_help" formatted="false">Виберіть вигляд панелі навігації. Попередній перегляд показує кожен стиль до вибору.</string>
+    <string name="emulation_game_preparing">Підготовка гри…</string>
+    <string name="settings_group_display_scaling">Зображення та масштабування</string>
+    <string name="settings_group_rendering_compatibility">Сумісність відтворення</string>
+    <string name="settings_group_shaders_cache">Шейдери та кеш</string>
+    <string name="settings_group_audio_output">Виведення аудіо</string>
+    <string name="settings_group_audio_buffering">Буферизація аудіо</string>
+    <string name="settings_group_input_devices">Пристрої введення</string>
+    <string name="settings_group_cpu_compilation">CPU та компіляція</string>
+    <string name="settings_group_diagnostics">Діагностика</string>
+    <string name="home_library_options">Параметри бібліотеки</string>
+    <string name="home_view_list">Показати списком</string>
+    <string name="home_view_grid">Показати сіткою</string>
+    <string name="home_search">Пошук ігор</string>
+    <string name="home_search_clear">Очистити пошук</string>
+    <string name="home_sort_title_asc">Назва А-Я</string>
+    <string name="home_sort_title_desc">Название Я-А</string>
+    <string name="home_sort_recent_desc">Нещодавно оновлені</string>
+    <string name="home_sort_recent_asc">Найстаріші оновлені</string>
+    <string name="home_sort_size_desc">Найбільші</string>
+    <string name="home_sort_size_asc">Найменші</string>
+    <string name="emulation_close_menu">Закрити меню</string>
+    <string name="emulation_play_time_badge">Час у грі %1$s</string>
+    <string name="emulation_menu_subtitle">Керуйте поточним сеансом, не виходячи з гри.</string>
+    <string name="home_empty_search_title">Немає результатів</string>
+    <string name="home_empty_search_subtitle">Спробуйте іншу назву або змініть сортування.</string>
+    <string name="save_manager_no_results_body">Спробуйте іншу назву гри або папки збереження.</string>
+    <string name="profile_no_recent_events">Нещодавніх подій поки немає.</string>
 </resources>

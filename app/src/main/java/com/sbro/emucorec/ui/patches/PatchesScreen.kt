@@ -1,5 +1,6 @@
 package com.sbro.emucorec.ui.patches
 
+import com.sbro.emucorec.ui.common.EmptyStateCard
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -151,11 +152,11 @@ fun PatchesScreen(
                     EmuCoreLoadingAnimation()
                 }
             }
-        } else if (uiState.games.isEmpty()) {
+        } else if (uiState.games.isEmpty() && !uiState.isLoading) {
             item {
                 EmptyPatchesState()
             }
-        } else {
+        } else if (uiState.games.isNotEmpty()) {
             item {
                 PatchGamePicker(
                     games = uiState.games,
@@ -210,107 +211,30 @@ fun PatchesScreen(
 
 @Composable
 private fun EmptyPatchesState() {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = ScreenHorizontalPadding),
-        shape = neonShape(18.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        tonalElevation = 1.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 48.dp, horizontal = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Build,
-                contentDescription = null,
-                modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Text(
-                text = stringResource(R.string.patches_empty_title),
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onBackground,
-                textAlign = TextAlign.Center
-            )
-            Text(
-                text = stringResource(R.string.patches_empty_body),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-        }
-    }
+    EmptyStateCard(
+        icon = Icons.Rounded.Build,
+        title = stringResource(R.string.patches_empty_title),
+        body = stringResource(R.string.patches_empty_body),
+        modifier = Modifier.padding(horizontal = ScreenHorizontalPadding),
+    )
 }
 
 @Composable
-private fun NoPatchesHint(
-    hasDownloaded: Boolean,
-    onDownload: () -> Unit
-) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = ScreenHorizontalPadding),
-        shape = neonShape(18.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        tonalElevation = 1.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 36.dp, horizontal = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.CloudDownload,
-                contentDescription = null,
-                modifier = Modifier.size(42.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Text(
-                text = stringResource(
-                    if (hasDownloaded) R.string.patches_no_patches_for_game
-                    else R.string.patches_hint_update
-                ),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-            if (!hasDownloaded) {
-                Surface(
-                    onClick = onDownload,
-                    shape = neonShape(12.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.CloudDownload,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                        Text(
-                            text = stringResource(R.string.patches_update),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
+private fun NoPatchesHint(hasDownloaded: Boolean, onDownload: () -> Unit) {
+    EmptyStateCard(
+        icon = Icons.Rounded.CloudDownload,
+        title = stringResource(R.string.patches_title),
+        body = stringResource(if (hasDownloaded) R.string.patches_no_patches_for_game else R.string.patches_hint_update),
+        modifier = Modifier.padding(horizontal = ScreenHorizontalPadding),
+        action = if (hasDownloaded) null else {
+            {
+                androidx.compose.material3.Button(shape = neonShape(12.dp), onClick = onDownload) {
+                    Icon(Icons.Rounded.CloudDownload, contentDescription = null)
+                    Text(stringResource(R.string.patches_update), modifier = Modifier.padding(start = 8.dp))
                 }
             }
-        }
-    }
+        },
+    )
 }
 
 @Composable
@@ -325,9 +249,9 @@ private fun DownloadResultBanner(
     }
     val isError = downloadResult is PatchRepository.DownloadResult.Error
     val containerColor = if (isError) MaterialTheme.colorScheme.errorContainer
-    else MaterialTheme.colorScheme.secondaryContainer
+    else MaterialTheme.colorScheme.primaryContainer
     val contentColor = if (isError) MaterialTheme.colorScheme.onErrorContainer
-    else MaterialTheme.colorScheme.onSecondaryContainer
+    else MaterialTheme.colorScheme.onPrimaryContainer
 
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -402,7 +326,7 @@ private fun PatchGamePicker(
                 Surface(
                     onClick = { onSelect(game.titleId) },
                     shape = neonShape(18.dp),
-                    color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+                    color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
                     border = BorderStroke(
                         1.dp,
                         if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.68f) else MaterialTheme.colorScheme.outlineVariant

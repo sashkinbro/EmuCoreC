@@ -34,7 +34,13 @@ class EmuCoreCApp : Application() {
         // prepareRuntime is synchronized, so this thread and the emulator boot
         // thread can race it safely.
         Thread({
-            runCatching { EmulatorStorage.prepareRuntime(this) }
+            runCatching {
+                EmulatorStorage.prepareRuntime(this)
+                if (AppPreferences(this).onboardingCompleted) {
+                    NativeLibraryLoader.ensureLoaded(this)
+                    com.sbro.emucorec.ui.settings.preloadCoreSettings(this)
+                }
+            }
         }, "EmuCoreC-PrepareRuntime").apply { isDaemon = true; start() }
         Thread({
             runCatching { runBlocking { DeviceGpuInfoProvider.preload(this@EmuCoreCApp) } }
@@ -44,9 +50,6 @@ class EmuCoreCApp : Application() {
         ProfilePlayTimeSyncer.syncPendingAsync(this)
         recoverPendingDriveRestore()
         DriveBackupWork.resumePending(this)
-        if (AppPreferences(this).onboardingCompleted) {
-            NativeLibraryLoader.ensureLoaded(this)
-        }
     }
 
     private fun recoverPendingDriveRestore() {

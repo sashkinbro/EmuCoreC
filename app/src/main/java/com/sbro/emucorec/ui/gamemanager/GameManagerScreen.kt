@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -27,13 +26,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import com.sbro.emucorec.ui.settings.animateScrollToCenterItem
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.RestartAlt
 import androidx.compose.material.icons.rounded.SportsEsports
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -42,20 +39,20 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -68,26 +65,34 @@ import com.sbro.emucorec.core.InstalledGpuDriver
 import com.sbro.emucorec.core.Ps3CoreConfig
 import com.sbro.emucorec.core.input.KeyboardMouseManager
 import com.sbro.emucorec.data.InstalledPs3Game
-import com.sbro.emucorec.ui.common.LocalImage
-import com.sbro.emucorec.ui.common.UrlImage
-import com.sbro.emucorec.ui.common.EmuCoreLoadingAnimation
-import com.sbro.emucorec.ui.common.ScreenTopBar
 import com.sbro.emucorec.ui.common.COVER_ART_ASPECT_RATIO
-import com.sbro.emucorec.ui.common.rememberDelayedLoading
+import com.sbro.emucorec.ui.common.EmptyStateCard
+import com.sbro.emucorec.ui.common.EmuCoreLoadingAnimation
+import com.sbro.emucorec.ui.common.LocalImage
+import com.sbro.emucorec.ui.common.ScreenTopBar
 import com.sbro.emucorec.ui.common.SectionCard
 import com.sbro.emucorec.ui.common.SettingHelpButton
+import com.sbro.emucorec.ui.common.StickyTabHeader
+import com.sbro.emucorec.ui.common.UrlImage
+import com.sbro.emucorec.ui.common.appFilterChipColors
+import com.sbro.emucorec.ui.common.appSliderColors
+import com.sbro.emucorec.ui.common.appSwitchColors
+import com.sbro.emucorec.ui.common.rememberDelayedLoading
+import com.sbro.emucorec.ui.common.rememberStickyTabHeaderPinned
+import com.sbro.emucorec.ui.common.stickyTabTopInset
 import com.sbro.emucorec.ui.settings.PerGameKeyboardMouseSettingsSection
 import com.sbro.emucorec.ui.settings.Ps3CoreSettingsCategory
-import com.sbro.emucorec.ui.settings.Ps3CoreSettingsSection
 import com.sbro.emucorec.ui.settings.Ps3CoreSettingsScope
+import com.sbro.emucorec.ui.settings.Ps3CoreSettingsSection
 import com.sbro.emucorec.ui.settings.Ps3CoreSettingsSurface
+import com.sbro.emucorec.ui.settings.animateScrollToCenterItem
 import com.sbro.emucorec.ui.theme.CardContentPadding
 import com.sbro.emucorec.ui.theme.ScreenContentBottomPadding
 import com.sbro.emucorec.ui.theme.ScreenHorizontalPadding
-import kotlin.math.roundToInt
-import com.sbro.emucorec.ui.theme.neon.neonShape
-import com.sbro.emucorec.ui.theme.neon.neonChipShape
 import com.sbro.emucorec.ui.theme.neon.neonButtonShape
+import com.sbro.emucorec.ui.theme.neon.neonChipShape
+import com.sbro.emucorec.ui.theme.neon.neonShape
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
@@ -121,6 +126,8 @@ fun GameManagerScreen(
     }
 
     val listState = rememberLazyListState()
+    val stickyInset = stickyTabTopInset()
+    val tabsPinned = rememberStickyTabHeaderPinned(listState, "game-manager-tabs")
     // Switching tabs used to leave the list at whatever scroll offset the
     // previous tab was read at, so the new tab's content appeared mid-screen.
     // Bring the (sticky) tab header back to the top on every change instead.
@@ -140,9 +147,10 @@ fun GameManagerScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
+            .padding(top = stickyInset)
             .navigationBarsPadding(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(
-            top = topInset,
+            top = (topInset + 12.dp - stickyInset).coerceAtLeast(0.dp),
             bottom = ScreenContentBottomPadding
         ),
         verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -167,11 +175,11 @@ fun GameManagerScreen(
                     EmuCoreLoadingAnimation()
                 }
             }
-        } else if (uiState.games.isEmpty()) {
+        } else if (uiState.games.isEmpty() && !uiState.isLoading) {
             item {
                 EmptyGameManagerState()
             }
-        } else {
+        } else if (uiState.games.isNotEmpty()) {
             item {
                 GamePicker(
                     games = uiState.games,
@@ -183,11 +191,7 @@ fun GameManagerScreen(
                 )
             }
             stickyHeader(key = "game-manager-tabs") {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.background)
-                ) {
+                StickyTabHeader(showDivider = tabsPinned) {
                     GameManagerTabs(selectedTab = selectedTab, onSelected = { selectedTab = it })
                 }
             }
@@ -207,9 +211,9 @@ fun GameManagerScreen(
                             Ps3CoreSettingsCategory.Graphics,
                             uiState.selectedTitleId,
                             viewModel::refreshCustomProfileFlag,
-                            additionalCategories = setOf(Ps3CoreSettingsCategory.Overlay),
                         )
                     }
+                    GameManagerTab.Overlay -> GameCoreSettings(Ps3CoreSettingsCategory.Overlay, uiState.selectedTitleId, viewModel::refreshCustomProfileFlag)
                     GameManagerTab.Audio -> GameCoreSettings(Ps3CoreSettingsCategory.Audio, uiState.selectedTitleId, viewModel::refreshCustomProfileFlag)
                     GameManagerTab.Controls -> {
                         GamepadProfileSection(
@@ -241,6 +245,7 @@ private const val GAME_MANAGER_TABS_ITEM_INDEX = 2
 private enum class GameManagerTab {
     General,
     Graphics,
+    Overlay,
     Audio,
     Controls,
     Network,
@@ -281,18 +286,16 @@ private fun GameManagerTabs(
         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = ScreenHorizontalPadding)
     ) {
         items(tabs, key = { it.name }) { tab ->
-            FilterChip(shape = neonChipShape(), 
+            FilterChip(shape = neonChipShape(),
                 selected = selectedTab == tab,
                 onClick = { onSelected(tab) },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
-                ),
+                colors = appFilterChipColors(),
                 label = {
                     Text(
                         text = when (tab) {
                             GameManagerTab.General -> stringResource(R.string.settings_tab_general)
                             GameManagerTab.Graphics -> stringResource(R.string.settings_tab_graphics)
+                            GameManagerTab.Overlay -> stringResource(R.string.settings_tab_overlay)
                             GameManagerTab.Audio -> stringResource(R.string.settings_tab_audio)
                             GameManagerTab.Controls -> stringResource(R.string.settings_tab_controls)
                             GameManagerTab.Network -> stringResource(R.string.settings_tab_network)
@@ -309,36 +312,12 @@ private fun GameManagerTabs(
 
 @Composable
 private fun EmptyGameManagerState() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(360.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.SportsEsports,
-                contentDescription = null,
-                modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Text(
-                text = stringResource(R.string.game_manager_empty_title),
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onBackground,
-                textAlign = TextAlign.Center
-            )
-            Text(
-                text = stringResource(R.string.game_manager_empty_body),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-        }
-    }
+    EmptyStateCard(
+        icon = Icons.Rounded.SportsEsports,
+        title = stringResource(R.string.game_manager_empty_title),
+        body = stringResource(R.string.game_manager_empty_body),
+        modifier = Modifier.padding(horizontal = ScreenHorizontalPadding),
+    )
 }
 
 @Composable
@@ -399,10 +378,11 @@ private fun GamePicker(
                 Surface(
                     onClick = { onSelect(game.titleId) },
                     shape = neonShape(18.dp),
-                    color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+                    color = if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f) else MaterialTheme.colorScheme.surface,
+                    contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
                     border = BorderStroke(
-                        1.dp,
-                        if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.68f) else MaterialTheme.colorScheme.outlineVariant
+                        if (selected) 2.dp else 1.dp,
+                        if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
                     )
                 ) {
                     Row(
@@ -468,23 +448,17 @@ private fun GraphicsProfileSection(
     onOpenGpuDriverManager: () -> Unit,
     onDriverOverrideSelected: (String?) -> Unit
 ) {
-    SectionCard(title = stringResource(R.string.settings_tab_graphics)) {
-        if (remember { GpuDriverCompatibility.supportsAdrenoToolsCustomDrivers() }) {
+    if (remember { GpuDriverCompatibility.supportsAdrenoToolsCustomDrivers() }) {
+        SectionCard(title = stringResource(R.string.settings_gpu_driver)) {
             GpuDriverChoiceRow(
                 effectiveDriverName = config.customDriverName,
                 globalDriverName = defaults.customDriverName,
                 customDriverOverride = customDriverOverride,
                 installedGpuDrivers = installedGpuDrivers,
                 onOpenGpuDriverManager = onOpenGpuDriverManager,
-                onReset = { onDriverOverrideSelected(null) },
-                onSelected = onDriverOverrideSelected
+                onReset = { onDriverOverrideSelected(null) }
             )
         }
-        Text(
-            text = stringResource(R.string.settings_gpu_driver_manager_subtitle),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
     }
 }
 
@@ -495,8 +469,7 @@ private fun GpuDriverChoiceRow(
     customDriverOverride: String?,
     installedGpuDrivers: List<InstalledGpuDriver>,
     onOpenGpuDriverManager: () -> Unit,
-    onReset: () -> Unit,
-    onSelected: (String?) -> Unit
+    onReset: () -> Unit
 ) {
     val selectedDriver = installedGpuDrivers.firstOrNull { it.name == effectiveDriverName }
     val status = when {
@@ -508,38 +481,17 @@ private fun GpuDriverChoiceRow(
         else -> stringResource(R.string.settings_gpu_driver_status_game_active, selectedDriver.name)
     }
 
-    SettingContainer(
-        title = stringResource(R.string.settings_gpu_driver),
-        description = stringResource(R.string.settings_help_gpu_driver),
-        onReset = onReset
-    ) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SettingHelpButton(title = stringResource(R.string.settings_gpu_driver),
+                description = stringResource(R.string.settings_help_gpu_driver))
+            TextButton(onClick = onReset) { Text(stringResource(R.string.settings_reset_defaults_menu)) }
+        }
         Text(
             text = status,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        val selectedLabel = when {
-            customDriverOverride == null -> stringResource(R.string.settings_gpu_driver_global)
-            customDriverOverride.isBlank() -> stringResource(R.string.settings_gpu_driver_system)
-            else -> customDriverOverride
-        }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(shape = neonChipShape(), 
-                selected = true,
-                onClick = onOpenGpuDriverManager,
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
-                ),
-                label = {
-                    Text(
-                        text = selectedLabel,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            )
-        }
         if (installedGpuDrivers.isEmpty()) {
             Text(
                 text = stringResource(R.string.settings_gpu_driver_none_installed),
@@ -547,7 +499,7 @@ private fun GpuDriverChoiceRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        OutlinedButton(shape = neonButtonShape(), 
+        OutlinedButton(shape = neonButtonShape(),
             onClick = onOpenGpuDriverManager,
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -622,45 +574,6 @@ private fun GamepadProfileSection(
             onChange = { value -> onUpdate { it.copy(touchHapticsStrength = value.roundToInt()) } }
         )
     }
-    SectionCard(title = stringResource(R.string.settings_gyro_mode)) {
-        IntChoiceRow(
-            title = stringResource(R.string.settings_gyro_mode),
-            description = stringResource(R.string.settings_help_gyro_mode),
-            selected = config.gyroMode,
-            options = listOf(
-                Ps3CoreConfig.GYRO_MODE_OFF to stringResource(R.string.settings_gyro_off),
-                Ps3CoreConfig.GYRO_MODE_AIM to stringResource(R.string.settings_gyro_aim),
-                Ps3CoreConfig.GYRO_MODE_STEERING to stringResource(R.string.settings_gyro_steering)
-            ),
-            onReset = { onUpdate { it.copy(gyroMode = defaults.gyroMode) } }
-        ) { value -> onUpdate { it.copy(gyroMode = value) } }
-        if (config.gyroMode != Ps3CoreConfig.GYRO_MODE_OFF) {
-            SliderRow(
-                title = stringResource(R.string.settings_gyro_sensitivity),
-                description = stringResource(R.string.settings_help_gyro_sensitivity),
-                valueText = stringResource(R.string.settings_gamepad_percent_value, config.gyroSensitivity),
-                value = config.gyroSensitivity.toFloat(),
-                valueRange = 25f..300f,
-                steps = 10,
-                onReset = { onUpdate { it.copy(gyroSensitivity = defaults.gyroSensitivity) } },
-                onChange = { value -> onUpdate { it.copy(gyroSensitivity = value.roundToInt()) } }
-            )
-            SliderRow(
-                title = stringResource(R.string.settings_gyro_smoothing),
-                description = stringResource(R.string.settings_help_gyro_smoothing),
-                valueText = stringResource(R.string.settings_gamepad_percent_value, config.gyroSmoothing),
-                value = config.gyroSmoothing.toFloat(),
-                valueRange = 0f..90f,
-                steps = 8,
-                onReset = { onUpdate { it.copy(gyroSmoothing = defaults.gyroSmoothing) } },
-                onChange = { value -> onUpdate { it.copy(gyroSmoothing = value.roundToInt()) } }
-            )
-            ToggleRow(stringResource(R.string.settings_gyro_invert_x), config.gyroInvertX, stringResource(R.string.settings_gyro_invert_x_desc), { onUpdate { it.copy(gyroInvertX = defaults.gyroInvertX) } }) { enabled -> onUpdate { it.copy(gyroInvertX = enabled) } }
-            if (config.gyroMode == Ps3CoreConfig.GYRO_MODE_AIM) {
-                ToggleRow(stringResource(R.string.settings_gyro_invert_y), config.gyroInvertY, stringResource(R.string.settings_gyro_invert_y_desc), { onUpdate { it.copy(gyroInvertY = defaults.gyroInvertY) } }) { enabled -> onUpdate { it.copy(gyroInvertY = enabled) } }
-            }
-        }
-    }
     SectionCard(title = stringResource(R.string.settings_gamepad_section)) {
         SliderRow(
             title = stringResource(R.string.settings_gamepad_deadzone),
@@ -723,6 +636,46 @@ private fun GamepadProfileSection(
         ToggleRow(stringResource(R.string.game_manager_invert_right_x), config.gamepadInvertRightX, stringResource(R.string.settings_help_gamepad_invert_x), { onUpdate { it.copy(gamepadInvertRightX = defaults.gamepadInvertRightX) } }) { onUpdate { cfg -> cfg.copy(gamepadInvertRightX = it) } }
         ToggleRow(stringResource(R.string.settings_gamepad_invert_right_y), config.gamepadInvertRightY, stringResource(R.string.settings_help_gamepad_invert_y), { onUpdate { it.copy(gamepadInvertRightY = defaults.gamepadInvertRightY) } }) { onUpdate { cfg -> cfg.copy(gamepadInvertRightY = it) } }
     }
+    SectionCard(title = stringResource(R.string.settings_gyro_mode)) {
+        IntChoiceRow(
+            title = stringResource(R.string.settings_gyro_mode),
+            description = stringResource(R.string.settings_help_gyro_mode),
+            selected = config.gyroMode,
+            options = listOf(
+                Ps3CoreConfig.GYRO_MODE_OFF to stringResource(R.string.settings_gyro_off),
+                Ps3CoreConfig.GYRO_MODE_AIM to stringResource(R.string.settings_gyro_aim),
+                Ps3CoreConfig.GYRO_MODE_STEERING to stringResource(R.string.settings_gyro_steering)
+            ),
+            onReset = { onUpdate { it.copy(gyroMode = defaults.gyroMode) } }
+        ) { value -> onUpdate { it.copy(gyroMode = value) } }
+        if (config.gyroMode != Ps3CoreConfig.GYRO_MODE_OFF) {
+            SliderRow(
+                title = stringResource(R.string.settings_gyro_sensitivity),
+                description = stringResource(R.string.settings_help_gyro_sensitivity),
+                valueText = stringResource(R.string.settings_gamepad_percent_value, config.gyroSensitivity),
+                value = config.gyroSensitivity.toFloat(),
+                valueRange = 25f..300f,
+                steps = 10,
+                onReset = { onUpdate { it.copy(gyroSensitivity = defaults.gyroSensitivity) } },
+                onChange = { value -> onUpdate { it.copy(gyroSensitivity = value.roundToInt()) } }
+            )
+            SliderRow(
+                title = stringResource(R.string.settings_gyro_smoothing),
+                description = stringResource(R.string.settings_help_gyro_smoothing),
+                valueText = stringResource(R.string.settings_gamepad_percent_value, config.gyroSmoothing),
+                value = config.gyroSmoothing.toFloat(),
+                valueRange = 0f..90f,
+                steps = 8,
+                onReset = { onUpdate { it.copy(gyroSmoothing = defaults.gyroSmoothing) } },
+                onChange = { value -> onUpdate { it.copy(gyroSmoothing = value.roundToInt()) } }
+            )
+            ToggleRow(stringResource(R.string.settings_gyro_invert_x), config.gyroInvertX, stringResource(R.string.settings_gyro_invert_x_desc), { onUpdate { it.copy(gyroInvertX = defaults.gyroInvertX) } }) { enabled -> onUpdate { it.copy(gyroInvertX = enabled) } }
+            if (config.gyroMode == Ps3CoreConfig.GYRO_MODE_AIM) {
+                ToggleRow(stringResource(R.string.settings_gyro_invert_y), config.gyroInvertY, stringResource(R.string.settings_gyro_invert_y_desc), { onUpdate { it.copy(gyroInvertY = defaults.gyroInvertY) } }) { enabled -> onUpdate { it.copy(gyroInvertY = enabled) } }
+            }
+        }
+    }
+
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -738,13 +691,10 @@ private fun ChoiceRow(
     SettingContainer(title = title, description = description, onReset = onReset) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             options.forEach { (value, label) ->
-                FilterChip(shape = neonChipShape(), 
+                FilterChip(shape = neonChipShape(),
                     selected = selected == value,
                     onClick = { onSelected(value) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
-                    ),
+                    colors = appFilterChipColors(),
                     label = { Text(label) }
                 )
             }
@@ -774,14 +724,11 @@ private fun IntChoiceRow(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             options.forEach { (value, label) ->
-                FilterChip(shape = neonChipShape(), 
+                FilterChip(shape = neonChipShape(),
                     selected = selected == value,
                     enabled = enabled,
                     onClick = { onSelected(value) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
-                    ),
+                    colors = appFilterChipColors(),
                     label = { Text(label) }
                 )
             }
@@ -841,7 +788,7 @@ private fun ToggleRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.End
         ) {
-            Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
+            Switch(colors = appSwitchColors(), checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
         }
     }
 }
@@ -864,7 +811,7 @@ private fun SliderRow(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Slider(
+        Slider(colors = appSliderColors(),
             enabled = enabled,
             value = value,
             onValueChange = onChange,

@@ -1,5 +1,9 @@
 package com.sbro.emucorec.ui.settings
 
+import com.sbro.emucorec.ui.common.appSliderColors
+
+import com.sbro.emucorec.ui.common.appSwitchColors
+
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -30,9 +34,8 @@ import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.StayCurrentPortrait
 import androidx.compose.material3.Button
-import androidx.compose.material3.AlertDialog
+import com.sbro.emucorec.ui.common.AppAlertDialog as AlertDialog
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -64,6 +67,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import android.view.InputDevice
 import android.widget.Toast
+import com.sbro.emucorec.ui.common.appFilterChipColors
 import com.sbro.emucorec.R
 import com.sbro.emucorec.core.AndroidGyroscopeInput
 import com.sbro.emucorec.core.GpuDriverCompatibility
@@ -125,7 +129,6 @@ fun SettingsTabContent(
                 onOpenTouchControlsEditor = onOpenTouchControlsEditor
             )
             Ps3CoreSettingsSection(Ps3CoreSettingsCategory.Controls, scope = Ps3CoreSettingsScope.Global)
-            GlobalKeyboardMouseSettingsSection()
         }
         SettingsTab.Storage -> {
             StorageTab(
@@ -189,32 +192,20 @@ private fun GraphicsTab(uiState: SettingsUiState, defaults: Ps3CoreConfig, viewM
                 description = stringResource(R.string.settings_help_gpu_driver),
                 onResetDefault = { viewModel.updateCoreSettings { it.copy(customDriverName = defaults.customDriverName) } }
             ) {
-                FilterChip(shape = neonChipShape(), 
-                    selected = uiState.coreConfig.customDriverName.isBlank(),
-                    onClick = { viewModel.updateCoreSettings { it.copy(customDriverName = "") } },
-                    label = { Text(stringResource(R.string.settings_gpu_driver_system)) }
-                )
-                FilterChip(shape = neonChipShape(), 
-                    selected = uiState.coreConfig.customDriverName.isNotBlank(),
-                    onClick = {
-                        val firstDriver = uiState.installedGpuDrivers.firstOrNull()
-                        if (firstDriver != null) {
-                            viewModel.updateCoreSettings { it.copy(customDriverName = firstDriver.name) }
-                        }
-                    },
-                    enabled = uiState.installedGpuDrivers.isNotEmpty(),
-                    label = { Text(stringResource(R.string.settings_gpu_driver_custom)) }
-                )
-            }
-            GpuDriverStatus(
-                selectedDriver = selectedDriver,
-                modifier = Modifier.padding(horizontal = SettingsSectionRowPadding)
-            )
-            Button(shape = neonButtonShape(), 
-                onClick = onOpenGpuDriverSettings,
-                modifier = Modifier.padding(horizontal = SettingsSectionRowPadding)
-            ) {
-                Text(stringResource(R.string.settings_gpu_driver_manage))
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    GpuDriverStatus(
+                        selectedDriver = selectedDriver,
+                        configuredName = uiState.coreConfig.customDriverName,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Button(
+                        shape = neonButtonShape(),
+                        onClick = onOpenGpuDriverSettings,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(R.string.settings_gpu_driver_manage))
+                    }
+                }
             }
         }
         Text(
@@ -229,14 +220,17 @@ private fun GraphicsTab(uiState: SettingsUiState, defaults: Ps3CoreConfig, viewM
 @Composable
 private fun GpuDriverStatus(
     selectedDriver: InstalledGpuDriver?,
+    configuredName: String,
     modifier: Modifier = Modifier
 ) {
     val text = when {
+        selectedDriver == null && configuredName.isNotBlank() -> stringResource(R.string.settings_gpu_driver_status_broken, configuredName)
         selectedDriver == null -> stringResource(R.string.settings_gpu_driver_status_system)
         !selectedDriver.isUsable -> stringResource(R.string.settings_gpu_driver_status_broken, selectedDriver.name)
         else -> stringResource(R.string.settings_gpu_driver_status_active, selectedDriver.name)
     }
     val supporting = when {
+        selectedDriver == null && configuredName.isNotBlank() -> stringResource(R.string.settings_gpu_driver_status_broken_desc)
         selectedDriver == null -> stringResource(R.string.settings_gpu_driver_status_system_desc)
         !selectedDriver.isUsable -> stringResource(R.string.settings_gpu_driver_status_broken_desc)
         else -> stringResource(R.string.settings_gpu_driver_status_active_desc)
@@ -278,11 +272,6 @@ private fun ControlsTab(
             InputDeviceClassifier.isPhysicalGameController(id)
         }
     }
-    SectionCard(title = stringResource(R.string.settings_tab_controls), contentPadding = androidx.compose.foundation.layout.PaddingValues(SettingsSectionContentPadding)) {
-        SliderRow(stringResource(R.string.settings_core_analog_multiplier_label), stringResource(R.string.settings_help_analog_multiplier), stringResource(R.string.settings_core_analog_multiplier_value, uiState.coreConfig.analogMultiplier), { viewModel.updateCoreSettings { it.copy(analogMultiplier = defaults.analogMultiplier) } }) {
-            Slider(value = uiState.coreConfig.analogMultiplier, onValueChange = { value -> viewModel.updateCoreSettings { it.copy(analogMultiplier = (value * 10).roundToInt() / 10f) } }, valueRange = 0.5f..2f, steps = 14)
-        }
-    }
     SectionCard(title = stringResource(R.string.settings_touch_controls_section), contentPadding = androidx.compose.foundation.layout.PaddingValues(SettingsSectionContentPadding)) {
         ActionRow(
             title = stringResource(R.string.settings_edit_touch_controls),
@@ -291,10 +280,10 @@ private fun ControlsTab(
         )
         Toggle(stringResource(R.string.settings_core_gamepad_overlay), stringResource(R.string.settings_help_gamepad_overlay), uiState.coreConfig.enableGamepadOverlay, { enabled -> viewModel.updateCoreSettings { it.copy(enableGamepadOverlay = enabled) } }, { viewModel.updateCoreSettings { it.copy(enableGamepadOverlay = defaults.enableGamepadOverlay) } })
         SliderRow(stringResource(R.string.settings_core_overlay_scale_label), stringResource(R.string.settings_help_overlay_scale), stringResource(R.string.settings_core_overlay_scale_value, uiState.coreConfig.overlayScale), { viewModel.updateCoreSettings { it.copy(overlayScale = defaults.overlayScale) } }) {
-            Slider(value = uiState.coreConfig.overlayScale, onValueChange = { value -> viewModel.updateCoreSettings { it.copy(overlayScale = (value * 10).roundToInt() / 10f) } }, valueRange = 0.5f..2f, steps = 14)
+            Slider(colors = appSliderColors(), value = uiState.coreConfig.overlayScale, onValueChange = { value -> viewModel.updateCoreSettings { it.copy(overlayScale = (value * 10).roundToInt() / 10f) } }, valueRange = 0.5f..2f, steps = 14)
         }
         SliderRow(stringResource(R.string.settings_core_overlay_opacity_label), stringResource(R.string.settings_help_overlay_opacity), stringResource(R.string.settings_core_overlay_opacity_value, uiState.coreConfig.overlayOpacity), { viewModel.updateCoreSettings { it.copy(overlayOpacity = defaults.overlayOpacity) } }) {
-            Slider(value = uiState.coreConfig.overlayOpacity.toFloat(), onValueChange = { value -> viewModel.updateCoreSettings { it.copy(overlayOpacity = value.roundToInt()) } }, valueRange = 10f..100f, steps = 8)
+            Slider(colors = appSliderColors(), value = uiState.coreConfig.overlayOpacity.toFloat(), onValueChange = { value -> viewModel.updateCoreSettings { it.copy(overlayOpacity = value.roundToInt()) } }, valueRange = 10f..100f, steps = 8)
         }
         Toggle(
             stringResource(R.string.settings_touch_haptics),
@@ -319,7 +308,7 @@ private fun ControlsTab(
             stringResource(R.string.settings_gamepad_percent_value, uiState.coreConfig.touchHapticsStrength),
             { viewModel.updateCoreSettings { it.copy(touchHapticsStrength = defaults.touchHapticsStrength) } }
         ) {
-            Slider(
+            Slider(colors = appSliderColors(),
                 enabled = uiState.coreConfig.touchHaptics,
                 value = uiState.coreConfig.touchHapticsStrength.toFloat(),
                 onValueChange = { value -> viewModel.updateCoreSettings { it.copy(touchHapticsStrength = value.roundToInt().coerceIn(10, 100)) } },
@@ -332,6 +321,73 @@ private fun ControlsTab(
             description = stringResource(R.string.settings_help_touch_haptics_test),
             enabled = uiState.coreConfig.touchHaptics,
             onClick = viewModel::testTouchHaptics
+        )
+    }
+    GlobalKeyboardMouseSettingsSection()
+    SectionCard(title = stringResource(R.string.settings_gamepad_section), contentPadding = androidx.compose.foundation.layout.PaddingValues(SettingsSectionContentPadding)) {
+        Text(
+            text = stringResource(
+                if (gamepadConnected) R.string.settings_gamepad_connected
+                else R.string.settings_gamepad_disconnected
+            ),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = SettingsSectionRowPadding)
+        )
+        SliderRow(stringResource(R.string.settings_core_analog_multiplier_label), stringResource(R.string.settings_help_analog_multiplier), stringResource(R.string.settings_core_analog_multiplier_value, uiState.coreConfig.analogMultiplier), { viewModel.updateCoreSettings { it.copy(analogMultiplier = defaults.analogMultiplier) } }) {
+            Slider(colors = appSliderColors(), value = uiState.coreConfig.analogMultiplier, onValueChange = { value -> viewModel.updateCoreSettings { it.copy(analogMultiplier = (value * 10).roundToInt() / 10f) } }, valueRange = 0.5f..2f, steps = 14)
+        }
+        SliderRow(stringResource(R.string.settings_gamepad_deadzone), stringResource(R.string.settings_help_gamepad_deadzone), stringResource(R.string.settings_gamepad_percent_value, (uiState.coreConfig.gamepadDeadzone * 100f).toInt()), { viewModel.updateCoreSettings { it.copy(gamepadDeadzone = defaults.gamepadDeadzone) } }) {
+            Slider(colors = appSliderColors(), enabled = gamepadConnected, value = uiState.coreConfig.gamepadDeadzone, onValueChange = { value -> viewModel.updateCoreSettings { it.copy(gamepadDeadzone = (value * 100).roundToInt() / 100f) } }, valueRange = 0f..0.45f, steps = 8)
+        }
+        SliderRow(stringResource(R.string.settings_gamepad_trigger_threshold), stringResource(R.string.settings_help_gamepad_trigger_threshold), stringResource(R.string.settings_gamepad_percent_value, (uiState.coreConfig.gamepadTriggerThreshold * 100f).toInt()), { viewModel.updateCoreSettings { it.copy(gamepadTriggerThreshold = defaults.gamepadTriggerThreshold) } }) {
+            Slider(colors = appSliderColors(), enabled = gamepadConnected, value = uiState.coreConfig.gamepadTriggerThreshold, onValueChange = { value -> viewModel.updateCoreSettings { it.copy(gamepadTriggerThreshold = (value * 100).roundToInt() / 100f) } }, valueRange = 0f..0.9f, steps = 8)
+        }
+        Chips(stringResource(R.string.settings_gamepad_button_profile), stringResource(R.string.settings_help_gamepad_button_profile), { viewModel.updateCoreSettings { it.copy(gamepadButtonProfile = defaults.gamepadButtonProfile) } }) {
+            TextChip(Ps3CoreConfig.GAMEPAD_PROFILE_STANDARD, stringResource(R.string.settings_gamepad_profile_standard), uiState.coreConfig.gamepadButtonProfile, viewModel, enabled = gamepadConnected) { config, value -> config.copy(gamepadButtonProfile = value) }
+            TextChip(Ps3CoreConfig.GAMEPAD_PROFILE_SWAP_CROSS_CIRCLE, stringResource(R.string.settings_gamepad_profile_swap_cross_circle), uiState.coreConfig.gamepadButtonProfile, viewModel, enabled = gamepadConnected) { config, value -> config.copy(gamepadButtonProfile = value) }
+            TextChip(Ps3CoreConfig.GAMEPAD_PROFILE_NINTENDO_FACE, stringResource(R.string.settings_gamepad_profile_nintendo_face), uiState.coreConfig.gamepadButtonProfile, viewModel, enabled = gamepadConnected) { config, value -> config.copy(gamepadButtonProfile = value) }
+        }
+        Toggle(stringResource(R.string.settings_gamepad_swap_sticks), stringResource(R.string.settings_help_gamepad_swap_sticks), uiState.coreConfig.gamepadSwapSticks, { enabled -> if (gamepadConnected) viewModel.updateCoreSettings { it.copy(gamepadSwapSticks = enabled) } }, { viewModel.updateCoreSettings { it.copy(gamepadSwapSticks = defaults.gamepadSwapSticks) } })
+        Toggle(stringResource(R.string.settings_gamepad_invert_left_y), stringResource(R.string.settings_help_gamepad_invert_y), uiState.coreConfig.gamepadInvertLeftY, { enabled -> if (gamepadConnected) viewModel.updateCoreSettings { it.copy(gamepadInvertLeftY = enabled) } }, { viewModel.updateCoreSettings { it.copy(gamepadInvertLeftY = defaults.gamepadInvertLeftY) } })
+        Toggle(stringResource(R.string.settings_gamepad_invert_right_y), stringResource(R.string.settings_help_gamepad_invert_y), uiState.coreConfig.gamepadInvertRightY, { enabled -> if (gamepadConnected) viewModel.updateCoreSettings { it.copy(gamepadInvertRightY = enabled) } }, { viewModel.updateCoreSettings { it.copy(gamepadInvertRightY = defaults.gamepadInvertRightY) } })
+    }
+    SectionCard(title = stringResource(R.string.settings_vibration_section), contentPadding = androidx.compose.foundation.layout.PaddingValues(SettingsSectionContentPadding)) {
+        Toggle(
+            stringResource(R.string.settings_vibration_enable),
+            stringResource(R.string.settings_help_vibration_enable),
+            uiState.coreConfig.gamepadVibration,
+            { enabled -> viewModel.updateCoreSettings { it.copy(gamepadVibration = enabled) } },
+            { viewModel.updateCoreSettings { it.copy(gamepadVibration = defaults.gamepadVibration) } }
+        )
+        SliderRow(
+            stringResource(R.string.settings_vibration_strength),
+            stringResource(R.string.settings_help_vibration_strength),
+            stringResource(R.string.settings_gamepad_percent_value, uiState.coreConfig.gamepadVibrationStrength),
+            { viewModel.updateCoreSettings { it.copy(gamepadVibrationStrength = defaults.gamepadVibrationStrength) } }
+        ) {
+            Slider(colors = appSliderColors(),
+                enabled = uiState.coreConfig.gamepadVibration,
+                value = uiState.coreConfig.gamepadVibrationStrength.toFloat(),
+                onValueChange = { value -> viewModel.updateCoreSettings { it.copy(gamepadVibrationStrength = value.roundToInt().coerceIn(0, 100)) } },
+                valueRange = 0f..100f,
+                steps = 19
+            )
+        }
+        VibrationTestRow(
+            title = stringResource(R.string.settings_test_vibration),
+            description = stringResource(R.string.settings_help_test_vibration),
+            enabled = uiState.coreConfig.gamepadVibration && uiState.coreConfig.gamepadVibrationStrength > 0,
+            onClick = {
+                viewModel.testVibration()
+            }
+        )
+        Toggle(
+            stringResource(R.string.settings_device_vibration_fallback),
+            stringResource(R.string.settings_help_device_vibration_fallback),
+            uiState.coreConfig.deviceVibrationFallback,
+            { enabled -> viewModel.updateCoreSettings { it.copy(deviceVibrationFallback = enabled) } },
+            { viewModel.updateCoreSettings { it.copy(deviceVibrationFallback = defaults.deviceVibrationFallback) } }
         )
     }
     SectionCard(title = stringResource(R.string.settings_gyro_mode), contentPadding = androidx.compose.foundation.layout.PaddingValues(SettingsSectionContentPadding)) {
@@ -361,7 +417,7 @@ private fun ControlsTab(
                 stringResource(R.string.settings_gamepad_percent_value, uiState.coreConfig.gyroSensitivity),
                 { viewModel.updateCoreSettings { it.copy(gyroSensitivity = defaults.gyroSensitivity) } }
             ) {
-                Slider(value = uiState.coreConfig.gyroSensitivity.toFloat(), onValueChange = { value -> viewModel.updateCoreSettings { it.copy(gyroSensitivity = value.roundToInt()) } }, valueRange = 25f..300f, steps = 10)
+                Slider(colors = appSliderColors(), value = uiState.coreConfig.gyroSensitivity.toFloat(), onValueChange = { value -> viewModel.updateCoreSettings { it.copy(gyroSensitivity = value.roundToInt()) } }, valueRange = 25f..300f, steps = 10)
             }
             SliderRow(
                 stringResource(R.string.settings_gyro_smoothing),
@@ -369,7 +425,7 @@ private fun ControlsTab(
                 stringResource(R.string.settings_gamepad_percent_value, uiState.coreConfig.gyroSmoothing),
                 { viewModel.updateCoreSettings { it.copy(gyroSmoothing = defaults.gyroSmoothing) } }
             ) {
-                Slider(value = uiState.coreConfig.gyroSmoothing.toFloat(), onValueChange = { value -> viewModel.updateCoreSettings { it.copy(gyroSmoothing = value.roundToInt()) } }, valueRange = 0f..90f, steps = 8)
+                Slider(colors = appSliderColors(), value = uiState.coreConfig.gyroSmoothing.toFloat(), onValueChange = { value -> viewModel.updateCoreSettings { it.copy(gyroSmoothing = value.roundToInt()) } }, valueRange = 0f..90f, steps = 8)
             }
             Toggle(stringResource(R.string.settings_gyro_invert_x), stringResource(R.string.settings_gyro_invert_x_desc), uiState.coreConfig.gyroInvertX, { enabled -> viewModel.updateCoreSettings { it.copy(gyroInvertX = enabled) } }, { viewModel.updateCoreSettings { it.copy(gyroInvertX = defaults.gyroInvertX) } })
             if (uiState.coreConfig.gyroMode == Ps3CoreConfig.GYRO_MODE_AIM) {
@@ -377,69 +433,7 @@ private fun ControlsTab(
             }
         }
     }
-    SectionCard(title = stringResource(R.string.settings_vibration_section), contentPadding = androidx.compose.foundation.layout.PaddingValues(SettingsSectionContentPadding)) {
-        Toggle(
-            stringResource(R.string.settings_vibration_enable),
-            stringResource(R.string.settings_help_vibration_enable),
-            uiState.coreConfig.gamepadVibration,
-            { enabled -> viewModel.updateCoreSettings { it.copy(gamepadVibration = enabled) } },
-            { viewModel.updateCoreSettings { it.copy(gamepadVibration = defaults.gamepadVibration) } }
-        )
-        SliderRow(
-            stringResource(R.string.settings_vibration_strength),
-            stringResource(R.string.settings_help_vibration_strength),
-            stringResource(R.string.settings_gamepad_percent_value, uiState.coreConfig.gamepadVibrationStrength),
-            { viewModel.updateCoreSettings { it.copy(gamepadVibrationStrength = defaults.gamepadVibrationStrength) } }
-        ) {
-            Slider(
-                enabled = uiState.coreConfig.gamepadVibration,
-                value = uiState.coreConfig.gamepadVibrationStrength.toFloat(),
-                onValueChange = { value -> viewModel.updateCoreSettings { it.copy(gamepadVibrationStrength = value.roundToInt().coerceIn(0, 100)) } },
-                valueRange = 0f..100f,
-                steps = 19
-            )
-        }
-        VibrationTestRow(
-            title = stringResource(R.string.settings_test_vibration),
-            description = stringResource(R.string.settings_help_test_vibration),
-            enabled = uiState.coreConfig.gamepadVibration && uiState.coreConfig.gamepadVibrationStrength > 0,
-            onClick = {
-                viewModel.testVibration()
-            }
-        )
-        Toggle(
-            stringResource(R.string.settings_device_vibration_fallback),
-            stringResource(R.string.settings_help_device_vibration_fallback),
-            uiState.coreConfig.deviceVibrationFallback,
-            { enabled -> viewModel.updateCoreSettings { it.copy(deviceVibrationFallback = enabled) } },
-            { viewModel.updateCoreSettings { it.copy(deviceVibrationFallback = defaults.deviceVibrationFallback) } }
-        )
-    }
-    SectionCard(title = stringResource(R.string.settings_gamepad_section), contentPadding = androidx.compose.foundation.layout.PaddingValues(SettingsSectionContentPadding)) {
-        Text(
-            text = stringResource(
-                if (gamepadConnected) R.string.settings_gamepad_connected
-                else R.string.settings_gamepad_disconnected
-            ),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = SettingsSectionRowPadding)
-        )
-        SliderRow(stringResource(R.string.settings_gamepad_deadzone), stringResource(R.string.settings_help_gamepad_deadzone), stringResource(R.string.settings_gamepad_percent_value, (uiState.coreConfig.gamepadDeadzone * 100f).toInt()), { viewModel.updateCoreSettings { it.copy(gamepadDeadzone = defaults.gamepadDeadzone) } }) {
-            Slider(enabled = gamepadConnected, value = uiState.coreConfig.gamepadDeadzone, onValueChange = { value -> viewModel.updateCoreSettings { it.copy(gamepadDeadzone = (value * 100).roundToInt() / 100f) } }, valueRange = 0f..0.45f, steps = 8)
-        }
-        SliderRow(stringResource(R.string.settings_gamepad_trigger_threshold), stringResource(R.string.settings_help_gamepad_trigger_threshold), stringResource(R.string.settings_gamepad_percent_value, (uiState.coreConfig.gamepadTriggerThreshold * 100f).toInt()), { viewModel.updateCoreSettings { it.copy(gamepadTriggerThreshold = defaults.gamepadTriggerThreshold) } }) {
-            Slider(enabled = gamepadConnected, value = uiState.coreConfig.gamepadTriggerThreshold, onValueChange = { value -> viewModel.updateCoreSettings { it.copy(gamepadTriggerThreshold = (value * 100).roundToInt() / 100f) } }, valueRange = 0f..0.9f, steps = 8)
-        }
-        Chips(stringResource(R.string.settings_gamepad_button_profile), stringResource(R.string.settings_help_gamepad_button_profile), { viewModel.updateCoreSettings { it.copy(gamepadButtonProfile = defaults.gamepadButtonProfile) } }) {
-            TextChip(Ps3CoreConfig.GAMEPAD_PROFILE_STANDARD, stringResource(R.string.settings_gamepad_profile_standard), uiState.coreConfig.gamepadButtonProfile, viewModel, enabled = gamepadConnected) { config, value -> config.copy(gamepadButtonProfile = value) }
-            TextChip(Ps3CoreConfig.GAMEPAD_PROFILE_SWAP_CROSS_CIRCLE, stringResource(R.string.settings_gamepad_profile_swap_cross_circle), uiState.coreConfig.gamepadButtonProfile, viewModel, enabled = gamepadConnected) { config, value -> config.copy(gamepadButtonProfile = value) }
-            TextChip(Ps3CoreConfig.GAMEPAD_PROFILE_NINTENDO_FACE, stringResource(R.string.settings_gamepad_profile_nintendo_face), uiState.coreConfig.gamepadButtonProfile, viewModel, enabled = gamepadConnected) { config, value -> config.copy(gamepadButtonProfile = value) }
-        }
-        Toggle(stringResource(R.string.settings_gamepad_swap_sticks), stringResource(R.string.settings_help_gamepad_swap_sticks), uiState.coreConfig.gamepadSwapSticks, { enabled -> if (gamepadConnected) viewModel.updateCoreSettings { it.copy(gamepadSwapSticks = enabled) } }, { viewModel.updateCoreSettings { it.copy(gamepadSwapSticks = defaults.gamepadSwapSticks) } })
-        Toggle(stringResource(R.string.settings_gamepad_invert_left_y), stringResource(R.string.settings_help_gamepad_invert_y), uiState.coreConfig.gamepadInvertLeftY, { enabled -> if (gamepadConnected) viewModel.updateCoreSettings { it.copy(gamepadInvertLeftY = enabled) } }, { viewModel.updateCoreSettings { it.copy(gamepadInvertLeftY = defaults.gamepadInvertLeftY) } })
-        Toggle(stringResource(R.string.settings_gamepad_invert_right_y), stringResource(R.string.settings_help_gamepad_invert_y), uiState.coreConfig.gamepadInvertRightY, { enabled -> if (gamepadConnected) viewModel.updateCoreSettings { it.copy(gamepadInvertRightY = enabled) } }, { viewModel.updateCoreSettings { it.copy(gamepadInvertRightY = defaults.gamepadInvertRightY) } })
-    }
+
 }
 
 @Composable
@@ -538,7 +532,7 @@ private fun StorageTab(
                 }
             }
 
-            Button(shape = neonButtonShape(), 
+            Button(shape = neonButtonShape(),
                 onClick = onAddGameFolder,
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -568,7 +562,7 @@ private fun StorageTab(
                 modifier = Modifier.padding(top = 8.dp)
             )
         }
-        Button(shape = neonButtonShape(), 
+        Button(shape = neonButtonShape(),
             onClick = { storagePickerVisible = true },
             enabled = !uiState.storageChangeInProgress,
             modifier = Modifier.padding(top = 12.dp)
@@ -651,7 +645,7 @@ private fun ClearCacheSection(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 8.dp)
         )
-        Button(shape = neonButtonShape(), 
+        Button(shape = neonButtonShape(),
             onClick = { confirmVisible = true },
             enabled = !clearing && cacheSizeBytes > 0L,
             modifier = Modifier.padding(top = 12.dp)
@@ -674,7 +668,7 @@ private fun ClearCacheSection(
             title = { Text(stringResource(R.string.settings_clear_cache_confirm_title)) },
             text = { Text(stringResource(R.string.settings_clear_cache_confirm_message, formattedSize)) },
             confirmButton = {
-                Button(shape = neonButtonShape(), 
+                Button(shape = neonButtonShape(),
                     enabled = !clearing,
                     onClick = {
                         clearing = true
@@ -820,7 +814,7 @@ private fun StorageMigrationDialog(
                     )
                 }
                 if (!inProgress) {
-                    Button(shape = neonButtonShape(), 
+                    Button(shape = neonButtonShape(),
                         onClick = onDismiss,
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -878,7 +872,7 @@ private fun SettingsStorageDialog(
                         modifier = Modifier.fillMaxWidth(),
                         shape = neonShape(18.dp),
                         color = if (location.selected) {
-                            MaterialTheme.colorScheme.secondaryContainer
+                            MaterialTheme.colorScheme.primaryContainer
                         } else {
                             MaterialTheme.colorScheme.surfaceContainerHigh
                         },
@@ -900,7 +894,7 @@ private fun SettingsStorageDialog(
                                 text = storageLocationLabel(location, index),
                                 style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
                                 color = if (location.selected) {
-                                    MaterialTheme.colorScheme.onSecondaryContainer
+                                    MaterialTheme.colorScheme.onPrimaryContainer
                                 } else {
                                     MaterialTheme.colorScheme.onSurface
                                 }
@@ -909,7 +903,7 @@ private fun SettingsStorageDialog(
                                 text = location.ps3Path,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = if (location.selected) {
-                                    MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.78f)
+                                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.78f)
                                 } else {
                                     MaterialTheme.colorScheme.onSurfaceVariant
                                 }
@@ -1181,7 +1175,7 @@ private fun VibrationTestRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Button(shape = neonButtonShape(), 
+            Button(shape = neonButtonShape(),
                 onClick = onClick,
                 enabled = enabled
             ) {
@@ -1295,7 +1289,7 @@ private fun KeepScreenOnSettingRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Switch(
+            Switch(colors = appSwitchColors(),
                 checked = keepScreenOn,
                 onCheckedChange = onCheckedChange
             )
@@ -1334,7 +1328,7 @@ private fun ClearCoverCacheSection(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 8.dp)
         )
-        Button(shape = neonButtonShape(), 
+        Button(shape = neonButtonShape(),
             onClick = { confirmVisible = true },
             enabled = !clearing && coverCacheSizeBytes > 0L,
             modifier = Modifier.padding(top = 12.dp)
@@ -1357,7 +1351,7 @@ private fun ClearCoverCacheSection(
             title = { Text(stringResource(R.string.settings_clear_cover_cache_confirm_title)) },
             text = { Text(stringResource(R.string.settings_clear_cover_cache_confirm_message, formattedSize)) },
             confirmButton = {
-                Button(shape = neonButtonShape(), 
+                Button(shape = neonButtonShape(),
                     enabled = !clearing,
                     onClick = {
                         clearing = true
@@ -1421,7 +1415,7 @@ private fun IntChip(
     enabled: Boolean = true,
     transform: (Ps3CoreConfig, Int) -> Ps3CoreConfig
 ) {
-    FilterChip(shape = neonChipShape(), 
+    FilterChip(shape = neonChipShape(),
         selected = current == value,
         enabled = enabled,
         onClick = { viewModel.updateCoreSettings { config -> transform(config, value) } },
@@ -1453,7 +1447,7 @@ private fun TextChip(
     enabled: Boolean = true,
     transform: (Ps3CoreConfig, String) -> Ps3CoreConfig
 ) {
-    FilterChip(shape = neonChipShape(), 
+    FilterChip(shape = neonChipShape(),
         selected = current == value,
         onClick = { viewModel.updateCoreSettings { config -> transform(config, value) } },
         enabled = enabled,
@@ -1461,13 +1455,3 @@ private fun TextChip(
         label = { Text(label) }
     )
 }
-
-@Composable
-private fun appFilterChipColors() = FilterChipDefaults.filterChipColors(
-    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-    labelColor = MaterialTheme.colorScheme.onSurface,
-    iconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-    selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-    selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer,
-    selectedLeadingIconColor = MaterialTheme.colorScheme.onSecondaryContainer
-)

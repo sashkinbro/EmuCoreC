@@ -1,5 +1,6 @@
 package com.sbro.emucorec.ui.playtime
 
+import com.sbro.emucorec.ui.common.EmptyStateCard
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -131,7 +132,7 @@ fun PlayTimeScreen(
                     EmuCoreLoadingAnimation()
                 }
             }
-        } else {
+        } else if (uiState.hasLoadedOnce) {
             item {
                 GameSelector(
                     games = uiState.gameStats,
@@ -259,8 +260,8 @@ private fun GameSelector(
                         selected = selectedTitleId == null,
                         onClick = { onSelect(null) },
                         colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
                         ),
                         label = { Text(stringResource(R.string.play_time_all_games), maxLines = 1, softWrap = false) },
                         leadingIcon = {
@@ -289,7 +290,7 @@ private fun GameSelectorCard(
     Surface(
         onClick = onClick,
         shape = neonShape(18.dp),
-        color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
         border = BorderStroke(
             1.dp,
             if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.7f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.58f)
@@ -494,9 +495,10 @@ private fun DayChart(days: List<PlayTimeDayStats>) {
 @Composable
 private fun GameTotalsChart(games: List<PlayTimeGameStats>) {
     if (games.isEmpty()) {
-        Text(
-            text = stringResource(R.string.play_time_no_sessions_body),
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+        EmptyStateCard(
+            icon = Icons.Rounded.QueryStats,
+            title = stringResource(R.string.play_time_no_sessions_title),
+            body = stringResource(R.string.play_time_no_sessions_body),
         )
         return
     }
@@ -590,39 +592,12 @@ private fun EmptyPlayTimeState(
     body: String = stringResource(R.string.play_time_no_sessions_body),
     modifier: Modifier = Modifier
 ) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = neonShape(24.dp),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 2.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.58f))
-    ) {
-        Column(
-            modifier = Modifier.padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.QueryStats,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(42.dp)
-            )
-            Text(
-                text = stringResource(R.string.play_time_no_sessions_title),
-                modifier = Modifier.fillMaxWidth(),
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                textAlign = TextAlign.Center
-            )
-            Text(
-                text = body,
-                modifier = Modifier.fillMaxWidth(),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-        }
-    }
+    EmptyStateCard(
+        icon = Icons.Rounded.QueryStats,
+        title = stringResource(R.string.play_time_no_sessions_title),
+        body = body,
+        modifier = modifier,
+    )
 }
 
 private fun formatDuration(durationMs: Long): String {

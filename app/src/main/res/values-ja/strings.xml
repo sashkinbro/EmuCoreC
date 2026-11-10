@@ -299,10 +299,10 @@
     <string name="settings_help_content_description">設定のヘルプを開く</string>
     <string name="settings_help_dialog_label">設定ガイド</string>
     <string name="settings_help_dialog_tip">一度に1つのオプションだけ変更し、同じゲームシーンでテストすると、本当に改善された点を確認できます。</string>
-    <string name="settings_help_gamepad_overlay">物理コントローラーを使用していないときに、画面上のコントロールを表示します。\n\nタッチやコントローラーの入力を、普段のプレイ感覚に近づけるために使用します。コントロールがすでに正しく感じられる場合は変更を避けてください。極端な値は、エイミング、メニュー、タッチ機能を使いにくくする可能性があります。</string>
-    <string name="settings_help_overlay_scale">画面上のコントロールのサイズを変更します。\n\nタッチやコントローラーの入力を、普段のプレイ感覚に近づけるために使用します。コントロールがすでに正しく感じられる場合は変更を避けてください。極端な値は、エイミング、メニュー、タッチ機能を使いにくくする可能性があります。</string>
-    <string name="settings_help_overlay_opacity">画面上のコントロールの透明度を変更します。\n\nタッチやコントローラーの入力を、普段のプレイ感覚に近づけるために使用します。コントロールがすでに正しく感じられる場合は変更を避けてください。極端な値は、エイミング、メニュー、タッチ機能を使いにくくする可能性があります。</string>
-    <string name="settings_help_analog_multiplier">アナログスティックの感度を変更します。\n\nタッチやコントローラーの入力を、普段のプレイ感覚に近づけるために使用します。コントロールがすでに正しく感じられる場合は変更を避けてください。極端な値は、エイミング、メニュー、タッチ機能を使いにくくする可能性があります。</string>
+    <string name="settings_help_gamepad_overlay" formatted="false">ゲーム画面上にタッチゲームパッドを表示します。実機コントローラーを使う場合や重要な部分を隠す場合は非表示にできます。ゲームメニューは戻る操作で開けます。</string>
+    <string name="settings_help_overlay_scale" formatted="false">すべてのタッチ操作部品をまとめて拡大・縮小します。押しやすくするには大きく、ゲームを広く見るには小さくします。個々のボタンの位置とサイズはタッチ操作エディターで調整します。</string>
+    <string name="settings_help_overlay_opacity" formatted="false">タッチ操作部品の見え方を変えます。100%は完全に不透明で、値を下げるとゲームが透けて見えます。外観だけの変更で、透明なボタンもタッチに反応します。</string>
+    <string name="settings_help_analog_multiplier" formatted="false">実機アナログスティックの移動量を、ゲームに送る前に乗算します。1.0より大きいと早く最大入力に達し、小さいと最大入力が減ります。中央のデッドゾーンやボタン割り当てとは別の設定です。</string>
     <string name="settings_help_gamepad_deadzone">中央付近の小さなスティックの動きをフィルタリングしてドリフトを軽減します。カメラやキャラクターが勝手に動く場合は値を上げ、エイミングの反応が悪い場合は値を下げてください。</string>
     <string name="settings_help_gamepad_trigger_threshold">入力が送信されるまでにアナログトリガーをどれだけ動かす必要があるかを設定します。ノイズの多いトリガーでは値を上げ、レースや押し込み加減を使うコントロールでは値を下げてください。</string>
     <string name="settings_help_gamepad_button_profile">物理コントローラーの前面ボタンを、エミュレーターに入力される前に再割り当てします。お使いのコントローラーの配置がPS3の×・○・□・△と異なる場合に使用してください。</string>
@@ -1115,7 +1115,7 @@
     <string name="core_help_video_anisotropic_filter_override" formatted="false">値を高くすると、GPU リソースを消費して、傾斜したサーフェス上のテクスチャの鮮明さが増します。
 最新の GPU は、16x であってもこの設定を問題なく処理できます。
 実機の PS3 で使用されている元の設定を使用したい場合は、これを「自動」のままにしておきます。</string>
-    <string name="core_help_video_aspect_ratio" formatted="false">4:3 モニターを使用していない限り、これを 16:9 のままにしておきます。</string>
+    <string name="core_help_video_aspect_ratio" formatted="false">ゲーム画像の縦横比を選びます。通常は16:9など、そのゲームが対応する比率を使用します。異なる比率では画像が歪む場合があります。画面全体への引き伸ばしは別の設定です。</string>
     <string name="core_help_audio_rsxaudio_avport" formatted="false">オーディオ データのサンプリングにどの avport を使用するかを制御します。</string>
     <string name="core_help_audio_desired_audio_buffer_duration" formatted="false">目標とするバッファ長をミリ秒で指定します。\n値を大きくするとバッファリング処理が安定しやすくなりますが、音声の遅延が目立つ場合があります。</string>
     <string name="core_help_audio_audio_channel_layout" formatted="false">RPCS3の音声出力形式を指定します。\n「自動」では、オーディオデバイスとエミュレートする音声形式に基づき、RPCS3が最適な形式を選択します。</string>
@@ -1130,12 +1130,12 @@
 手動設定では選択した形式が使用され、自動設定では利用可能なすべての形式からゲームが選択されます。</string>
     <string name="core_help_audio_audio_provider" formatted="false">どの PS3 オーディオ API を使用するかを制御します。
 ゲームは CellAudio を使用しますが、VSH には RSXAudio が必要です。</string>
-    <string name="core_help_audio_renderer" formatted="false">Cubebはクロスプラットフォームに対応し、オーディオバッファリングも利用できるため推奨されます。\n利用できない場合はFAudioを使用できます。</string>
+    <string name="core_help_audio_renderer" formatted="false">音声出力方式を選びます。音が出ない、音が壊れるといった問題を調べる場合以外は標準の方式を使ってください。変更にはゲームの再起動が必要で、Nullは音声を無効にします。</string>
     <string name="core_help_input_output_background_input_enabled" formatted="false">ゲーム ウィンドウにフォーカスがないときにパッドとキーボードの入力が可能になります。</string>
     <string name="core_help_net_bind_address" formatted="false">バインド先のインターフェイス IP アドレス。
 カスタム構成でのみ使用できます。</string>
     <string name="core_help_input_output_buzz_emulated_controller" formatted="false">Buzz!コントローラーに対応します。\nゲームでBuzz!コントローラーが必要で、実物を持っていない場合は「コントローラー1台」または「コントローラー2台」を選択してください。\nゲームがDualShockに対応している場合や、実物のBuzz!コントローラーを使う場合は「なし」を選択してください。</string>
-    <string name="core_help_input_output_camera" formatted="false">オペレーティング システムのデフォルトのカメラ デバイスを使用するには、[Qt カメラ] を選択します。</string>
+    <string name="core_help_input_output_camera" formatted="false">Androidでは、実映像なしのPS3カメラ接続の模擬、またはカメラなしを選べます。実機カメラの撮影は未実装です。Fakeは一部の接続確認を通過できますが、ライブ映像は提供しません。</string>
     <string name="core_help_input_output_camera_flip" formatted="false">カメラ画像を水平方向、垂直方向、または両方の軸で反転します。</string>
     <string name="core_help_input_output_camera_id" formatted="false">ゲームプレイ中に使用するカメラを選択します。</string>
     <string name="core_help_input_output_camera_type" formatted="false">ゲームによっては、特定のカメラの種類を選択する必要がある場合があります。</string>
@@ -1146,8 +1146,8 @@
     <string name="core_help_system_console_time_offset_s" formatted="false">コンソール内で使用される時間を設定します。これは、実時間を追跡するオフセットとして適用されます。
 「今すぐ設定」をクリックすると、現在の実時間にリセットできます。</string>
     <string name="core_help_audio_convert_to_16_bit" formatted="false">標準の32ビット浮動小数点音声の代わりに、16ビットの音声サンプルを使用します。\nオーディオドライバーの不具合により音が出ない場合や、音声が大きく乱れる場合に使用してください。</string>
-    <string name="core_help_video_custom_anaglyph_matrices_matrix_left" formatted="false">3D立体視の描画モードを設定します（基準解像度が720pのゲーム別設定でのみ利用可能）。\nアナグリフは左右の目に異なる色を使い、対応するメガネで分離して表示します。\n左右分割は多くのVRビューアーアプリに対応しています。\n上下分割は本来の立体視出力に近い方式ですが、対応するアプリは比較的少なめです。</string>
-    <string name="core_help_video_custom_anaglyph_matrices_matrix_right" formatted="false">3D立体視の描画モードを設定します（基準解像度が720pのゲーム別設定でのみ利用可能）。\nアナグリフは左右の目に異なる色を使い、対応するメガネで分離して表示します。\n左右分割は多くのVRビューアーアプリに対応しています。\n上下分割は本来の立体視出力に近い方式ですが、対応するアプリは比較的少なめです。</string>
+    <string name="core_help_video_custom_anaglyph_matrices_matrix_left" formatted="false">アナグリフ3Dの、この目に使う3×3色変換行列です。特定の色付きメガネや調整用です。不適切な値は色を歪めます。通常の2D出力には影響しません。</string>
+    <string name="core_help_video_custom_anaglyph_matrices_matrix_right" formatted="false">アナグリフ3Dの、この目に使う3×3色変換行列です。特定の色付きメガネや調整用です。不適切な値は色を歪めます。通常の2D出力には影響しません。</string>
     <string name="core_help_system_date_format" formatted="false">PS3の日付形式を選択します。</string>
     <string name="core_help_core_debug_console_mode" formatted="false">DECR コンソールなどに合わせて、使用可能なシステム メモリの量を増やします。
 一部のソフトウェアが小売ハードウェアとは異なる動作をする原因になります。</string>
@@ -1195,11 +1195,7 @@
     <string name="core_help_video_force_high_precision_z_buffer" formatted="false">GPUハードウェア間の違いをデバッグする場合にのみ役立ちます。\n通常の使用には必要ありません。\nよくわからない場合は使用しないでください。</string>
     <string name="core_help_video_force_hardware_msaa_resolve" formatted="false">MSAAのすべてのサンプリング操作で、ホストGPUのリゾルブ機能を使用します。\n性能の低下や画像の乱れが生じる可能性がありますが、MSAA有効時に、より鮮明な画質が得られる場合があります。</string>
     <string name="core_help_video_framebuffer_aliasing_heuristic_bias" formatted="false">カラーと深度が同じメモリを共有するレンダーターゲットの処理方法を指定します。通常は「自動」を推奨します。\n・自動: 従来どおり深度を優先します。\n・カラーを優先: カラー書き込みが有効で深度書き込みが無効の場合、カラーのバインドを維持します。その描画では深度テストを省略しますが、一部の遅延レンダラー（Starhawkなど）で形状の欠けを解消します。\n・深度を優先: 現在は「自動」と同じ動作です。</string>
-    <string name="core_help_video_frame_limit" formatted="false">オフが最も速いオプションです。
-フレーム リミッターを使用すると、余分なオーバーヘッドが追加され、ゲームの速度が低下します。ただし、フレームレートが高すぎると一部のゲームがクラッシュします。
-PS3 ネイティブは、フレーム ペーシングの問題が発生する可能性があるため、自動 が正しく機能していない場合にのみ使用してください。
-無限 は、フレームごとに別の vblank 信号を追加する正のフィードバック ループを追加し、より多くのゲームを fps 無制限にできるようにします。
-他のフレーム制限が必要な経験豊富なユーザーは、構成ファイルの「2番目のフレーム制限」設定を使用する必要があります。</string>
+    <string name="core_help_video_frame_limit" formatted="false">ゲームの毎秒フレーム数を制限します。PS3 Nativeは本体のタイミングに従います。固定値はゲーム速度や物理演算を変える場合があります。制限なしでは発熱や、上限を前提とするゲームの不具合が増えることがあります。</string>
     <string name="core_help_video_fidelityfx_cas_sharpening_intensity" formatted="false">FidelityFX Super 解像度 によって適用されるシャープネスの強さを制御します。値を高くすると出力がシャープになりますが、アーティファクトが発生する可能性があります。</string>
     <string name="core_help_input_output_ghltar_emulated_controller" formatted="false">Guitar Hero Live（GHL）のギターコントローラーに対応します。\nゲームでGHLギターコントローラーが必要で、実物を持っていない場合は「コントローラー1台」または「コントローラー2台」を選択してください。\nゲームがDualShockに対応している場合や、実物のギターコントローラーを使う場合は「なし」を選択してください。\n実物とエミュレートしたギターコントローラーは同時に使用できます。</string>
     <string name="core_help_video_use_gpu_texture_scaling" formatted="false">すべてのテクスチャ転送、スケーリング、変換操作を GPU 上で強制します。
@@ -1226,19 +1222,14 @@ PS3 ネイティブは、フレーム ペーシングの問題が発生する可
     <string name="core_help_video_log_shader_programs" formatted="false">ゲームのシェーダーをファイルにダンプします。開発者向けの機能です。\nよくわからない場合は使用しないでください。</string>
     <string name="core_help_audio_master_volume" formatted="false">エミュレーション全体の音量を調整します。\n100%を超える値では音質が低下する場合があります。</string>
     <string name="core_help_vfs_disk_cache_maximum_size_mb" formatted="false">ディスクキャッシュが指定容量を超えた場合、起動時に古いファイルを自動で削除します。\nゲームはキャッシュフォルダーを利用して、システムメモリ外にデータを一時保存できます。長期保存用ではありません。\n\nこの設定は全体設定でのみ利用できます。</string>
-    <string name="core_help_core_max_llvm_compile_threads" formatted="false">初期の PPU および SPU モジュールのコンパイルに使用されるスレッドの最大数を制限します。
-他の開いているアプリケーションのパフォーマンスを向上させるには、この値を下げます。
-デフォルトでは、使用可能なすべてのスレッドが使用されます。</string>
+    <string name="core_help_core_max_llvm_compile_threads" formatted="false">初期PPU/SPUコンパイルの最大並列タスク数です。0はCPUと空きメモリーに応じた自動設定です。手動で小さくするとコンパイルが遅くなり、大きくするとRAM使用量と発熱が増える場合があります。</string>
     <string name="core_help_core_max_cpu_preempt_count" formatted="false">CPU使用率と消費電力を抑え、モバイル端末のバッテリー持続時間を延ばします（0で無効）。\n値を大きくすると効果が高まりますが、音声や性能に問題が生じる場合があります。50以下を推奨します。\nフレームレートが安定しているときに働くため、この設定はFPS制限を強制します。\nゲームのハードウェア負荷が軽いほど節電効果が高まります（プリエンプション回数の上限に達するまで）。</string>
     <string name="core_help_core_max_spurs_threads" formatted="false">各スレッドグループのSPURSスレッド数を制限します。\nハードウェアスレッド数が少ない環境などで、性能が向上する場合があります。\nスレッド数の制限によりクラッシュする可能性があるため、初期値のままにすることを推奨します。</string>
     <string name="core_help_core_mfc_commands_shuffling_limit" formatted="false">MFCコマンドを遅延させ、少なくとも2個のコマンドが保留になるのを待ってからランダムな順序で実行します。\n性能が大幅に低下します！よくわからない場合は使用しないでください。</string>
     <string name="core_help_core_mfc_debug" formatted="false">MFC ログを作成します。
 開発者のみに役立ちます。
 これは絶対に使用しないでください。</string>
-    <string name="core_help_audio_microphone_devices" formatted="false">ほとんどのゲームでは標準を使用する必要があります。
-SingStar は SingStar デバイスをエミュレートするため、SingStar ゲームで使用する必要があります。
-実機のSingStar は、SingStar ゲームを備えた REAL SingStar デバイスでのみ使用してください。
-Rocksmith は Rocksmith ドングルとともに使用する必要があります。</string>
+    <string name="core_help_audio_microphone_devices" formatted="false">エミュレートするマイクの録音元となる実機デバイスを選びます。Androidのマイク権限が必要です。マイクの種類はゲームに見せるPS3周辺機器を決め、この設定は音声の入力元を決めます。</string>
     <string name="core_help_audio_microphone_type" formatted="false">ほとんどのゲームでは標準を使用する必要があります。
 SingStar は SingStar デバイスをエミュレートするため、SingStar ゲームで使用する必要があります。
 実機のSingStar は、SingStar ゲームを備えた REAL SingStar デバイスでのみ使用してください。
@@ -1283,10 +1274,10 @@ FidelityFX は視覚的なアーティファクトを引き起こす可能性が
     <string name="core_help_video_performance_overlay_show_header" formatted="false">パフォーマンス オーバーレイの上部にアプリ、ビルド、コアのバージョンが表示され、下部に CPU と GPU の行が表示されます。</string>
     <string name="core_help_video_performance_overlay_font_size_px" formatted="false">パフォーマンス オーバーレイのフォント サイズ (ピクセル単位) を設定します。</string>
     <string name="core_help_video_performance_overlay_framerate_datapoints" formatted="false">フレームレート グラフで使用されるデータポイントの量を設定します。</string>
-    <string name="core_help_video_performance_overlay_framerate_graph_detail_level" formatted="false">パフォーマンス オーバーレイに表示される情報の量を制御します。</string>
+    <string name="core_help_video_performance_overlay_framerate_graph_detail_level" formatted="false">FPSグラフに表示する注釈や統計を選びます。詳細を増やすとフレームの均一性を確認しやすくなりますが、ゲーム性能は上がりません。</string>
     <string name="core_help_video_performance_overlay_enable_framerate_graph" formatted="false">フレームレートグラフを有効または無効にします。</string>
     <string name="core_help_video_performance_overlay_frametime_datapoints" formatted="false">フレームタイム グラフで使用されるデータポイントの量を設定します。</string>
-    <string name="core_help_video_performance_overlay_frametime_graph_detail_level" formatted="false">パフォーマンス オーバーレイに表示される情報の量を制御します。</string>
+    <string name="core_help_video_performance_overlay_frametime_graph_detail_level" formatted="false">フレーム時間グラフの注釈や統計を選びます。山が大きい箇所はフレーム間隔の乱れを示します。グラフの表示だけを変え、ゲームのタイミングは変えません。</string>
     <string name="core_help_video_performance_overlay_enable_frametime_graph" formatted="false">フレームタイムグラフを有効または無効にします。</string>
     <string name="core_help_video_performance_overlay_horizontal_margin" formatted="false">画面の象限を基準とした画面境界線までの水平距離を設定します (% 単位で測定)。</string>
     <string name="core_help_video_performance_overlay_vertical_margin" formatted="false">画面の象限を基準とした画面境界線までの垂直距離を設定します (% 単位で測定)。</string>
@@ -1300,7 +1291,7 @@ FidelityFX は視覚的なアーティファクトを引き起こす可能性が
     <string name="core_help_core_ppu_debug" formatted="false">PPU ログを作成します。
 開発者のみに役立ちます。
 これは絶対に使用しないでください。</string>
-    <string name="core_help_core_ppu_decoder" formatted="false">初回実行の前に、LLVMリコンパイラーでゲームのPPUコードを一度コンパイルしてキャッシュします。\n圧倒的に高速なため、通常はこの設定を使用してください。\n互換性の問題が起きる場合は、いずれかのインタープリターに切り替えて再試行してください。\nよくわからない場合はこの設定を使用してください。</string>
+    <string name="core_help_core_ppu_decoder" formatted="false">PPUコードの実行方式を選びます。LLVMは通常高速で、コードや関連設定が変わるまでコンパイル済みモジュールを再利用します。インタープリターは特定の互換性問題を調べる場合に試してください。</string>
     <string name="core_help_core_ppu_reservation_priority_over_spus" formatted="false">SPUがリザベーションを使用しているときに、PPUの実行を優先します。\n性能向上のために推奨されるのは一部のゲームのみです。\n性能が低下する可能性があるため、指示がない限り使用しないでください。</string>
     <string name="core_help_core_ppu_vector_nan_handling" formatted="false">PPUバックエンドのベクトル命令で、NaNの結果を補正します。\nよくわからない場合は変更しないでください。</string>
     <string name="core_help_video_accurate_zcull_stats" formatted="false">ZCULLレポートの同期方法を変更します。ゲームに適した設定を試してください。通常は「近似」を推奨します。\n・高精度: PS3の動作を最も正確に再現します。Demon’s SoulsやThe Darknessなどで正確な描画を行うために必要です。\n・近似: PS3と完全には一致しない場合もありますが、オクルージョンデータをより高速に生成します。ほとんどのPS3ゲームで良好に動作します。\n・緩和: 同期方法を全面的に変更します。一部のゲームでは性能が大幅に向上しますが、ほかのゲームでは動作しなくなる場合があります。</string>
@@ -1314,8 +1305,8 @@ FidelityFX は視覚的なアーティファクトを引き起こす可能性が
     <string name="core_help_net_psn_status" formatted="false">RPCN に設定すると、ゲームがサポートされている場合、RPCS3 は PSN 接続として RPCN サーバーを使用します。
 シミュレーション に設定すると、RPCS3 は PSN 接続を偽装しようとしますが、実際に PSN 機能を使用しようとすると、エラーまたはクラッシュが発生する可能性があります。
 シミュレートはカスタム構成でのみ使用できます。</string>
-    <string name="core_help_video_read_color_buffers" formatted="false">仮想マシンのメモリを使って、レンダーターゲットのメモリを初期化します。</string>
-    <string name="core_help_video_read_depth_buffer" formatted="false">仮想マシンのメモリを使って、レンダーターゲットのメモリを初期化します。</string>
+    <string name="core_help_video_read_color_buffers" formatted="false">描画前にエミュレートされたPS3メモリーから色データを読み込みます。CPUが描画先を書き換えるゲームで、画像やエフェクトの欠落を修正する場合があります。追加転送により速度が低下することがあります。</string>
+    <string name="core_help_video_read_depth_buffer" formatted="false">描画前にエミュレートされたPS3メモリーから深度データを読み込みます。深度に関連する表示不具合があるゲーム向けです。追加転送により性能が低下する場合があります。</string>
     <string name="core_help_video_record_with_overlays" formatted="false">オーバーレイを含めて録画します。\nスクリーンショットにも適用されます。</string>
     <string name="core_help_video_relaxed_zcull_sync" formatted="false">ZCULLレポートの同期方法を変更します。ゲームに適した設定を試してください。通常は「近似」を推奨します。\n・高精度: PS3の動作を最も正確に再現します。Demon’s SoulsやThe Darknessなどで正確な描画を行うために必要です。\n・近似: PS3と完全には一致しない場合もありますが、オクルージョンデータをより高速に生成します。ほとんどのPS3ゲームで良好に動作します。\n・緩和: 同期方法を全面的に変更します。一部のゲームでは性能が大幅に向上しますが、ほかのゲームでは動作しなくなる場合があります。</string>
     <string name="core_help_video_renderdoc_compatibility_mode" formatted="false">従来のOpenGLバッファを有効にし、RenderDocなどのキャプチャーツールをRPCS3で使えるようにします。\nVulkanではデバッグマーカーも有効になり、RenderDocでのキャプチャーがわかりやすくなります。\nよくわからない場合は使用しないでください。</string>
@@ -1325,7 +1316,7 @@ FidelityFX は視覚的なアーティファクトを引き起こす可能性が
 ゲームが 1920x1080 をサポートしている場合のみ、1920x1080 を使用してください。
 まれに、エミュレーションのバグが原因で、一部のゲームが 480p などの低解像度でのみレンダリングされることがあります。</string>
     <string name="core_help_video_resolution_scale" formatted="false">ゲームの解像度を指定した割合で拡大・縮小します。\n基準解像度は常に1280x720です。\n通常の「解像度」設定を使用する場合は、100%にしてください。\n100%未満にしても、通常は性能は向上しません。</string>
-    <string name="core_help_video_screen_size_in_inches" formatted="false">3D立体視の描画モードを設定します（基準解像度が720pのゲーム別設定でのみ利用可能）。\nアナグリフは左右の目に異なる色を使い、対応するメガネで分離して表示します。\n左右分割は多くのVRビューアーアプリに対応しています。\n上下分割は本来の立体視出力に近い方式ですが、対応するアプリは比較的少なめです。</string>
+    <string name="core_help_video_screen_size_in_inches" formatted="false">PS3の映像APIを通して画面の対角サイズをインチでゲームに通知します。立体視を調整するゲームで使用され、Androidの解像度や画像の拡大率は変えません。</string>
     <string name="core_help_input_output_load_sdl_gamecontroller_mappings" formatted="false">ゲームパッドの互換性を向上させるために、SDL GameController データベースをロードします。 SDL パッド ハンドラーでのみ使用されます。</string>
     <string name="core_help_core_set_daz_and_ftz" formatted="false">SSE 操作のエラーをデバッグするために特別な MXCSR フラグを設定します。
 精度を犠牲にして PPU のパフォーマンスを向上させます。</string>
@@ -1337,7 +1328,7 @@ FidelityFX は視覚的なアーティファクトを引き起こす可能性が
 これは、読みやすさや美しさを向上させるために使用される場合があります。</string>
     <string name="core_help_video_shader_loading_dialog_allow_custom_background" formatted="false">ネイティブ シェーダのロード ダイアログ/ロード画面中に背景イメージを表示します。
 デフォルトでは、使用される画像は /PS3_GAME/PIC1.PNG になります。</string>
-    <string name="core_help_video_shader_mode" formatted="false">推奨される設定です。\nキャッシュにないシェーダーは、コンパイルが終わるまで描画されません。\nそのため、一部のグラフィックが遅れて表示されることがあります。</string>
+    <string name="core_help_video_shader_mode" formatted="false">未作成のGPUシェーダーの準備方法です。非同期モードは停止を減らしますが、一時的にエフェクトが欠ける場合があります。シェーダーインタープリターは欠けを減らす代わりに、起動時の処理とGPU負荷を増やします。</string>
     <string name="core_help_video_shader_precision" formatted="false">生成されるシェーダーの精度レベルを制御します。精度が低いと、ハードウェアによってははるかに高速なコードが生成されますが、視覚的に小さな不具合やちらつきが発生する場合があります。</string>
     <string name="core_help_miscellaneous_show_analog_limiter_toggle_hint" formatted="false">ネイティブ オーバーレイを使用して、アナログ リミッターの切り替えヒントを表示します。</string>
     <string name="core_help_miscellaneous_show_autosave_autoload_hint" formatted="false">ネイティブ オーバーレイを使用して自動保存/自動ロードのヒントを表示します。</string>
@@ -1355,9 +1346,9 @@ FidelityFX は視覚的なアーティファクトを引き起こす可能性が
     <string name="core_help_core_sleep_timers_accuracy" formatted="false">スリープ時間の精度を変更します。\n「ホストシステムと同じ」ではOS標準の精度を使い、「すべてのタイマー」では精度向上を試みます。\n「usleepのみ」ではusleepシステムコールだけを調整します。\n予期しない形で性能に影響する場合があります。</string>
     <string name="core_help_core_spu_block_size" formatted="false">このオプションは、SPU アナライザー、特にコンパイルされたユニットのサイズを制御します。 Mega モードと Giga モードでは、より小さなユニットを結合し、コンパイルされるユニットの数は減りますが、サイズは増加するため、パフォーマンスが向上する可能性があります。
 互換性を最大限に高めるには、セーフ モードを使用してください。</string>
-    <string name="core_help_core_spu_cache" formatted="false">実行前にLLVMリコンパイラーでゲームのSPUコードをコンパイルしてキャッシュするため、起動に時間がかかります。\n実行速度が最も速く、互換性も良好です。\n問題が起きる場合はASMJITリコンパイラーを使用してください。</string>
+    <string name="core_help_core_spu_cache" formatted="false">検出したSPUプログラムを保存し、ゲーム開始前にキャッシュを準備します。次回以降の再コンパイルを減らします。新しいコードはプレイ中にもコンパイルされる場合があり、無効にすると引っ掛かりが増えることがあります。</string>
     <string name="core_help_core_spu_debug" formatted="false">SPUログを作成します。\n開発者向けの機能です。\n通常は使用しないでください。</string>
-    <string name="core_help_core_spu_decoder" formatted="false">実行前にLLVMリコンパイラーでゲームのSPUコードをコンパイルしてキャッシュするため、起動に時間がかかります。\n実行速度が最も速く、互換性も良好です。\n問題が起きる場合はASMJITリコンパイラーを使用してください。</string>
+    <string name="core_help_core_spu_decoder" formatted="false">SPUコードの実行方式を選びます。LLVMは高速化のためネイティブコードを生成します。インタープリターは主に互換性の確認用で、大幅に遅くなる場合があります。方式を変更するとキャッシュの再構築が必要になることがあります。</string>
     <string name="core_help_core_spu_loop_detection" formatted="false">SPU カーネル内のループ状態を検出し、それをスケジューリングのヒントとして使用してみます。
 パフォーマンスが向上し、CPU 使用率が削減されます。
 まれに、重度の音声の途切れが発生することがあります。</string>
@@ -1381,7 +1372,7 @@ FidelityFX は視覚的なアーティファクトを引き起こす可能性が
     <string name="core_help_miscellaneous_use_native_user_interface" formatted="false">ゲーム コントローラと対話できるゲーム ウィンドウ内でネイティブ HUD を使用できるようにします。
 無効にすると、代わりに通常の Qt ダイアログが使用されます。
 現在、オンスクリーン キーボードは英語のキー レイアウトのみをサポートしています。</string>
-    <string name="core_help_video_vulkan_use_re_bar_for_gpu_uploads" formatted="false">有効にすると、Vulkanはタイミングが重要なデータのGPU転送に、PCI-eのResizable BARアドレス空間を使用しようとします。\n基本フレームレートが低い場合、NVIDIA製GPUで大幅な性能向上が得られます。\nフレームレートが非常に高いゲームでは、GPUのメーカーを問わず性能が低下する可能性があります。</string>
+    <string name="core_help_video_vulkan_use_re_bar_for_gpu_uploads" formatted="false">遅延に敏感なVulkan転送に、CPUからアクセスできるコヒーレントメモリーを使います。AndroidではデスクトップのPCIe Re-BAR機器ではなく共有RAMを使います。性能はGPUドライバー次第なので同じ場面で比較してください。</string>
     <string name="core_help_miscellaneous_use_recursive_scan" formatted="false">選択したフォルダーからゲームをスキャンするときに、サブフォルダーでの再帰的スキャンの使用を有効にします。
 無効にすると、選択したフォルダーでのみゲームがスキャンされます。</string>
     <string name="core_help_video_vblank_ntsc_fixup" formatted="false">59.94Hz などの値に対して、VBLANK のレートを 1000/1001 で乗算します。
@@ -1396,7 +1387,7 @@ OpenGL を使用する場合、これは必要ありません。</string>
     <string name="core_help_miscellaneous_window_title_format" formatted="false">ゲームウィンドウのタイトルを設定します。
 これを変更したりフレームレートを追加すると、バグのある録画ソフトウェアや古い録画ソフトウェアが RPCS3 に気づかなくなる可能性があります。</string>
     <string name="core_help_video_write_color_buffers" formatted="false">ゲーム内でグラフィックが欠けたり、ライティングが乱れたりする場合に有効にしてください。\n性能が低下し、途切れが発生する場合があります。\nDemon’s Soulsでは必須です。</string>
-    <string name="core_help_video_write_depth_buffer" formatted="false">深度バッファ値を VM メモリに書き込みます。</string>
+    <string name="core_help_video_write_depth_buffer" formatted="false">描画した深度をエミュレートされたPS3メモリーに書き戻します。一部のゲームのエフェクトや可視性判定に必要です。GPUからの読み戻しは高負荷になり得るため、特定の表示問題がある場合に有効にしてください。</string>
     <string name="core_help_core_spu_xfloat_accuracy" formatted="false">SPUの浮動小数点ベクトル処理の精度を調整します。\n性能と引き換えに、さまざまなゲームの不具合を修正します。\nSPUデコーダーが動的インタープリターまたはLLVMに設定されている場合にのみ適用されます。</string>
     <string name="core_label_chinese_simplified">中国語（簡体字）</string>
     <string name="core_label_chinese_traditional">中国語（繁体字）</string>
@@ -1968,4 +1959,31 @@ OpenGL を使用する場合、これは必要ありません。</string>
     <string name="customization_font_help" formatted="false">アプリの書体を選ぶか、TTF または OTF のフォントファイルを読み込みます。「システム」は端末のフォントを使います。</string>
     <string name="customization_text_size_help" formatted="false">アプリ全体の文字サイズを調整します。文字を大きくすると、一部のラベルの行数が増える場合があります。</string>
     <string name="settings_customization_drawer_help" formatted="false">ナビゲーションドロワーの外観を選びます。選択前に各スタイルをプレビューで確認できます。</string>
+    <string name="emulation_game_preparing">ゲームを準備中…</string>
+    <string name="settings_group_display_scaling">表示とスケーリング</string>
+    <string name="settings_group_rendering_compatibility">描画の互換性</string>
+    <string name="settings_group_shaders_cache">シェーダーとキャッシュ</string>
+    <string name="settings_group_audio_output">音声出力</string>
+    <string name="settings_group_audio_buffering">音声バッファー</string>
+    <string name="settings_group_input_devices">入力デバイス</string>
+    <string name="settings_group_cpu_compilation">CPUとコンパイル</string>
+    <string name="settings_group_diagnostics">診断</string>
+    <string name="home_library_options">ライブラリのオプション</string>
+    <string name="home_view_list">リスト表示</string>
+    <string name="home_view_grid">グリッド表示</string>
+    <string name="home_search">ゲームを検索</string>
+    <string name="home_search_clear">検索をクリア</string>
+    <string name="home_sort_title_asc">タイトル昇順 (A-Z)</string>
+    <string name="home_sort_title_desc">タイトル降順 (Z-A)</string>
+    <string name="home_sort_recent_desc">最近の更新</string>
+    <string name="home_sort_recent_asc">古い更新</string>
+    <string name="home_sort_size_desc">サイズが大きい順</string>
+    <string name="home_sort_size_asc">サイズが小さい順</string>
+    <string name="emulation_close_menu">メニューを閉じる</string>
+    <string name="emulation_play_time_badge">プレイ時間 %1$s</string>
+    <string name="emulation_menu_subtitle">ゲームを終了せずに現在のセッションを管理します。</string>
+    <string name="home_empty_search_title">検索結果なし</string>
+    <string name="home_empty_search_subtitle">別の名前を試すか、並べ替えを変更してください。</string>
+    <string name="save_manager_no_results_body">別のゲーム名やセーブフォルダー名で検索してください。</string>
+    <string name="profile_no_recent_events">最近のイベントはまだありません。</string>
 </resources>

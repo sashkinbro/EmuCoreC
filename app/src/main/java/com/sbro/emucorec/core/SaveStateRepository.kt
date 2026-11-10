@@ -19,7 +19,8 @@ class SaveStateRepository internal constructor(private val root: File) {
         return SLOT_ORDER.mapNotNull { slot ->
             stateFile(titleId, slot)?.let { file ->
                 SaveStateSlot(slot, file.lastModified() / 1000, file.length(), file.absolutePath,
-                    thumbnailFile(titleId, slot).takeIf(File::isFile)?.absolutePath)
+                    thumbnailFile(titleId, slot).takeIf(File::isFile)?.absolutePath,
+                    thumbnailFile(titleId, slot).lastModified())
             }
         }
     }

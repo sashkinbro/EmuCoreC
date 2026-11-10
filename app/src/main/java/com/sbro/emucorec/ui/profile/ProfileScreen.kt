@@ -1,5 +1,6 @@
 package com.sbro.emucorec.ui.profile
 
+import com.sbro.emucorec.ui.common.EmptyStateCard
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -97,6 +98,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import com.sbro.emucorec.ui.common.appFilterChipColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -1169,7 +1171,7 @@ private fun TrophyFilterRow(selected: String, onSelect: (String) -> Unit) {
             "in_progress" to R.string.profile_trophy_filter_in_progress,
             "completed" to R.string.profile_trophy_filter_completed
         ).forEach { (key, label) ->
-            FilterChip(
+            FilterChip(colors = appFilterChipColors(),
                 shape = neonChipShape(),
                 selected = selected == key,
                 onClick = { onSelect(key) },
@@ -1294,11 +1296,7 @@ private fun ProfileNotificationsDialog(
             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
         )
         if (incoming.isEmpty()) {
-            Text(
-                text = stringResource(R.string.profile_friend_requests_empty),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            EmptyStateCard(icon = Icons.Rounded.Person, title = stringResource(R.string.profile_friend_requests_empty))
         } else {
             incoming.forEach { friendship ->
                 SocialIdentityRow(
@@ -1322,11 +1320,8 @@ private fun ProfileNotificationsDialog(
             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
         )
         if (feed.isEmpty()) {
-            Text(
-                text = stringResource(R.string.profile_friend_requests_empty),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            EmptyStateCard(icon = Icons.Rounded.Notifications, title = stringResource(R.string.profile_recent_events),
+                body = stringResource(R.string.profile_no_recent_events))
         } else {
             feed.take(5).forEach { event ->
                 Text(
@@ -1352,11 +1347,7 @@ private fun ProfileFriendsDialog(
     var pendingRemove by remember { mutableStateOf<ProfileFriendship?>(null) }
     ProfileFeatureDialog(title = stringResource(R.string.profile_friends_title), onDismiss = onDismiss) {
         if (accepted.isEmpty()) {
-            Text(
-                text = stringResource(R.string.profile_friends_empty),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            EmptyStateCard(icon = Icons.Rounded.Person, title = stringResource(R.string.profile_friends_empty))
         } else {
             accepted.forEach { friendship ->
                 SocialIdentityRow(
@@ -1420,11 +1411,7 @@ private fun ProfileBlockedPlayersDialog(
 ) {
     ProfileFeatureDialog(title = stringResource(R.string.profile_blocked_title), onDismiss = onDismiss) {
         if (blockedUids.isEmpty()) {
-            Text(
-                text = stringResource(R.string.profile_blocked_empty),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            EmptyStateCard(icon = Icons.Rounded.Person, title = stringResource(R.string.profile_blocked_empty))
         } else {
             blockedUids.forEach { uid ->
                 SocialIdentityRow(
@@ -1515,11 +1502,7 @@ private fun ProfileDevicesDialog(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         if (devices.isEmpty()) {
-            Text(
-                text = stringResource(R.string.profile_devices_empty),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            EmptyStateCard(icon = Icons.Rounded.Person, title = stringResource(R.string.profile_devices_empty))
         }
         devices.forEach { device ->
             Surface(
@@ -1620,13 +1603,13 @@ internal fun CloudProfilesDialog(
     ProfileFeatureDialog(title = stringResource(R.string.profile_cloud_title), onDismiss = onDismiss) {
         if (firebaseAvailable) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
+                FilterChip(colors = appFilterChipColors(),
                     shape = neonChipShape(),
                     selected = cloudTab == 0,
                     onClick = { cloudTab = 0 },
                     label = { Text(stringResource(R.string.drive_settings_tab)) }
                 )
-                FilterChip(
+                FilterChip(colors = appFilterChipColors(),
                     shape = neonChipShape(),
                     selected = cloudTab == 1,
                     onClick = { cloudTab = 1 },
@@ -2352,36 +2335,11 @@ private fun AdvancedStatsContent(
 
 @Composable
 private fun EmptyActivityCard() {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = neonShape(18.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.BarChart,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = stringResource(R.string.profile_stats_history_empty_title),
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-            )
-            Text(
-                text = stringResource(R.string.profile_stats_empty),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-        }
-    }
+    EmptyStateCard(
+        icon = Icons.Rounded.BarChart,
+        title = stringResource(R.string.profile_stats_history_empty_title),
+        body = stringResource(R.string.profile_stats_empty),
+    )
 }
 
 @Composable
@@ -2770,22 +2728,7 @@ private fun RevealOnEnter(revealKey: Any?, content: @Composable () -> Unit) {
 
 @Composable
 private fun EmptyProfileState(text: String) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = neonShape(22.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = profileCardBorder()
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 26.dp)
-        )
-    }
+    EmptyStateCard(icon = Icons.Rounded.Person, title = text)
 }
 
 @Composable

@@ -14,14 +14,31 @@ import java.util.concurrent.ConcurrentHashMap
 object CoreSettingsTreeCache {
     @Volatile
     private var treeJson: String? = null
+    private var generation = 0L
+    private val treeLock = Any()
 
     private val resourceIds = ConcurrentHashMap<String, Int>()
 
-    fun tree(fetch: () -> String): String =
-        treeJson ?: fetch().also { treeJson = it }
+    fun tree(fetch: () -> String): String {
+        while (true) {
+            val expectedGeneration = synchronized(treeLock) {
+                treeJson?.let { return it }
+                generation
+            }
+            val fetched = fetch()
+            synchronized(treeLock) {
+                if (generation == expectedGeneration) {
+                    return (treeJson ?: fetched).also { treeJson = it }
+                }
+            }
+        }
+    }
 
     fun invalidateTree() {
-        treeJson = null
+        synchronized(treeLock) {
+            generation++
+            treeJson = null
+        }
     }
 
     fun resourceId(name: String, resolve: () -> Int): Int =

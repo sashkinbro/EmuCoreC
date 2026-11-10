@@ -1,5 +1,6 @@
 package com.sbro.emucorec.ui.achievements
 
+import com.sbro.emucorec.ui.common.EmptyStateCard
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -243,8 +244,8 @@ private fun TrophySetSelector(
                     selected = selected,
                     onClick = { onSelect(set.communicationId) },
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
                     ),
                     label = {
                         Text(
@@ -801,42 +802,10 @@ private fun TrophyGradePill(
 
 @Composable
 private fun EmptyAchievementsState(modifier: Modifier = Modifier) {
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .heightIn(min = 220.dp),
-        shape = neonShape(24.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
-    ) {
-        Column(
-            modifier = Modifier.padding(22.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.EmojiEvents,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(42.dp)
-            )
-            Text(
-                text = stringResource(R.string.achievements_empty_title),
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 14.dp)
-            )
-            Text(
-                text = stringResource(R.string.achievements_empty_body),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp)
-            )
-        }
-    }
+    EmptyStateCard(
+        icon = Icons.Rounded.EmojiEvents,
+        title = stringResource(R.string.achievements_empty_title),
+        body = stringResource(R.string.achievements_empty_body),
+        modifier = modifier,
+    )
 }

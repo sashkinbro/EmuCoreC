@@ -1,5 +1,7 @@
 package com.sbro.emucorec.ui.settings
 
+import com.sbro.emucorec.ui.common.appSwitchColors
+
 import android.view.KeyEvent
 
 import androidx.compose.foundation.BorderStroke
@@ -30,6 +32,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import com.sbro.emucorec.ui.common.appFilterChipColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
@@ -444,13 +447,13 @@ private fun KeyboardMouseMappingDialog(
                 .padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            FilterChip(
+            FilterChip(colors = appFilterChipColors(),
                 shape = neonChipShape(),
                 selected = mappingSource == KeyboardMouseMappingSource.KEYBOARD,
                 onClick = { source = KeyboardMouseMappingSource.KEYBOARD.ordinal },
                 label = { Text(stringResource(R.string.settings_keyboard_mouse_source_keyboard)) }
             )
-            FilterChip(
+            FilterChip(colors = appFilterChipColors(),
                 shape = neonChipShape(),
                 selected = mappingSource == KeyboardMouseMappingSource.MOUSE,
                 onClick = { source = KeyboardMouseMappingSource.MOUSE.ordinal },
@@ -654,7 +657,7 @@ private fun KeyboardMouseToggleRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Switch(checked = checked, onCheckedChange = onCheckedChange)
+            Switch(colors = appSwitchColors(), checked = checked, onCheckedChange = onCheckedChange)
         }
     }
 }
@@ -741,8 +744,8 @@ private fun KeyboardMouseChoiceSection(
                     selected = selectedValue == value,
                     onClick = { onSelect(value) },
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
                     ),
                     label = { Text(label) }
                 )

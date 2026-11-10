@@ -1,13 +1,6 @@
 package com.sbro.emucorec.ui.library
 
 import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -24,7 +17,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.width
@@ -33,7 +25,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ViewList
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.EmojiEvents
@@ -45,8 +36,7 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tune
-import androidx.compose.material.icons.rounded.ViewModule
-import androidx.compose.material3.AlertDialog
+import com.sbro.emucorec.ui.common.AppAlertDialog as AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -59,6 +49,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -76,13 +67,13 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sbro.emucorec.R
 import com.sbro.emucorec.data.LibraryLayoutPreferences
 import com.sbro.emucorec.data.Ps3CatalogRepository
+import com.sbro.emucorec.ui.common.EmptyStateCard
 import com.sbro.emucorec.ui.common.LocalImage
 import com.sbro.emucorec.ui.common.UrlImage
 import com.sbro.emucorec.ui.common.CustomizationBackground
@@ -103,7 +94,7 @@ import kotlinx.coroutines.withContext
 import com.sbro.emucorec.ui.theme.neon.neonShape
 import com.sbro.emucorec.ui.theme.neon.neonButtonShape
 
-private enum class LibraryLayoutMode {
+internal enum class LibraryLayoutMode {
     LIST,
     GRID
 }
@@ -136,7 +127,30 @@ fun LibraryScreen(
                 ?: LibraryLayoutMode.LIST
         )
     }
+    val optionsPreferences = remember(context) { LibraryOptionsPreferences(context) }
+    var sortOption by rememberSaveable { mutableStateOf(optionsPreferences.sortOption) }
     var searchExpanded by rememberSaveable { mutableStateOf(false) }
+    var showLibraryOptions by rememberSaveable { mutableStateOf(false) }
+    var sortMetadata by remember { mutableStateOf<Map<String, LibrarySortMetadata>>(emptyMap()) }
+    var sizeMetadataPaths by remember { mutableStateOf<Set<String>>(emptySet()) }
+    LaunchedEffect(uiState.items, uiState.isLoading, sortOption) {
+        if (uiState.isLoading) {
+            // Refresh invalidates filesystem metadata; queries and layout changes do not.
+            sortMetadata = emptyMap()
+            sizeMetadataPaths = emptySet()
+        } else if (sortOption.requiresMetadata) {
+            val needsSize = sortOption == LibrarySortOption.SIZE_ASC || sortOption == LibrarySortOption.SIZE_DESC
+            val missing = uiState.items.filter { it.installPath !in sortMetadata || (needsSize && it.installPath !in sizeMetadataPaths) }
+            if (missing.isNotEmpty()) {
+                val loaded = withContext(Dispatchers.IO) { readLibrarySortMetadata(missing, sortOption) }
+                sortMetadata = sortMetadata + loaded
+                if (needsSize) sizeMetadataPaths = sizeMetadataPaths + loaded.keys
+            }
+        }
+    }
+    val displayedItems = remember(uiState.items, sortOption, sortMetadata) {
+        sortLibraryGames(uiState.items, sortOption, sortMetadata)
+    }
     var deleteGameId by remember { mutableStateOf<String?>(null) }
 
     val topInset = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
@@ -168,16 +182,16 @@ fun LibraryScreen(
         )
     }
     val libraryState = rememberLazyListState()
-    val coverRequests = remember(uiState.items) {
-        uiState.items.mapNotNull { game ->
+    val coverRequests = remember(displayedItems) {
+        displayedItems.mapNotNull { game ->
             val url = game.catalogCoverUrl?.takeIf { it.isNotBlank() }?.let(::igdbCoverUrl)
             val key = url ?: game.iconPath?.takeIf { it.isNotBlank() }
             key?.let { it to LibraryArtworkRequest(url, game.iconPath) }
         }.toMap()
     }
-    val coverWindow = remember(uiState.items, layoutMode, gridColumns) {
+    val coverWindow = remember(displayedItems, layoutMode, gridColumns) {
         val columns = if (layoutMode == LibraryLayoutMode.LIST) 1 else gridColumns.coerceAtLeast(1)
-        HomeCoverPrefetchWindow(uiState.items.chunked(columns).map { row ->
+        HomeCoverPrefetchWindow(displayedItems.chunked(columns).map { row ->
             HomeCoverPrefetchRow(row.first().titleId, row.map { game ->
                 game.catalogCoverUrl?.takeIf { it.isNotBlank() }?.let(::igdbCoverUrl)
                     ?: game.iconPath?.takeIf { it.isNotBlank() }
@@ -260,56 +274,53 @@ fun LibraryScreen(
                             )
                         }
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(
-                            onClick = {
-                                searchExpanded = !searchExpanded
-                                if (!searchExpanded) viewModel.updateQuery("")
-                            }
-                        ) {
-                            Icon(
-                                imageVector = if (searchExpanded) Icons.Rounded.Close else Icons.Rounded.Search,
-                                contentDescription = stringResource(R.string.library_search_hint),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        IconButton(onClick = {
+                    LibraryHeaderActions(
+                        optionsExpanded = showLibraryOptions,
+                        onOptionsExpandedChange = { showLibraryOptions = it },
+                        refreshing = uiState.isLoading,
+                        searchExpanded = searchExpanded,
+                        onToggleSearch = {
+                            searchExpanded = !searchExpanded
+                            if (!searchExpanded) viewModel.updateQuery("")
+                        },
+                        layoutMode = layoutMode,
+                        onToggleLayout = {
                             layoutMode = if (layoutMode == LibraryLayoutMode.LIST) LibraryLayoutMode.GRID else LibraryLayoutMode.LIST
                             layoutPreferences.layoutMode = layoutMode.name
-                        }) {
-                            Icon(
-                                imageVector = if (layoutMode == LibraryLayoutMode.LIST) Icons.Rounded.ViewModule else Icons.AutoMirrored.Rounded.ViewList,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        IconButton(onClick = refreshClick) {
-                            Icon(
-                                imageVector = Icons.Rounded.Refresh,
-                                contentDescription = stringResource(R.string.library_refresh),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
+                        },
+                        sortOption = sortOption,
+                        onSortSelected = {
+                            sortOption = it
+                            optionsPreferences.sortOption = it
+                        },
+                        onRefresh = refreshClick,
+                    )
                 }
             }
 
-        item {
-            AnimatedVisibility(
-                visible = searchExpanded,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
-            ) {
+        if (searchExpanded) {
+            item {
                 OutlinedTextField(
                     value = uiState.query,
                     onValueChange = viewModel::updateQuery,
                     modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text(stringResource(R.string.library_search_hint)) },
+                    placeholder = { Text(stringResource(R.string.home_search)) },
+                    leadingIcon = {
+                        Icon(Icons.Rounded.Search, contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                    },
+                    trailingIcon = {
+                        if (uiState.query.isNotBlank()) {
+                            IconButton(onClick = { viewModel.updateQuery("") }) {
+                                Icon(Icons.Rounded.Close, stringResource(R.string.home_search_clear))
+                            }
+                        }
+                    },
                     singleLine = true,
                     shape = neonShape(20.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.55f),
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
                         focusedContainerColor = MaterialTheme.colorScheme.surface,
                         unfocusedContainerColor = MaterialTheme.colorScheme.surface
                     )
@@ -330,38 +341,27 @@ fun LibraryScreen(
             }
         } else if (uiState.items.isEmpty()) {
             item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 360.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        modifier = Modifier.widthIn(max = 520.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(18.dp)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.library_empty_title),
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onBackground,
-                            textAlign = TextAlign.Center
-                        )
-                        Text(
-                            text = stringResource(R.string.library_empty_body),
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.82f),
-                            textAlign = TextAlign.Center
-                        )
-                        Button(shape = neonButtonShape(), onClick = refreshClick) {
-                            Icon(Icons.Rounded.Refresh, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(stringResource(R.string.library_refresh))
+                EmptyStateCard(
+                    icon = if (uiState.query.isBlank()) Icons.Rounded.FolderOpen else Icons.Rounded.Search,
+                    title = stringResource(if (uiState.query.isBlank()) R.string.library_empty_title else R.string.home_empty_search_title),
+                    body = stringResource(if (uiState.query.isBlank()) R.string.library_empty_body else R.string.home_empty_search_subtitle),
+                    action = {
+                        if (uiState.query.isBlank()) {
+                            Button(shape = neonButtonShape(), onClick = refreshClick) {
+                                Icon(Icons.Rounded.Refresh, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(stringResource(R.string.library_refresh))
+                            }
+                        } else {
+                            TextButton(onClick = { viewModel.updateQuery("") }) {
+                                Text(stringResource(R.string.home_search_clear))
+                            }
                         }
-                    }
-                }
+                    },
+                )
             }
         } else if (layoutMode == LibraryLayoutMode.LIST) {
-            items(uiState.items, key = { it.titleId }) { game ->
+            items(displayedItems, key = { it.titleId }) { game ->
                 val selectGameClick = rememberDebouncedClick { onLaunchGame(game.titleId, game.installPath) }
                 val shape = neonShape(24.dp)
                 var menuExpanded by remember(game.titleId) { mutableStateOf(false) }
@@ -531,7 +531,7 @@ fun LibraryScreen(
             }
         } else {
             items(
-                items = uiState.items.chunked(gridColumns),
+                items = displayedItems.chunked(gridColumns),
                 key = { row -> row.firstOrNull()?.titleId ?: row.hashCode().toString() }
             ) { rowItems ->
                 Row(

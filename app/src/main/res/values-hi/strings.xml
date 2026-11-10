@@ -102,10 +102,10 @@
     <string name="settings_help_content_description">सेटिंग सहायता खोलें</string>
     <string name="settings_help_dialog_label">सेटिंग गाइड</string>
     <string name="settings_help_dialog_tip">एक बार में केवल एक विकल्प बदलें, फिर उसी गेम सीन को टेस्ट करें ताकि असली सुधार साफ दिखे।</string>
-    <string name="settings_help_gamepad_overlay">जब आप भौतिक कंट्रोलर का उपयोग नहीं कर रहे हों तो ऑन-स्क्रीन कंट्रोल दिखाता है।\n\nTouch या controller input को अपने खेलने के तरीके के करीब करने के लिए इस्तेमाल करें। अगर controls पहले से सही लगते हैं तो न बदलें, क्योंकि extreme values aiming, menus या touch features को मुश्किल बना सकती हैं।</string>
-    <string name="settings_help_overlay_scale">ऑन-स्क्रीन कंट्रोल का आकार बदलता है।\n\nTouch या controller input को अपने खेलने के तरीके के करीब करने के लिए इस्तेमाल करें। अगर controls पहले से सही लगते हैं तो न बदलें, क्योंकि extreme values aiming, menus या touch features को मुश्किल बना सकती हैं।</string>
-    <string name="settings_help_overlay_opacity">बदलता है कि ऑन-स्क्रीन कंट्रोल कितने पारदर्शी हैं।\n\nTouch या controller input को अपने खेलने के तरीके के करीब करने के लिए इस्तेमाल करें। अगर controls पहले से सही लगते हैं तो न बदलें, क्योंकि extreme values aiming, menus या touch features को मुश्किल बना सकती हैं।</string>
-    <string name="settings_help_analog_multiplier">एनालॉग स्टिक संवेदनशीलता को बदलता है।\n\nTouch या controller input को अपने खेलने के तरीके के करीब करने के लिए इस्तेमाल करें। अगर controls पहले से सही लगते हैं तो न बदलें, क्योंकि extreme values aiming, menus या touch features को मुश्किल बना सकती हैं।</string>
+    <string name="settings_help_gamepad_overlay" formatted="false">गेम चित्र पर टच गेमपैड दिखाता है। असली कंट्रोलर इस्तेमाल करते समय या स्क्रीन के अहम हिस्से ढकने पर इसे छिपाएँ। गेम मेनू वापस बटन से उपलब्ध रहता है।</string>
+    <string name="settings_help_overlay_scale" formatted="false">सभी टच कंट्रोल का आकार एक साथ बदलता है। आसानी से दबाने के लिए बढ़ाएँ या गेम अधिक दिखाने के लिए घटाएँ। अलग-अलग बटन खिसकाने या आकार बदलने के लिए टच-कंट्रोल संपादक खोलें।</string>
+    <string name="settings_help_overlay_opacity" formatted="false">टच कंट्रोल की दृश्यता बदलता है: 100% पूरी तरह अपारदर्शी है और कम मान गेम अधिक दिखाते हैं। केवल रूप बदलता है; पारदर्शी बटन भी टच स्वीकार करते हैं।</string>
+    <string name="settings_help_analog_multiplier" formatted="false">असली एनालॉग स्टिक की गति को गेम तक भेजने से पहले गुणा करता है। 1.0 से ऊपर जल्दी पूरा झुकाव मिलता है; नीचे अधिकतम इनपुट घटता है। केंद्र का डेड ज़ोन और बटन मैपिंग अलग सेटिंग हैं।</string>
     <string name="settings_reset_toast">%1$s डिफ़ॉल्ट पर रीसेट हो गया</string>
     <string name="settings_app_language">ऐप की भाषा</string>
     <string name="settings_app_language_system">सिस्टम डिफ़ॉल्ट</string>
@@ -1121,7 +1121,7 @@
     <string name="core_help_video_anisotropic_filter_override" formatted="false">उच्च मान GPU संसाधनों की कीमत पर ढलान वाली सतहों पर बनावट की तीक्ष्णता को बढ़ाते हैं।
 आधुनिक जीपीयू इस सेटिंग को 16x पर भी ठीक से संभाल सकते हैं।
 यदि आप वास्तविक PS3 द्वारा उपयोग की जाने वाली मूल सेटिंग का उपयोग करना चाहते हैं तो इसे स्वचालित पर रखें।</string>
-    <string name="core_help_video_aspect_ratio" formatted="false">इसे 16:9 पर छोड़ दें जब तक कि आपके पास 4:3 मॉनिटर न हो।</string>
+    <string name="core_help_video_aspect_ratio" formatted="false">गेम चित्र का अनुपात चुनता है। गेम द्वारा समर्थित अनुपात इस्तेमाल करें, आमतौर पर 16:9। दूसरा अनुपात चित्र बिगाड़ सकता है; डिस्प्ले पर खींचना अलग सेटिंग है।</string>
     <string name="core_help_audio_rsxaudio_avport" formatted="false">नियंत्रित करता है कि ऑडियो डेटा का नमूना लेने के लिए किस AVपोर्ट का उपयोग किया जाता है।</string>
     <string name="core_help_audio_desired_audio_buffer_duration" formatted="false">लक्ष्य बफ़र अवधि मिलीसेकंड में.
 उच्च मान बफ़रिंग एल्गोरिदम के काम को आसान बनाते हैं, लेकिन ध्यान देने योग्य ऑडियो विलंबता ला सकते हैं।</string>
@@ -1138,15 +1138,14 @@ RPCS3 को ऑडियो डिवाइस और अनुकरणित 
 मैन्युअल सेटिंग आपके चयनित प्रारूपों का उपयोग करेगी जबकि स्वचालित सेटिंग गेम को सभी उपलब्ध प्रारूपों में से चुनने देगी।</string>
     <string name="core_help_audio_audio_provider" formatted="false">नियंत्रित करता है कि किस PS3 ऑडियो API का उपयोग किया जाए।
 गेम्स CellAudio का उपयोग करते हैं, जबकि VSH को RSXAudio की आवश्यकता होती है।</string>
-    <string name="core_help_audio_renderer" formatted="false">Cubeb एक क्रॉस-प्लेटफ़ॉर्म दृष्टिकोण का उपयोग करता है और ऑडियो बफरिंग का समर्थन करता है, इसलिए यह अनुशंसित विकल्प है।
-यदि यह उपलब्ध नहीं है, तो इसके स्थान पर FAudio का उपयोग किया जा सकता है।</string>
+    <string name="core_help_audio_renderer" formatted="false">ऑडियो आउटपुट बैकएंड चुनता है। आवाज़ न आने या बिगड़ने की जाँच न कर रहे हों तो प्लेटफ़ॉर्म का डिफ़ॉल्ट रखें। बदलने पर गेम फिर शुरू करना पड़ता है; Null आवाज़ बंद करता है।</string>
     <string name="core_help_input_output_background_input_enabled" formatted="false">गेम विंडो अनफोकस्ड होने पर पैड और कीबोर्ड इनपुट की अनुमति देता है।</string>
     <string name="core_help_net_bind_address" formatted="false">बाइंड करने के लिए इंटरफ़ेस IP पता.
 केवल कस्टम कॉन्फ़िगरेशन में उपलब्ध है.</string>
     <string name="core_help_input_output_buzz_emulated_controller" formatted="false">चर्चा! सहायता।
 यदि गेम को बज़ की आवश्यकता है तो 1 या 2 नियंत्रकों का चयन करें! नियंत्रक और आपके पास वास्तविक नियंत्रक नहीं हैं।
 यदि गेम में डुअलशॉक का समर्थन है या यदि आपके पास वास्तविक बज़ है तो नल का चयन करें! नियंत्रक.</string>
-    <string name="core_help_input_output_camera" formatted="false">अपने ऑपरेटिंग सिस्टम के डिफ़ॉल्ट कैमरा डिवाइस का उपयोग करने के लिए Qt कैमरा का चयन करें।</string>
+    <string name="core_help_input_output_camera" formatted="false">Android असली चित्र के बिना नकली PS3 कैमरा कनेक्शन या बिना कैमरे की स्थिति का समर्थन करता है। वास्तविक कैमरा कैप्चर लागू नहीं है; Fake कुछ कनेक्शन जाँच पास कर सकता है लेकिन लाइव वीडियो नहीं देता।</string>
     <string name="core_help_input_output_camera_flip" formatted="false">कैमरे की छवि को क्षैतिज, लंबवत या दोनों अक्षों पर फ़्लिप करता है।</string>
     <string name="core_help_input_output_camera_id" formatted="false">वह कैमरा चुनें जिसे आप गेमप्ले के दौरान उपयोग करना चाहते हैं।</string>
     <string name="core_help_input_output_camera_type" formatted="false">खेल के आधार पर, आपको एक विशिष्ट कैमरा प्रकार का चयन करने की आवश्यकता हो सकती है।</string>
@@ -1158,14 +1157,8 @@ RPCS3 को ऑडियो डिवाइस और अनुकरणित 
 &quot;अभी सेट करें&quot; पर क्लिक करके वर्तमान दीवार घड़ी के समय को रीसेट किया जा सकता है।</string>
     <string name="core_help_audio_convert_to_16_bit" formatted="false">डिफ़ॉल्ट 32-बिट फ़्लोटिंग पॉइंट के बजाय 16-बिट ऑडियो नमूने का उपयोग करता है।
 यदि आपके पास कोई ध्वनि नहीं है या पूरी तरह से टूटी हुई ध्वनि है तो खराब ऑडियो ड्राइवरों के साथ प्रयोग करें।</string>
-    <string name="core_help_video_custom_anaglyph_matrices_matrix_left" formatted="false">3डी स्टीरियो रेंडरिंग मोड सेट करता है (केवल 720p के डिफ़ॉल्ट रिज़ॉल्यूशन के साथ कस्टम कॉन्फ़िगरेशन में उपलब्ध है)।
-एनाग्लिफ़ प्रत्येक आंख के लिए अलग-अलग रंगों का उपयोग करता है, जिसे बाद में कुछ चश्मे से फ़िल्टर किया जा सकता है।
-साइड-बाय-साइड आमतौर पर वीआर व्यूअर ऐप्स द्वारा समर्थित है।
-ओवर-अंडर मूल स्टीरियो आउटपुट के करीब है, लेकिन आमतौर पर कम समर्थित है।</string>
-    <string name="core_help_video_custom_anaglyph_matrices_matrix_right" formatted="false">3डी स्टीरियो रेंडरिंग मोड सेट करता है (केवल 720p के डिफ़ॉल्ट रिज़ॉल्यूशन के साथ कस्टम कॉन्फ़िगरेशन में उपलब्ध है)।
-एनाग्लिफ़ प्रत्येक आंख के लिए अलग-अलग रंगों का उपयोग करता है, जिसे बाद में कुछ चश्मे से फ़िल्टर किया जा सकता है।
-साइड-बाय-साइड आमतौर पर वीआर व्यूअर ऐप्स द्वारा समर्थित है।
-ओवर-अंडर मूल स्टीरियो आउटपुट के करीब है, लेकिन आमतौर पर कम समर्थित है।</string>
+    <string name="core_help_video_custom_anaglyph_matrices_matrix_left" formatted="false">एनाग्लिफ़ 3D में इस आँख के लिए कस्टम 3×3 रंग रूपांतरण मैट्रिक्स। खास रंगीन चश्मे या कैलिब्रेशन के लिए ही बदलें; गलत मान रंग बिगाड़ सकते हैं। सामान्य 2D आउटपुट पर असर नहीं होता।</string>
+    <string name="core_help_video_custom_anaglyph_matrices_matrix_right" formatted="false">एनाग्लिफ़ 3D में इस आँख के लिए कस्टम 3×3 रंग रूपांतरण मैट्रिक्स। खास रंगीन चश्मे या कैलिब्रेशन के लिए ही बदलें; गलत मान रंग बिगाड़ सकते हैं। सामान्य 2D आउटपुट पर असर नहीं होता।</string>
     <string name="core_help_system_date_format" formatted="false">PS3 का दिनांक स्वरूप चुनें.</string>
     <string name="core_help_core_debug_console_mode" formatted="false">DECR कंसोल और अन्य से मेल खाने के लिए प्रयोग करने योग्य सिस्टम मेमोरी की मात्रा बढ़ाता है।
 कुछ सॉफ़्टवेयर के कारण खुदरा हार्डवेयर की तुलना में भिन्न व्यवहार होता है।</string>
@@ -1242,11 +1235,7 @@ RPCS3 को ऑडियो डिवाइस और अनुकरणित 
 · ऑटो मौजूदा व्यवहार है, जो गहराई की ओर पक्षपाती है।
 · जब रंग-लेखन सक्षम होता है और गहराई-लेखन सक्षम नहीं होता है तो प्रेफर कलर रंग को बाइंडिंग रखता है। उस ड्रॉ के लिए गहराई परीक्षण को छोड़ने की कीमत पर कुछ स्थगित रेंडरर्स (उदाहरण के लिए स्टारहॉक) में लापता ज्यामिति को ठीक करता है।
 · प्रेफ़र डेप्थ अभी ऑटो के समान ही है।</string>
-    <string name="core_help_video_frame_limit" formatted="false">ऑफ सबसे तेज़ विकल्प है.
-फ़्रेम लिमिटर का उपयोग करने से अतिरिक्त ओवरहेड जुड़ जाएगा और गेम धीमा हो जाएगा। हालाँकि, यदि फ़्रेमरेट बहुत अधिक है तो कुछ गेम क्रैश हो जाएंगे।
-PS3 नेटिव का उपयोग केवल तभी किया जाना चाहिए जब ऑटो सही ढंग से काम नहीं कर रहा हो क्योंकि इससे फ्रेम-पेसिंग संबंधी समस्याएं आ सकती हैं।
-इनफिनिट एक सकारात्मक फीडबैक लूप जोड़ता है जो प्रति फ्रेम एक और VBlank सिग्नल जोड़ता है जिससे अधिक गेम FPS असीमित हो जाते हैं।
-अन्य फ़्रेम सीमाओं की आवश्यकता वाले अनुभवी उपयोगकर्ताओं को कॉन्फ़िगरेशन फ़ाइल में &quot;दूसरी फ़्रेम सीमा&quot; सेटिंग का उपयोग करना चाहिए।</string>
+    <string name="core_help_video_frame_limit" formatted="false">गेम के प्रति सेकंड फ़्रेम सीमित करता है। PS3 Native कंसोल का समयक्रम अपनाता है; तय मान गेम की गति या भौतिकी बदल सकते हैं। सीमा हटाने से गर्मी या सीमा पर निर्भर गेमों में त्रुटियाँ बढ़ सकती हैं।</string>
     <string name="core_help_video_fidelityfx_cas_sharpening_intensity" formatted="false">फिडेलिटीएफएक्स सुपर रेजोल्यूशन द्वारा लागू शार्पनिंग ताकत को नियंत्रित करें। उच्च मान तेज़ आउटपुट देंगे लेकिन कलाकृतियाँ पेश कर सकते हैं।</string>
     <string name="core_help_input_output_ghltar_emulated_controller" formatted="false">गिटार हीरो लाइव (जीएचएल) गिटार नियंत्रक समर्थन।
 यदि गेम को जीएचएल गिटार नियंत्रकों की आवश्यकता है और आपके पास वास्तविक गिटार नियंत्रक नहीं हैं, तो 1 या 2 नियंत्रकों का चयन करें।
@@ -1288,9 +1277,7 @@ PS3 नेटिव का उपयोग केवल तभी किया �
 गेम सिस्टम मेमोरी के बाहर डेटा को अस्थायी रूप से संग्रहीत करने के लिए कैश फ़ोल्डर का उपयोग कर सकते हैं। इसका उपयोग दीर्घकालिक भंडारण के लिए नहीं किया जाता है।
 
 यह सेटिंग केवल वैश्विक कॉन्फ़िगरेशन में उपलब्ध है.</string>
-    <string name="core_help_core_max_llvm_compile_threads" formatted="false">प्रारंभिक PPU और SPU मॉड्यूल संकलन के लिए उपयोग किए जाने वाले थ्रेड्स की अधिकतम संख्या को सीमित करता है।
-अन्य खुले अनुप्रयोगों का प्रदर्शन बढ़ाने के लिए इसे कम करें।
-डिफ़ॉल्ट सभी उपलब्ध थ्रेड्स का उपयोग करता है।</string>
+    <string name="core_help_core_max_llvm_compile_threads" formatted="false">प्रारंभिक PPU/SPU संकलन के अधिकतम समानांतर कार्य। 0 उपलब्ध CPU और मेमोरी के अनुसार अपने आप निर्धारित करता है। कम मैनुअल मान संकलन धीमा कर सकता है; अधिक मान RAM उपयोग और गर्मी बढ़ाता है।</string>
     <string name="core_help_core_max_cpu_preempt_count" formatted="false">सीपीयू उपयोग और बिजली की खपत को कम करता है, मोबाइल उपकरणों पर बैटरी जीवन में सुधार करता है। (0 का मतलब अक्षम है)
 उच्च मान अधिक स्पष्ट प्रभाव पैदा करते हैं, लेकिन ऑडियो या प्रदर्शन संबंधी समस्याएं पैदा कर सकते हैं। 50 या उससे कम का मान अनुशंसित है।
 यह विकल्प FPS सीमा को बाध्य करता है क्योंकि फ़्रेमरेट स्थिर होने पर यह सक्रिय होता है।
@@ -1303,10 +1290,7 @@ PS3 नेटिव का उपयोग केवल तभी किया �
     <string name="core_help_core_mfc_debug" formatted="false">MFC लॉग बनाता है।
 केवल डेवलपर्स के लिए उपयोगी.
 इसका प्रयोग कदापि न करें.</string>
-    <string name="core_help_audio_microphone_devices" formatted="false">अधिकांश खेलों के लिए मानक का उपयोग किया जाना चाहिए।
-सिंगस्टार एक सिंगस्टार डिवाइस का अनुकरण करता है और इसका उपयोग सिंगस्टार गेम्स के साथ किया जाना चाहिए।
-रियल सिंगस्टार का उपयोग केवल सिंगस्टार गेम्स वाले रियल सिंगस्टार डिवाइस के साथ ही किया जाना चाहिए।
-रॉकस्मिथ का उपयोग रॉकस्मिथ डोंगल के साथ किया जाना चाहिए।</string>
+    <string name="core_help_audio_microphone_devices" formatted="false">एमुलेटेड माइक्रोफ़ोन का वास्तविक रिकॉर्डिंग डिवाइस चुनता है। Android माइक्रोफ़ोन अनुमति चाहिए। माइक्रोफ़ोन प्रकार तय करता है कि गेम कौन-सा PS3 एक्सेसरी देखता है; यह विकल्प उसका ऑडियो स्रोत चुनता है।</string>
     <string name="core_help_audio_microphone_type" formatted="false">अधिकांश खेलों के लिए मानक का उपयोग किया जाना चाहिए।
 सिंगस्टार एक सिंगस्टार डिवाइस का अनुकरण करता है और इसका उपयोग सिंगस्टार गेम्स के साथ किया जाना चाहिए।
 रियल सिंगस्टार का उपयोग केवल सिंगस्टार गेम्स वाले रियल सिंगस्टार डिवाइस के साथ ही किया जाना चाहिए।
@@ -1357,10 +1341,10 @@ PS3 नेटिव का उपयोग केवल तभी किया �
     <string name="core_help_video_performance_overlay_show_header" formatted="false">प्रदर्शन ओवरले में ऐप, बिल्ड और कोर संस्करण शीर्ष पर तथा CPU और GPU पंक्तियाँ नीचे दिखाता है।</string>
     <string name="core_help_video_performance_overlay_font_size_px" formatted="false">प्रदर्शन ओवरले का फ़ॉन्ट आकार सेट करता है (पिक्Cell में मापा जाता है)।</string>
     <string name="core_help_video_performance_overlay_framerate_datapoints" formatted="false">फ़्रेमरेट ग्राफ़ में उपयोग किए गए डेटापॉइंट की मात्रा निर्धारित करता है।</string>
-    <string name="core_help_video_performance_overlay_framerate_graph_detail_level" formatted="false">प्रदर्शन ओवरले पर प्रदर्शित जानकारी की मात्रा को नियंत्रित करता है।</string>
+    <string name="core_help_video_performance_overlay_framerate_graph_detail_level" formatted="false">FPS ग्राफ़ पर दिखने वाली टिप्पणियाँ और आँकड़े चुनता है। अधिक विवरण फ़्रेमों की नियमितता समझने में मदद करता है, पर गेम का प्रदर्शन नहीं बढ़ाता।</string>
     <string name="core_help_video_performance_overlay_enable_framerate_graph" formatted="false">फ़्रेमरेट ग्राफ़ को सक्षम या अक्षम करता है।</string>
     <string name="core_help_video_performance_overlay_frametime_datapoints" formatted="false">फ़्रेमटाइम ग्राफ़ में उपयोग किए गए डेटापॉइंट की मात्रा निर्धारित करता है।</string>
-    <string name="core_help_video_performance_overlay_frametime_graph_detail_level" formatted="false">प्रदर्शन ओवरले पर प्रदर्शित जानकारी की मात्रा को नियंत्रित करता है।</string>
+    <string name="core_help_video_performance_overlay_frametime_graph_detail_level" formatted="false">फ़्रेम-समय ग्राफ़ की टिप्पणियाँ और आँकड़े चुनता है। ऊँचे शिखर असमान फ़्रेम अंतराल दिखाते हैं; केवल ग्राफ़ बदलता है, गेम का समयक्रम नहीं।</string>
     <string name="core_help_video_performance_overlay_enable_frametime_graph" formatted="false">फ़्रेमटाइम ग्राफ़ को सक्षम या अक्षम करता है।</string>
     <string name="core_help_video_performance_overlay_horizontal_margin" formatted="false">स्क्रीन क्वाड्रेंट के सापेक्ष स्क्रीन बॉर्डर की क्षैतिज दूरी सेट करता है (% में मापा जाता है)।</string>
     <string name="core_help_video_performance_overlay_vertical_margin" formatted="false">स्क्रीन क्वाड्रेंट के सापेक्ष स्क्रीन बॉर्डर की ऊर्ध्वाधर दूरी सेट करता है (% में मापा जाता है)।</string>
@@ -1374,10 +1358,7 @@ PS3 नेटिव का उपयोग केवल तभी किया �
     <string name="core_help_core_ppu_debug" formatted="false">PPU लॉग बनाता है।
 केवल डेवलपर्स के लिए उपयोगी.
 इसका प्रयोग कदापि न करें.</string>
-    <string name="core_help_core_ppu_decoder" formatted="false">पहली बार चलाने से पहले एक बार LLVM रीकंपाइलर का उपयोग करके गेम के PPU कोड को पुन: संकलित और कैश करता है।
-यह अब तक का सबसे तेज़ विकल्प है और इसका हमेशा उपयोग किया जाना चाहिए।
-यदि आपको संगतता संबंधी समस्याओं का सामना करना पड़े, तो दुभाषियों में से किसी एक के पास वापस जाएँ और पुनः प्रयास करें।
-यदि अनिश्चित हो तो इस विकल्प का उपयोग करें।</string>
+    <string name="core_help_core_ppu_decoder" formatted="false">PPU कोड चलाने का तरीका चुनता है। LLVM आमतौर पर तेज़ होता है और कोड या संबंधित सेटिंग बदलने तक संकलित मॉड्यूल दोबारा उपयोग करता है। किसी खास संगतता समस्या के लिए ही इंटरप्रेटर आज़माएँ।</string>
     <string name="core_help_core_ppu_reservation_priority_over_spus" formatted="false">जब SPU आरक्षण का उपयोग कर रहे हों तो PPU को निष्पादन लाभ दें।
 प्रदर्शन में सुधार के लिए यह सेटिंग केवल कुछ गेम के लिए अनुशंसित है।
 प्रदर्शन में संभावित गिरावट के कारण बिना सलाह दिए इसका उपयोग न करें।</string>
@@ -1397,8 +1378,8 @@ PS3 नेटिव का उपयोग केवल तभी किया �
     <string name="core_help_net_psn_status" formatted="false">यदि RPCN पर सेट किया जाता है, तो गेम समर्थित होने पर RPCS3 PSN कनेक्शन के रूप में RPCN सर्वर का उपयोग करेगा।
 यदि सिम्युलेटेड पर सेट किया जाता है, तो RPCS3 PSN कनेक्शन को नकली बनाने का प्रयास करेगा, लेकिन PSN कार्यक्षमता का उपयोग करने के किसी भी वास्तविक प्रयास के परिणामस्वरूप त्रुटियां या क्रैश हो सकते हैं।
 सिम्युलेटेड केवल कस्टम कॉन्फ़िगरेशन में उपलब्ध है।</string>
-    <string name="core_help_video_read_color_buffers" formatted="false">वीएम मेमोरी का उपयोग करके लक्ष्य मेमोरी को प्रस्तुत करना आरंभ करता है।</string>
-    <string name="core_help_video_read_depth_buffer" formatted="false">वीएम मेमोरी का उपयोग करके लक्ष्य मेमोरी को प्रस्तुत करना आरंभ करता है।</string>
+    <string name="core_help_video_read_color_buffers" formatted="false">चित्र बनाने से पहले एमुलेटेड PS3 मेमोरी से रंग पढ़ता है। CPU द्वारा रेंडर लक्ष्य बदलने वाले गेमों में गायब चित्र या प्रभाव ठीक कर सकता है; अतिरिक्त डेटा स्थानांतरण गति घटा सकता है।</string>
+    <string name="core_help_video_read_depth_buffer" formatted="false">चित्र बनाने से पहले एमुलेटेड PS3 मेमोरी से गहराई पढ़ता है। गहराई-संबंधी ग्राफ़िक्स त्रुटियों वाले गेमों के लिए उपयोग करें; अतिरिक्त स्थानांतरण प्रदर्शन घटा सकता है।</string>
     <string name="core_help_video_record_with_overlays" formatted="false">ओवरले के साथ रिकॉर्डिंग सक्षम करता है।
 इसका असर स्क्रीनशॉट पर भी पड़ता है.</string>
     <string name="core_help_video_relaxed_zcull_sync" formatted="false">ZCULL रिपोर्ट सिंक्रनाइज़ेशन व्यवहार को बदलता है। अपने खेल के लिए सर्वोत्तम विकल्प खोजने के लिए प्रयोग करें। अधिकांश खेलों के लिए अनुमानित मोड की अनुशंसा की जाती है.
@@ -1417,10 +1398,7 @@ Vulkan को अच्छे रेंडरडॉक कैप्चर के
 आधार रिज़ॉल्यूशन हमेशा 1280x720 होता है।
 यदि आप सामान्य रिज़ॉल्यूशन विकल्पों का उपयोग करना चाहते हैं तो इस मान को 100% पर सेट करें।
 100% से कम मान आमतौर पर प्रदर्शन में सुधार नहीं करेंगे।</string>
-    <string name="core_help_video_screen_size_in_inches" formatted="false">3डी स्टीरियो रेंडरिंग मोड सेट करता है (केवल 720p के डिफ़ॉल्ट रिज़ॉल्यूशन के साथ कस्टम कॉन्फ़िगरेशन में उपलब्ध है)।
-एनाग्लिफ़ प्रत्येक आंख के लिए अलग-अलग रंगों का उपयोग करता है, जिसे बाद में कुछ चश्मे से फ़िल्टर किया जा सकता है।
-साइड-बाय-साइड आमतौर पर वीआर व्यूअर ऐप्स द्वारा समर्थित है।
-ओवर-अंडर मूल स्टीरियो आउटपुट के करीब है, लेकिन आमतौर पर कम समर्थित है।</string>
+    <string name="core_help_video_screen_size_in_inches" formatted="false">PS3 वीडियो API से गेमों को स्क्रीन का विकर्ण इंच में बताता है। स्टीरियोस्कोपिक कैलिब्रेशन में इस्तेमाल होता है; Android रिज़ॉल्यूशन या चित्र का स्केल नहीं बदलता।</string>
     <string name="core_help_input_output_load_sdl_gamecontroller_mappings" formatted="false">बेहतर गेमपैड संगतता के लिए SDL गेमकंट्रोलर डेटाबेस लोड करता है। केवल SDL पैड हैंडलर में उपयोग किया जाता है।</string>
     <string name="core_help_core_set_daz_and_ftz" formatted="false">एसएसई संचालन में त्रुटियों को डीबग करने के लिए विशेष एमएक्ससीएसआर झंडे सेट करता है।
 सटीकता की कीमत पर PPU प्रदर्शन में तेजी लाता है।</string>
@@ -1432,9 +1410,7 @@ Vulkan को अच्छे रेंडरडॉक कैप्चर के
 इसका उपयोग पठनीयता और/या सौंदर्यशास्त्र में सुधार के लिए किया जा सकता है।</string>
     <string name="core_help_video_shader_loading_dialog_allow_custom_background" formatted="false">नेटिव शेडर लोडिंग डायलॉग/लोडिंग स्क्रीन के दौरान एक पृष्ठभूमि छवि दिखाता है।
 डिफ़ॉल्ट रूप से प्रयुक्त छवि /PS3_GAME/PIC1.PNG होगी।</string>
-    <string name="core_help_video_shader_mode" formatted="false">यह अनुशंसित विकल्प है.
-यदि कैश में कोई शेडर नहीं मिलता है, तो इस शेडर के संकलित होने तक उसके लिए कुछ भी प्रस्तुत नहीं किया जाएगा।
-आपको ग्राफ़िक्स पॉप-इन का अनुभव हो सकता है.</string>
+    <string name="core_help_video_shader_mode" formatted="false">गायब GPU शेडर तैयार करने का तरीका चुनता है। असिंक्रोनस मोड रुकावट घटाते हैं, पर कुछ प्रभाव अस्थायी रूप से गायब हो सकते हैं। शेडर इंटरप्रेटर इसे घटाता है, लेकिन शुरुआती काम और GPU भार बढ़ाता है।</string>
     <string name="core_help_video_shader_precision" formatted="false">उत्पन्न शेडर्स के परिशुद्धता स्तर को नियंत्रित करता है। कम परिशुद्धता हार्डवेयर के आधार पर बहुत तेज़ कोड उत्पन्न करती है, लेकिन कभी-कभी मामूली दृश्य गड़बड़ियां या झिलमिलाहट उत्पन्न कर सकती है।</string>
     <string name="core_help_miscellaneous_show_analog_limiter_toggle_hint" formatted="false">नेटिव ओवरले का उपयोग करके एनालॉग लिमिटर टॉगल संकेत दिखाता है।</string>
     <string name="core_help_miscellaneous_show_autosave_autoload_hint" formatted="false">नेटिव ओवरले का उपयोग करके ऑटोसेव/ऑटोलोड संकेत दिखाता है।</string>
@@ -1455,15 +1431,11 @@ Vulkan को अच्छे रेंडरडॉक कैप्चर के
 अप्रत्याशित तरीकों से प्रदर्शन को प्रभावित कर सकता है.</string>
     <string name="core_help_core_spu_block_size" formatted="false">यह विकल्प SPU विश्लेषक को नियंत्रित करता है, विशेष रूप से संकलित इकाइयों के आकार को। मेगा और गीगा मोड छोटी इकाइयों को एक साथ जोड़कर, संकलित इकाइयों की संख्या को कम करके लेकिन उनके आकार को बढ़ाकर प्रदर्शन में सुधार कर सकते हैं।
 अधिकतम अनुकूलता के लिए सुरक्षित मोड का उपयोग करें.</string>
-    <string name="core_help_core_spu_cache" formatted="false">चलाने से पहले LLVM रीकंपाइलर का उपयोग करके गेम के SPU कोड को पुन: संकलित और कैश करता है जो अतिरिक्त स्टार्ट-अप समय जोड़ता है।
-यह बहुत अच्छी अनुकूलता वाला सबसे तेज़ विकल्प है।
-यदि आप समस्याओं का अनुभव करते हैं, तो ASMJIT रीकंपाइलर का उपयोग करें।</string>
+    <string name="core_help_core_spu_cache" formatted="false">पहचाने गए SPU प्रोग्राम सहेजता है और खेलने से पहले उनका कैश तैयार करता है। अगले लॉन्च पर दोबारा संकलन कम होता है। नया कोड खेलते समय भी संकलित हो सकता है; इसे बंद करने से रुकावटें बढ़ सकती हैं।</string>
     <string name="core_help_core_spu_debug" formatted="false">SPU लॉग बनाता है।
 केवल डेवलपर्स के लिए उपयोगी.
 इसका प्रयोग कदापि न करें.</string>
-    <string name="core_help_core_spu_decoder" formatted="false">चलाने से पहले LLVM रीकंपाइलर का उपयोग करके गेम के SPU कोड को पुन: संकलित और कैश करता है जो अतिरिक्त स्टार्ट-अप समय जोड़ता है।
-यह बहुत अच्छी अनुकूलता वाला सबसे तेज़ विकल्प है।
-यदि आप समस्याओं का अनुभव करते हैं, तो ASMJIT रीकंपाइलर का उपयोग करें।</string>
+    <string name="core_help_core_spu_decoder" formatted="false">SPU कोड चलाने का तरीका चुनता है। LLVM अधिक गति के लिए नेटिव कोड बनाता है; इंटरप्रेटर मुख्यतः संगतता जाँच के लिए हैं और बहुत धीमे हो सकते हैं। डिकोडर बदलने पर कैश फिर बनाना पड़ सकता है।</string>
     <string name="core_help_core_spu_loop_detection" formatted="false">SPU कर्नेल में लूप स्थितियों का पता लगाने का प्रयास करें और उन्हें शेड्यूलिंग संकेत के रूप में उपयोग करें।
 प्रदर्शन में सुधार करता है और CPU उपयोग को कम करता है।
 दुर्लभ मामलों में गंभीर ऑडियो हकलाहट का कारण बन सकता है।</string>
@@ -1506,9 +1478,7 @@ Vulkan को अच्छे रेंडरडॉक कैप्चर के
     <string name="core_help_miscellaneous_use_native_user_interface" formatted="false">गेम विंडो के भीतर देशी HUD के उपयोग को सक्षम बनाता है जो गेम नियंत्रकों के साथ इंटरैक्ट कर सकता है।
 अक्षम होने पर, इसके स्थान पर नियमित Qt संवाद का उपयोग किया जाता है।
 वर्तमान में, ऑन-स्क्रीन कीबोर्ड केवल अंग्रेजी कुंजी लेआउट का समर्थन करता है।</string>
-    <string name="core_help_video_vulkan_use_re_bar_for_gpu_uploads" formatted="false">सक्षम होने पर, Vulkan समय-संवेदनशील डेटा के जीपीयू अपलोड के लिए पीसीआई-ई आकार बदलने योग्य बार एड्रेस स्पेस का उपयोग करने का प्रयास करेगा।
-बेस फ़्रेमरेट कम होने पर यह NVIDIA कार्ड पर बड़े पैमाने पर प्रदर्शन जीतता है।
-बहुत अधिक फ़्रेमरेट वाले गेम के लिए, इस विकल्प के परिणामस्वरूप सभी GPU विक्रेताओं का प्रदर्शन ख़राब हो सकता है।</string>
+    <string name="core_help_video_vulkan_use_re_bar_for_gpu_uploads" formatted="false">समय-संवेदी Vulkan अपलोड के लिए CPU से उपलब्ध कोहेरेंट मेमोरी चुनता है। Android डेस्कटॉप PCIe Re-BAR हार्डवेयर के बजाय साझा RAM इस्तेमाल करता है। नतीजा GPU ड्राइवर पर निर्भर है; एक ही दृश्य की तुलना करें।</string>
     <string name="core_help_miscellaneous_use_recursive_scan" formatted="false">चयनित फ़ोल्डर से गेम स्कैन करते समय सबफ़ोल्डर्स पर पुनरावर्ती स्कैन का उपयोग सक्षम बनाता है।
 अक्षम होने पर, गेम केवल चयनित फ़ोल्डर पर स्कैन किए जाते हैं।</string>
     <string name="core_help_video_vblank_ntsc_fixup" formatted="false">59.94Hz जैसे मानों के लिए VBLANK की दर को 1000/1001 से गुणा करता है।
@@ -1531,7 +1501,7 @@ OpenGL का उपयोग करते समय इसकी आवश्�
     <string name="core_help_video_write_color_buffers" formatted="false">यदि आपको गेम में गायब ग्राफिक्स या टूटी हुई रोशनी मिलती है तो इस विकल्प को सक्षम करें।
 प्रदर्शन ख़राब हो सकता है और कुछ मामलों में हकलाहट आ सकती है।
 राक्षसों की आत्माओं के लिए आवश्यक.</string>
-    <string name="core_help_video_write_depth_buffer" formatted="false">वीएम मेमोरी में गहराई बफर मान लिखता है।</string>
+    <string name="core_help_video_write_depth_buffer" formatted="false">रेंडर की गई गहराई वापस एमुलेटेड PS3 मेमोरी में लिखता है। कुछ गेमों के प्रभावों या दृश्यता जाँच को इसकी ज़रूरत होती है। GPU से पढ़ना महँगा हो सकता है, इसलिए किसी खास ग्राफ़िक्स समस्या के लिए चालू करें।</string>
     <string name="core_help_core_spu_xfloat_accuracy" formatted="false">SPU फ्लोट वैक्टर प्रोसेसिंग की सटीकता को नियंत्रित करें।
 प्रदर्शन की कीमत पर विभिन्न खेलों में बग ठीक करता है।
 यह सेटिंग केवल तभी लागू होती है जब SPU डिकोडर को डायनामिक या LLVM पर सेट किया जाता है।</string>
@@ -2111,4 +2081,31 @@ OpenGL का उपयोग करते समय इसकी आवश्�
     <string name="customization_font_help" formatted="false">ऐप का फ़ॉन्ट चुनें या TTF या OTF फ़ॉन्ट फ़ाइल आयात करें। सिस्टम विकल्प डिवाइस का फ़ॉन्ट इस्तेमाल करता है।</string>
     <string name="customization_text_size_help" formatted="false">पूरे ऐप में टेक्स्ट का आकार बदलें। बड़े टेक्स्ट से कुछ लेबल अधिक पंक्तियों में जा सकते हैं।</string>
     <string name="settings_customization_drawer_help" formatted="false">नेविगेशन ड्रॉअर का रूप चुनें। चुनने से पहले पूर्वावलोकन में हर शैली दिखाई देती है।</string>
+    <string name="emulation_game_preparing">गेम तैयार हो रहा है…</string>
+    <string name="settings_group_display_scaling">डिस्प्ले और स्केलिंग</string>
+    <string name="settings_group_rendering_compatibility">रेंडरिंग संगतता</string>
+    <string name="settings_group_shaders_cache">शेडर और कैश</string>
+    <string name="settings_group_audio_output">ऑडियो आउटपुट</string>
+    <string name="settings_group_audio_buffering">ऑडियो बफ़रिंग</string>
+    <string name="settings_group_input_devices">इनपुट डिवाइस</string>
+    <string name="settings_group_cpu_compilation">CPU और संकलन</string>
+    <string name="settings_group_diagnostics">निदान</string>
+    <string name="home_library_options">लाइब्रेरी विकल्प</string>
+    <string name="home_view_list">लिस्ट के रूप में दिखाएं</string>
+    <string name="home_view_grid">ग्रिड के रूप में दिखाएं</string>
+    <string name="home_search">गेम्स खोजें</string>
+    <string name="home_search_clear">सर्च साफ़ करें</string>
+    <string name="home_sort_title_asc">शीर्षक A-Z</string>
+    <string name="home_sort_title_desc">शीर्षक Z-A</string>
+    <string name="home_sort_recent_desc">हाल ही में अपडेट किए गए</string>
+    <string name="home_sort_recent_asc">सबसे पुराने अपडेट किए गए</string>
+    <string name="home_sort_size_desc">सबसे बड़े</string>
+    <string name="home_sort_size_asc">सबसे छोटे</string>
+    <string name="emulation_close_menu">मेनू बंद करें</string>
+    <string name="emulation_play_time_badge">खेलने का समय %1$s</string>
+    <string name="emulation_menu_subtitle">गेम छोड़े बिना वर्तमान सत्र को प्रबंधित करें।</string>
+    <string name="home_empty_search_title">कोई परिणाम नहीं</string>
+    <string name="home_empty_search_subtitle">कोई अलग नाम आज़माएं या सॉर्टिंग बदलें।</string>
+    <string name="save_manager_no_results_body">किसी दूसरे गेम शीर्षक या सेव फ़ोल्डर के नाम से खोजें।</string>
+    <string name="profile_no_recent_events">अभी कोई हालिया गतिविधि नहीं है।</string>
 </resources>

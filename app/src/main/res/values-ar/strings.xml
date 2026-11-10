@@ -219,10 +219,10 @@
     <string name="settings_help_content_description">فتح مساعدة الإعدادات</string>
     <string name="settings_help_dialog_label">دليل الإعدادات</string>
     <string name="settings_help_dialog_tip">قم بتغيير خيار واحد في كل مرة، ثم اختبر نفس المشهد في اللعبة حتى تتمكن من رؤية ما تحسن بالفعل.</string>
-    <string name="settings_help_gamepad_overlay">يُظهر أزرار التحكم على الشاشة عندما لا تستخدم وحدة تحكم فعلية.\n\nاستخدم هذا لجعل الإدخال باللمس أو بوحدة التحكم أقرب إلى طريقتك في اللعب. تجنب تغييره عندما تشعر أن أزرار التحكم صحيحة بالفعل، لأن القيم المتطرفة يمكن أن تجعل التصويب أو القوائم أو ميزات اللمس أصعب في الاستخدام.</string>
-    <string name="settings_help_overlay_scale">يغير حجم أزرار التحكم على الشاشة.\n\nاستخدم هذا لجعل الإدخال باللمس أو بوحدة التحكم أقرب إلى طريقتك في اللعب. تجنب تغييره عندما تشعر أن أزرار التحكم صحيحة بالفعل، لأن القيم المتطرفة يمكن أن تجعل التصويب أو القوائم أو ميزات اللمس أصعب في الاستخدام.</string>
-    <string name="settings_help_overlay_opacity">يغير مدى شفافية أزرار التحكم على الشاشة.\n\nاستخدم هذا لجعل الإدخال باللمس أو بوحدة التحكم أقرب إلى طريقتك في اللعب. تجنب تغييره عندما تشعر أن أزرار التحكم صحيحة بالفعل، لأن القيم المتطرفة يمكن أن تجعل التصويب أو القوائم أو ميزات اللمس أصعب في الاستخدام.</string>
-    <string name="settings_help_analog_multiplier">يغير حساسية العصا التناظرية.\n\nاستخدم هذا لجعل الإدخال باللمس أو بوحدة التحكم أقرب إلى طريقتك في اللعب. تجنب تغييره عندما تشعر أن أزرار التحكم صحيحة بالفعل، لأن القيم المتطرفة يمكن أن تجعل التصويب أو القوائم أو ميزات اللمس أصعب في الاستخدام.</string>
+    <string name="settings_help_gamepad_overlay" formatted="false">يعرض أزرار اللمس فوق صورة اللعبة. أخفها عند استخدام يد فعلية أو إذا حجبت أجزاء مهمة من الشاشة. تظل قائمة اللعبة متاحة بزر الرجوع.</string>
+    <string name="settings_help_overlay_scale" formatted="false">يغير حجم جميع عناصر اللمس معًا. زد الحجم لتسهيل النقر أو قلله لرؤية مساحة أكبر من اللعبة. لتحريك زر منفرد أو تغيير حجمه افتح محرر التحكم باللمس.</string>
+    <string name="settings_help_overlay_opacity" formatted="false">يغير ظهور عناصر اللمس: 100% معتم تمامًا، والقيم الأقل تكشف المزيد من اللعبة. يتغير الشكل فقط؛ تظل الأزرار الشفافة تستقبل اللمس.</string>
+    <string name="settings_help_analog_multiplier" formatted="false">يضرب حركة العصي التناظرية الفعلية قبل إرسالها إلى اللعبة. فوق 1.0 تصل للإزاحة القصوى أسرع؛ وتحت 1.0 يقل الإدخال الأقصى. المنطقة الميتة الوسطية وتعيين الأزرار إعدادان منفصلان.</string>
     <string name="settings_help_gamepad_deadzone">يصفي حركة العصا الصغيرة بالقرب من المركز لتقليل الانجراف (Drift). ارفعه إذا كانت الكاميرا أو الشخصية تتحرك من تلقاء نفسها؛ خفضه إذا شعرت أن التصويب غير مستجيب.</string>
     <string name="settings_help_gamepad_trigger_threshold">يحدد المسافة التي يجب أن تتحرك فيها الأزرار التناظرية قبل إرسال الإدخال. ارفعه للأزرار المزعجة؛ خفضه لسباقات السيارات أو عناصر التحكم الحساسة للضغط.</string>
     <string name="settings_help_gamepad_button_profile">يعيد تعيين أزرار الوجه الفعلية قبل أن تصل إلى المحاكي. استخدم هذا عندما لا يتطابق تخطيط وحدة التحكم الخاصة بك مع وضع Cross، Circle، Square، و Triangle الخاص بـ PS3.</string>
@@ -1125,7 +1125,7 @@
     <string name="core_help_video_anisotropic_filter_override" formatted="false">تعمل القيم الأعلى على زيادة حدة الأنسجة على الأسطح المنحدرة على حساب موارد وحدة معالجة الرسومات.
 يمكن لوحدات معالجة الرسومات الحديثة التعامل مع هذا الإعداد بشكل جيد، حتى عند 16x.
 احتفظ بهذا على الوضع التلقائي إذا كنت تريد استخدام الإعداد الأصلي الذي يستخدمه جهاز PS3 حقيقي.</string>
-    <string name="core_help_video_aspect_ratio" formatted="false">اترك هذا على 16:9 إلا إذا كان لديك شاشة 4:3.</string>
+    <string name="core_help_video_aspect_ratio" formatted="false">يختار نسبة أبعاد صورة اللعبة. استخدم النسبة التي تدعمها اللعبة، عادة 16:9. قد تشوه نسبة أخرى الصورة؛ ويُضبط تمديدها إلى الشاشة بشكل منفصل.</string>
     <string name="core_help_audio_rsxaudio_avport" formatted="false">يتحكم في أي منفذ يتم استخدامه لأخذ عينات من البيانات الصوتية.</string>
     <string name="core_help_audio_desired_audio_buffer_duration" formatted="false">مدة المخزن المؤقت الهدف بالمللي ثانية.
 تعمل القيم الأعلى على تسهيل مهمة خوارزمية التخزين المؤقت، ولكنها قد تؤدي إلى زمن وصول ملحوظ للصوت.</string>
@@ -1142,15 +1142,14 @@
 سيستخدم الإعداد اليدوي التنسيقات التي حددتها بينما سيسمح الإعداد التلقائي للعبة بالاختيار من بين جميع التنسيقات المتاحة.</string>
     <string name="core_help_audio_audio_provider" formatted="false">يتحكم في واجهة برمجة التطبيقات الصوتية PS3 المستخدمة.
 تستخدم الألعاب CellAudio، بينما يتطلب VSH RSXAudio.</string>
-    <string name="core_help_audio_renderer" formatted="false">يستخدم Cubeb نهجًا مشتركًا بين الأنظمة الأساسية ويدعم التخزين المؤقت للصوت، لذا فهو الخيار الموصى به.
-إذا لم يكن متاحًا، فيمكن استخدام FAudio بدلاً من ذلك.</string>
+    <string name="core_help_audio_renderer" formatted="false">يختار محرك إخراج الصوت. احتفظ بافتراضي المنصة إلا عند تشخيص صوت مفقود أو مشوه. يتطلب التغيير إعادة تشغيل اللعبة؛ ويعطل Null الصوت.</string>
     <string name="core_help_input_output_background_input_enabled" formatted="false">يسمح بإدخال لوحة المفاتيح ولوحة المفاتيح عندما تكون نافذة اللعبة غير مركزة.</string>
     <string name="core_help_net_bind_address" formatted="false">عنوان IP للواجهة المراد الارتباط به.
 متوفر فقط في التكوينات المخصصة.</string>
     <string name="core_help_input_output_buzz_emulated_controller" formatted="false">ضجيج! يدعم.
 حدد وحدة تحكم واحدة أو اثنتين إذا كانت اللعبة تتطلب Buzz! وحدات تحكم وليس لديك وحدات تحكم حقيقية.
 حدد Null إذا كانت اللعبة تدعم DualShock أو إذا كان لديك Buzz حقيقي! وحدات تحكم.</string>
-    <string name="core_help_input_output_camera" formatted="false">حدد Qt Camera لاستخدام جهاز الكاميرا الافتراضي لنظام التشغيل الخاص بك.</string>
+    <string name="core_help_input_output_camera" formatted="false">يدعم Android محاكاة اتصال كاميرا PS3 دون صورة حقيقية أو عدم وجود كاميرا. التقاط الكاميرا الفعلية غير منفذ؛ وقد يجتاز Fake بعض اختبارات الاتصال لكنه لا يقدم فيديو مباشرًا.</string>
     <string name="core_help_input_output_camera_flip" formatted="false">يقلب صورة الكاميرا إما أفقيًا أو رأسيًا أو على كلا المحورين.</string>
     <string name="core_help_input_output_camera_id" formatted="false">حدد الكاميرا التي تريد استخدامها أثناء اللعب.</string>
     <string name="core_help_input_output_camera_type" formatted="false">اعتمادًا على اللعبة، قد تحتاج إلى تحديد نوع كاميرا معين.</string>
@@ -1162,14 +1161,8 @@
 يمكن إعادة ضبطه على وقت ساعة الحائط الحالي بالنقر فوق &quot;ضبط على الآن&quot;.</string>
     <string name="core_help_audio_convert_to_16_bit" formatted="false">يستخدم عينات صوتية 16 بت بدلاً من النقطة العائمة الافتراضية 32 بت.
 استخدمه مع برامج تشغيل الصوت التي تجرها الدواب إذا لم يكن لديك صوت أو صوت مكسور تمامًا.</string>
-    <string name="core_help_video_custom_anaglyph_matrices_matrix_left" formatted="false">يضبط وضع عرض الاستريو ثلاثي الأبعاد (متوفر فقط في التكوينات المخصصة بدقة افتراضية تبلغ 720 بكسل).
-يستخدم Anaglyph ألوانًا مختلفة لكل عين، والتي يمكن بعد ذلك تصفيتها باستخدام نظارات معينة.
-يتم دعم ميزة Side-by-Side بشكل أكثر شيوعًا بواسطة تطبيقات عارض الواقع الافتراضي.
-يعتبر Over-Under أقرب إلى إخراج الاستريو الأصلي، ولكنه أقل دعمًا بشكل شائع.</string>
-    <string name="core_help_video_custom_anaglyph_matrices_matrix_right" formatted="false">يضبط وضع عرض الاستريو ثلاثي الأبعاد (متوفر فقط في التكوينات المخصصة بدقة افتراضية تبلغ 720 بكسل).
-يستخدم Anaglyph ألوانًا مختلفة لكل عين، والتي يمكن بعد ذلك تصفيتها باستخدام نظارات معينة.
-يتم دعم ميزة Side-by-Side بشكل أكثر شيوعًا بواسطة تطبيقات عارض الواقع الافتراضي.
-يعتبر Over-Under أقرب إلى إخراج الاستريو الأصلي، ولكنه أقل دعمًا بشكل شائع.</string>
+    <string name="core_help_video_custom_anaglyph_matrices_matrix_left" formatted="false">مصفوفة تحويل لون مخصصة 3×3 لهذه العين في خرج 3D بالألوان المنفصلة. اضبطها لنظارات ملونة محددة أو للمعايرة؛ وقد تشوه القيم غير المناسبة الألوان. لا تؤثر على خرج 2D العادي.</string>
+    <string name="core_help_video_custom_anaglyph_matrices_matrix_right" formatted="false">مصفوفة تحويل لون مخصصة 3×3 لهذه العين في خرج 3D بالألوان المنفصلة. اضبطها لنظارات ملونة محددة أو للمعايرة؛ وقد تشوه القيم غير المناسبة الألوان. لا تؤثر على خرج 2D العادي.</string>
     <string name="core_help_system_date_format" formatted="false">حدد تنسيق التاريخ لجهاز PS3.</string>
     <string name="core_help_core_debug_console_mode" formatted="false">يزيد من حجم ذاكرة النظام القابلة للاستخدام لتتوافق مع وحدة تحكم DECR والمزيد.
 يتسبب في عمل بعض البرامج بشكل مختلف عن أجهزة البيع بالتجزئة.</string>
@@ -1246,11 +1239,7 @@
 · تلقائي هو السلوك الموجود، المتحيز نحو العمق.
 · يحتفظ الخيار Prefer Color بربط اللون عند تمكين الكتابة بالألوان وعدم تمكين الكتابة العميقة. يعمل على إصلاح الشكل الهندسي المفقود في بعض العارضين المؤجلين (مثل Starhawk) على حساب تخطي اختبار العمق لذلك السحب.
 · العمق المفضل هو نفس الوضع التلقائي في الوقت الحالي.</string>
-    <string name="core_help_video_frame_limit" formatted="false">إيقاف التشغيل هو الخيار الأسرع.
-سيؤدي استخدام محدد الإطار إلى إضافة حمل إضافي وإبطاء اللعبة. ومع ذلك، قد تتعطل بعض الألعاب إذا كان معدل الإطارات مرتفعًا جدًا.
-يجب استخدام نظام PS3 الأصلي فقط إذا كان الوضع التلقائي لا يعمل بشكل صحيح لأنه يمكن أن يسبب مشكلات في سرعة الإطار.
-يضيف Infinite حلقة ردود فعل إيجابية تضيف إشارة vblank أخرى لكل إطار مما يسمح لمزيد من الألعاب بأن تكون إطارات في الثانية بلا حدود.
-يجب على المستخدمين ذوي الخبرة الذين يحتاجون إلى حدود إطارات أخرى استخدام الإعداد &quot;Second Frame Limit&quot; في ملف التكوين.</string>
+    <string name="core_help_video_frame_limit" formatted="false">يحد عدد إطارات اللعبة في الثانية. يتبع PS3 Native توقيت الجهاز؛ وقد تغير القيم الثابتة سرعة اللعبة أو الفيزياء. قد يزيد إلغاء الحد الحرارة أو يسبب أخطاء في الألعاب التي تتوقع حدًا.</string>
     <string name="core_help_video_fidelityfx_cas_sharpening_intensity" formatted="false">تحكم في قوة الوضوح المطبقة بواسطة FidelityFX Supersolution. ستعطي القيم الأعلى مخرجات أكثر وضوحًا ولكنها قد تؤدي إلى ظهور خلل.</string>
     <string name="core_help_input_output_ghltar_emulated_controller" formatted="false">دعم وحدة تحكم الجيتار Guitar Hero Live (GHL).
 حدد وحدة تحكم واحدة أو اثنتين إذا كانت اللعبة تتطلب وحدات تحكم GHL Guitar ولم يكن لديك وحدات تحكم جيتار حقيقية.
@@ -1292,9 +1281,7 @@
 يمكن للألعاب استخدام مجلد ذاكرة التخزين المؤقت لتخزين البيانات مؤقتًا خارج ذاكرة النظام. لا يستخدم للتخزين على المدى الطويل.
 
 هذا الإعداد متاح فقط في التكوين العام.</string>
-    <string name="core_help_core_max_llvm_compile_threads" formatted="false">يحد من الحد الأقصى لعدد مؤشرات الترابط المستخدمة في التجميع الأولي لوحدة PPU وSPU.
-قم بتقليل هذا من أجل زيادة أداء التطبيقات المفتوحة الأخرى.
-يستخدم الافتراضي جميع المواضيع المتاحة.</string>
+    <string name="core_help_core_max_llvm_compile_threads" formatted="false">أقصى عدد للمهام المتوازية في الترجمة الأولية لـ PPU/SPU. يختار 0 الجدولة التلقائية حسب المعالج والذاكرة المتاحة. قد تقلل القيمة اليدوية الأصغر سرعة الترجمة؛ والأكبر تزيد استخدام RAM والحرارة.</string>
     <string name="core_help_core_max_cpu_preempt_count" formatted="false">يقلل من استخدام وحدة المعالجة المركزية واستهلاك الطاقة، مما يحسن عمر البطارية على الأجهزة المحمولة. (0 يعني معطل)
 تؤدي القيم الأعلى إلى تأثير أكثر وضوحًا، ولكنها قد تسبب مشكلات في الصوت أو الأداء. يوصى بقيمة 50 أو أقل.
 يفرض هذا الخيار حدًا لعدد الإطارات في الثانية لأنه يكون نشطًا عندما يكون معدل الإطارات ثابتًا.
@@ -1307,10 +1294,7 @@
     <string name="core_help_core_mfc_debug" formatted="false">ينشئ سجلات MFC.
 مفيدة فقط للمطورين.
 لا تستخدم هذا أبدا.</string>
-    <string name="core_help_audio_microphone_devices" formatted="false">يجب استخدام المعيار لمعظم الألعاب.
-يحاكي SingStar جهاز SingStar ويجب استخدامه مع ألعاب SingStar.
-يجب استخدام Real SingStar فقط مع جهاز REAL SingStar مع ألعاب SingStar.
-يجب استخدام Rocksmith مع دونجل Rocksmith.</string>
+    <string name="core_help_audio_microphone_devices" formatted="false">يختار جهاز التسجيل الفعلي للميكروفون المحاكى. يتطلب إذن الميكروفون من Android. يحدد نوع الميكروفون ملحق PS3 الذي تراه اللعبة، بينما يختار هذا الخيار مصدر الصوت.</string>
     <string name="core_help_audio_microphone_type" formatted="false">يجب استخدام المعيار لمعظم الألعاب.
 يحاكي SingStar جهاز SingStar ويجب استخدامه مع ألعاب SingStar.
 يجب استخدام Real SingStar فقط مع جهاز REAL SingStar مع ألعاب SingStar.
@@ -1361,10 +1345,10 @@
     <string name="core_help_video_performance_overlay_show_header" formatted="false">يعرض إصدار التطبيق والبناء والنواة في الأعلى، وصفّي CPU وGPU في أسفل تراكب الأداء.</string>
     <string name="core_help_video_performance_overlay_font_size_px" formatted="false">يضبط حجم الخط لتراكب الأداء (يتم قياسه بالبكسل).</string>
     <string name="core_help_video_performance_overlay_framerate_datapoints" formatted="false">يضبط مقدار نقاط البيانات المستخدمة في الرسم البياني لمعدل الإطارات.</string>
-    <string name="core_help_video_performance_overlay_framerate_graph_detail_level" formatted="false">يتحكم في كمية المعلومات المعروضة على تراكب الأداء.</string>
+    <string name="core_help_video_performance_overlay_framerate_graph_detail_level" formatted="false">يختار التعليقات والإحصاءات المعروضة مع مخطط FPS. تساعد التفاصيل على فحص انتظام الإطارات لكنها لا تزيد أداء اللعبة.</string>
     <string name="core_help_video_performance_overlay_enable_framerate_graph" formatted="false">تمكين أو تعطيل الرسم البياني لمعدل الإطارات.</string>
     <string name="core_help_video_performance_overlay_frametime_datapoints" formatted="false">يضبط مقدار نقاط البيانات المستخدمة في الرسم البياني للإطار الزمني.</string>
-    <string name="core_help_video_performance_overlay_frametime_graph_detail_level" formatted="false">يتحكم في كمية المعلومات المعروضة على تراكب الأداء.</string>
+    <string name="core_help_video_performance_overlay_frametime_graph_detail_level" formatted="false">يختار التعليقات والإحصاءات مع مخطط زمن الإطار. تكشف القمم عدم انتظام عرض الإطارات؛ ويتغير المخطط فقط لا توقيت اللعبة.</string>
     <string name="core_help_video_performance_overlay_enable_frametime_graph" formatted="false">تمكين أو تعطيل الرسم البياني لإطار الإطار.</string>
     <string name="core_help_video_performance_overlay_horizontal_margin" formatted="false">يضبط المسافة الأفقية إلى حدود الشاشة بالنسبة لربع الشاشة (يتم قياسها بنسبة %).</string>
     <string name="core_help_video_performance_overlay_vertical_margin" formatted="false">يضبط المسافة العمودية إلى حدود الشاشة بالنسبة لربع الشاشة (يتم قياسها بنسبة %).</string>
@@ -1378,10 +1362,7 @@
     <string name="core_help_core_ppu_debug" formatted="false">إنشاء سجلات PPU.
 مفيدة فقط للمطورين.
 لا تستخدم هذا أبدا.</string>
-    <string name="core_help_core_ppu_decoder" formatted="false">إعادة ترجمة رمز PPU الخاص باللعبة وتخزينه مؤقتًا باستخدام LLVM Recompiler مرة واحدة قبل تشغيله لأول مرة.
-يعد هذا الخيار الأسرع إلى حد بعيد ويجب استخدامه دائمًا.
-إذا واجهت مشكلات في التوافق، فارجع إلى أحد المترجمين الفوريين وأعد المحاولة.
-إذا لم تكن متأكدا، استخدم هذا الخيار.</string>
+    <string name="core_help_core_ppu_decoder" formatted="false">يحدد طريقة تنفيذ شفرة PPU. يكون LLVM أسرع عادة ويعيد استخدام الوحدات حتى تتغير الشفرة أو الإعدادات ذات الصلة. جرّب المفسر فقط لمشكلة توافق محددة.</string>
     <string name="core_help_core_ppu_reservation_priority_over_spus" formatted="false">امنح وحدات PPU ميزة التنفيذ عندما تستخدم وحدات SPU الحجوزات.
 يوصى بهذا الإعداد فقط لعدد قليل من الألعاب لتحسين الأداء.
 لا تستخدمه دون أن يُنصح بذلك بسبب احتمال تدهور الأداء.</string>
@@ -1401,8 +1382,8 @@
     <string name="core_help_net_psn_status" formatted="false">إذا تم التعيين على RPCN، فسيستخدم RPCS3 خادم RPCN كاتصال PSN إذا كانت اللعبة مدعومة.
 إذا تم تعيينه على &quot;محاكاة&quot;، فسيحاول RPCS3 تزييف اتصال PSN، ولكن أي محاولة فعلية لاستخدام وظيفة PSN قد تؤدي إلى حدوث أخطاء أو أعطال.
 المحاكاة متاحة فقط في التكوينات المخصصة.</string>
-    <string name="core_help_video_read_color_buffers" formatted="false">تهيئة عرض الذاكرة المستهدفة باستخدام ذاكرة vm.</string>
-    <string name="core_help_video_read_depth_buffer" formatted="false">تهيئة عرض الذاكرة المستهدفة باستخدام ذاكرة vm.</string>
+    <string name="core_help_video_read_color_buffers" formatted="false">يقرأ بيانات اللون من ذاكرة PS3 المحاكاة قبل الرسم. قد يصلح الصور أو التأثيرات المفقودة حين تعدّل اللعبة أهداف الرسم عبر CPU؛ وقد تخفض عمليات النقل الإضافية السرعة.</string>
+    <string name="core_help_video_read_depth_buffer" formatted="false">يقرأ بيانات العمق من ذاكرة PS3 المحاكاة قبل الرسم. استخدمه لألعاب بها أخطاء رسومية متعلقة بالعمق؛ وقد تقلل عمليات النقل الإضافية الأداء.</string>
     <string name="core_help_video_record_with_overlays" formatted="false">تمكين التسجيل مع التراكبات.
 يؤثر هذا أيضًا على لقطات الشاشة.</string>
     <string name="core_help_video_relaxed_zcull_sync" formatted="false">تغيير سلوك مزامنة تقرير ZCULL. قم بالتجربة للعثور على الخيار الأفضل للعبتك. يوصى بالوضع التقريبي لمعظم الألعاب.
@@ -1421,10 +1402,7 @@
 الدقة الأساسية هي دائمًا 1280 × 720.
 قم بتعيين هذه القيمة إلى 100% إذا كنت تريد استخدام خيارات الدقة العادية.
 عادةً لن تؤدي القيم الأقل من 100% إلى تحسين الأداء.</string>
-    <string name="core_help_video_screen_size_in_inches" formatted="false">يضبط وضع عرض الاستريو ثلاثي الأبعاد (متوفر فقط في التكوينات المخصصة بدقة افتراضية تبلغ 720 بكسل).
-يستخدم Anaglyph ألوانًا مختلفة لكل عين، والتي يمكن بعد ذلك تصفيتها باستخدام نظارات معينة.
-يتم دعم ميزة Side-by-Side بشكل أكثر شيوعًا بواسطة تطبيقات عارض الواقع الافتراضي.
-يعتبر Over-Under أقرب إلى إخراج الاستريو الأصلي، ولكنه أقل دعمًا بشكل شائع.</string>
+    <string name="core_help_video_screen_size_in_inches" formatted="false">يبلغ الألعاب بقطر الشاشة بالبوصة عبر واجهة فيديو PS3. تستخدمه الألعاب لمعايرة العرض المجسم؛ ولا يغير دقة Android أو تحجيم الصورة.</string>
     <string name="core_help_input_output_load_sdl_gamecontroller_mappings" formatted="false">يقوم بتحميل قاعدة بيانات SDL GameController لتحسين توافق لوحة الألعاب. يستخدم فقط في معالج لوحة SDL.</string>
     <string name="core_help_core_set_daz_and_ftz" formatted="false">يقوم بتعيين إشارات MXCSR خاصة لتصحيح الأخطاء في عمليات SSE.
 يعمل على تسريع أداء PPU على حساب الدقة.</string>
@@ -1436,9 +1414,7 @@
 يمكن استخدام هذا لتحسين إمكانية القراءة و/أو الجماليات.</string>
     <string name="core_help_video_shader_loading_dialog_allow_custom_background" formatted="false">يعرض صورة خلفية أثناء شاشة تحميل/مربع حوار تحميل التظليل الأصلي.
 بشكل افتراضي، ستكون الصورة المستخدمة هي /PS3_GAME/PIC1.PNG.</string>
-    <string name="core_help_video_shader_mode" formatted="false">هذا هو الخيار الموصى به.
-إذا لم يتم العثور على التظليل في ذاكرة التخزين المؤقت، فلن يتم عرض أي شيء لهذا التظليل حتى يتم تجميعه.
-قد تواجهك الرسومات المنبثقة.</string>
+    <string name="core_help_video_shader_mode" formatted="false">يحدد تجهيز مظللات GPU المفقودة. تقلل الأوضاع غير المتزامنة التوقفات لكن قد تختفي بعض التأثيرات مؤقتًا. يقلل مفسر المظللات هذه الفجوات مقابل عمل إضافي عند البدء وحمل أكبر على GPU.</string>
     <string name="core_help_video_shader_precision" formatted="false">يتحكم في مستوى دقة التظليل الذي تم إنشاؤه. تؤدي الدقة المنخفضة إلى إنشاء تعليمات برمجية أسرع بكثير اعتمادًا على الأجهزة، ولكنها يمكن أن تؤدي في بعض الأحيان إلى حدوث خلل بصري بسيط أو وميض.</string>
     <string name="core_help_miscellaneous_show_analog_limiter_toggle_hint" formatted="false">يعرض تلميح تبديل المحدد التناظري باستخدام التراكب الأصلي.</string>
     <string name="core_help_miscellaneous_show_autosave_autoload_hint" formatted="false">يعرض تلميح الحفظ التلقائي/التحميل التلقائي باستخدام التراكب الأصلي.</string>
@@ -1459,15 +1435,11 @@
 يمكن أن يؤثر على الأداء بطرق غير متوقعة.</string>
     <string name="core_help_core_spu_block_size" formatted="false">يتحكم هذا الخيار في محلل SPU، وخاصة حجم الوحدات المترجمة. قد يعمل الوضعان Mega وGiga على تحسين الأداء عن طريق ربط الوحدات الأصغر معًا، مما يقلل عدد الوحدات المترجمة ولكن يزيد حجمها.
 استخدم الوضع الآمن لتحقيق أقصى قدر من التوافق.</string>
-    <string name="core_help_core_spu_cache" formatted="false">يعيد ترجمة رمز SPU الخاص باللعبة وتخزينه مؤقتًا باستخدام LLVM Recompiler قبل التشغيل مما يضيف وقتًا إضافيًا لبدء التشغيل.
-هذا هو الخيار الأسرع مع توافق جيد جدًا.
-إذا واجهت مشاكل، استخدم ASMJIT Recompiler.</string>
+    <string name="core_help_core_spu_cache" formatted="false">يحفظ برامج SPU المكتشفة ويجهز ذاكرتها المؤقتة قبل اللعب، لتقليل إعادة الترجمة عند التشغيل لاحقًا. قد تظل الشفرة الجديدة تُترجم أثناء اللعب؛ وقد يزيد التعطيل من التقطعات.</string>
     <string name="core_help_core_spu_debug" formatted="false">ينشئ سجلات SPU.
 مفيدة فقط للمطورين.
 لا تستخدم هذا أبدا.</string>
-    <string name="core_help_core_spu_decoder" formatted="false">يعيد ترجمة رمز SPU الخاص باللعبة وتخزينه مؤقتًا باستخدام LLVM Recompiler قبل التشغيل مما يضيف وقتًا إضافيًا لبدء التشغيل.
-هذا هو الخيار الأسرع مع توافق جيد جدًا.
-إذا واجهت مشاكل، استخدم ASMJIT Recompiler.</string>
+    <string name="core_help_core_spu_decoder" formatted="false">يحدد طريقة تنفيذ شفرة SPU. ينتج LLVM شفرة أصلية لسرعة أفضل؛ والمفسرات مخصصة أساسًا لفحص التوافق وقد تكون أبطأ بكثير. قد يتطلب تغيير المفكك إعادة بناء الذاكرة المؤقتة.</string>
     <string name="core_help_core_spu_loop_detection" formatted="false">حاول اكتشاف شروط الحلقة في نواة SPU واستخدامها كتلميحات للجدولة.
 يحسن الأداء ويقلل من استخدام وحدة المعالجة المركزية.
 قد يسبب التأتأة الصوتية الشديدة في حالات نادرة.</string>
@@ -1510,9 +1482,7 @@
     <string name="core_help_miscellaneous_use_native_user_interface" formatted="false">يتيح استخدام شاشة HUD الأصلية داخل نافذة اللعبة والتي يمكنها التفاعل مع وحدات التحكم في الألعاب.
 عند التعطيل، يتم استخدام مربعات حوار Qt العادية بدلاً من ذلك.
 حاليًا، تدعم لوحة المفاتيح التي تظهر على الشاشة تخطيط المفاتيح باللغة الإنجليزية فقط.</string>
-    <string name="core_help_video_vulkan_use_re_bar_for_gpu_uploads" formatted="false">عند التمكين، سيحاول Vulkan استخدام مساحة عنوان شريط PCI-e القابلة لتغيير الحجم لتحميلات GPU للبيانات الحساسة للتوقيت.
-يؤدي هذا إلى فوز هائل في الأداء على بطاقات NVIDIA عندما يكون معدل الإطارات الأساسي منخفضًا.
-بالنسبة للألعاب ذات معدلات الإطارات العالية جدًا، يمكن أن يؤدي هذا الخيار إلى أداء أسوأ لجميع موردي وحدات معالجة الرسومات.</string>
+    <string name="core_help_video_vulkan_use_re_bar_for_gpu_uploads" formatted="false">يختار ذاكرة متماسكة متاحة للمعالج لعمليات رفع Vulkan الحساسة للتوقيت. يستخدم Android ذاكرة RAM مشتركة لا عتاد PCIe Re-BAR المكتبي. يعتمد الأداء على تعريف GPU؛ قارن المشهد نفسه.</string>
     <string name="core_help_miscellaneous_use_recursive_scan" formatted="false">لتمكين استخدام الفحص العودي على المجلدات الفرعية عند فحص الألعاب من المجلد المحدد.
 عند التعطيل، يتم فحص الألعاب في المجلد المحدد فقط.</string>
     <string name="core_help_video_vblank_ntsc_fixup" formatted="false">ضرب معدل VBLANK في 1000/1001 لقيم مثل 59.94 هرتز.
@@ -1535,7 +1505,7 @@
     <string name="core_help_video_write_color_buffers" formatted="false">قم بتمكين هذا الخيار إذا فقدت الرسومات أو الإضاءة المعطلة في اللعبة.
 قد يؤدي إلى انخفاض الأداء وإحداث التأتأة في بعض الحالات.
 مطلوب لأرواح الشيطان.</string>
-    <string name="core_help_video_write_depth_buffer" formatted="false">يكتب قيم المخزن المؤقت للعمق في ذاكرة الجهاز الظاهري.</string>
+    <string name="core_help_video_write_depth_buffer" formatted="false">يعيد كتابة العمق الناتج إلى ذاكرة PS3 المحاكاة. تحتاجه بعض الألعاب للتأثيرات أو فحص الرؤية. فعّله لمشكلة رسومية محددة لأن القراءة العكسية من GPU قد تكون مكلفة.</string>
     <string name="core_help_core_spu_xfloat_accuracy" formatted="false">دقة التحكم في معالجة ناقلات تعويم SPU.
 إصلاح الأخطاء في الألعاب المختلفة على حساب الأداء.
 يتم تطبيق هذا الإعداد فقط عند ضبط SPU Decoder على Dynamic أو LLVM.</string>
@@ -2121,4 +2091,31 @@
     <string name="customization_font_help" formatted="false">اختر خط التطبيق أو استورد ملف خط TTF أو OTF. يستخدم خيار النظام خط الجهاز.</string>
     <string name="customization_text_size_help" formatted="false">غيّر حجم النص في التطبيق كله. قد يجعل النص الأكبر بعض التسميات تمتد إلى أسطر أكثر.</string>
     <string name="settings_customization_drawer_help" formatted="false">اختر مظهر درج التنقل. تُظهر المعاينات كل نمط قبل اختياره.</string>
+    <string name="emulation_game_preparing">جارٍ تجهيز اللعبة…</string>
+    <string name="settings_group_display_scaling">العرض والتحجيم</string>
+    <string name="settings_group_rendering_compatibility">توافق التصيير</string>
+    <string name="settings_group_shaders_cache">المظللات وذاكرة التخزين المؤقت</string>
+    <string name="settings_group_audio_output">إخراج الصوت</string>
+    <string name="settings_group_audio_buffering">التخزين المؤقت للصوت</string>
+    <string name="settings_group_input_devices">أجهزة الإدخال</string>
+    <string name="settings_group_cpu_compilation">المعالج والترجمة</string>
+    <string name="settings_group_diagnostics">التشخيص</string>
+    <string name="home_library_options">خيارات المكتبة</string>
+    <string name="home_view_list">عرض كقائمة</string>
+    <string name="home_view_grid">عرض كشبكة</string>
+    <string name="home_search">البحث عن ألعاب</string>
+    <string name="home_search_clear">مسح البحث</string>
+    <string name="home_sort_title_asc">العنوان أ-ي</string>
+    <string name="home_sort_title_desc">العنوان ي-أ</string>
+    <string name="home_sort_recent_desc">تم تحديثها مؤخرًا</string>
+    <string name="home_sort_recent_asc">الأقدم تحديثًا</string>
+    <string name="home_sort_size_desc">الأكبر حجمًا</string>
+    <string name="home_sort_size_asc">الأصغر حجمًا</string>
+    <string name="emulation_close_menu">إغلاق القائمة</string>
+    <string name="emulation_play_time_badge">وقت اللعب %1$s</string>
+    <string name="emulation_menu_subtitle">إدارة الجلسة الحالية دون مغادرة اللعبة.</string>
+    <string name="home_empty_search_title">لا توجد نتائج</string>
+    <string name="home_empty_search_subtitle">جرب اسمًا مختلفًا أو قم بتغيير طريقة الفرز.</string>
+    <string name="save_manager_no_results_body">جرّب اسم لعبة آخر أو اسم مجلد حفظ آخر.</string>
+    <string name="profile_no_recent_events">لا توجد أحداث حديثة بعد.</string>
 </resources>

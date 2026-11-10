@@ -102,10 +102,10 @@
     <string name="settings_help_content_description">Ayar yardımını aç</string>
     <string name="settings_help_dialog_label">Ayar rehberi</string>
     <string name="settings_help_dialog_tip">Her seferinde yalnızca bir seçeneği değiştirin ve gerçekten neyin iyileştiğini görmek için aynı oyun sahnesini test edin.</string>
-    <string name="settings_help_gamepad_overlay">Fiziksel bir oyun kolu kullanmadığınızda ekran üstü kontrolleri gösterir.\n\nDokunmatik veya kontrolcü girişini oynama tarzınıza yaklaştırmak için kullanın. Kontroller zaten doğru hissediliyorsa değiştirmeyin; aşırı değerler nişan almayı, menüleri veya dokunmatik özellikleri zorlaştırabilir.</string>
-    <string name="settings_help_overlay_scale">Ekran üstü kontrollerin boyutunu değiştirir.\n\nDokunmatik veya kontrolcü girişini oynama tarzınıza yaklaştırmak için kullanın. Kontroller zaten doğru hissediliyorsa değiştirmeyin; aşırı değerler nişan almayı, menüleri veya dokunmatik özellikleri zorlaştırabilir.</string>
-    <string name="settings_help_overlay_opacity">Ekran üstü kontrollerin ne kadar şeffaf olacağını değiştirir.\n\nDokunmatik veya kontrolcü girişini oynama tarzınıza yaklaştırmak için kullanın. Kontroller zaten doğru hissediliyorsa değiştirmeyin; aşırı değerler nişan almayı, menüleri veya dokunmatik özellikleri zorlaştırabilir.</string>
-    <string name="settings_help_analog_multiplier">Analog çubuk hassasiyetini değiştirir.\n\nDokunmatik veya kontrolcü girişini oynama tarzınıza yaklaştırmak için kullanın. Kontroller zaten doğru hissediliyorsa değiştirmeyin; aşırı değerler nişan almayı, menüleri veya dokunmatik özellikleri zorlaştırabilir.</string>
+    <string name="settings_help_gamepad_overlay" formatted="false">Dokunmatik oyun kumandasını oyun üzerinde gösterir. Fiziksel kumanda kullanırken veya ekranın önemli bölümünü kapatıyorsa gizleyin. Oyun menüsüne Geri tuşuyla erişmeye devam edebilirsiniz.</string>
+    <string name="settings_help_overlay_scale" formatted="false">Tüm dokunmatik kontrollerin boyutunu birlikte değiştirir. Daha rahat dokunmak için büyütün veya oyunu daha çok görmek için küçültün. Tek tek düğmeleri taşımak veya boyutlandırmak için dokunmatik düzenleyiciyi açın.</string>
+    <string name="settings_help_overlay_opacity" formatted="false">Dokunmatik kontrollerin görünürlüğünü değiştirir: %100 tamamen opaktır; düşük değerler oyunu daha çok gösterir. Yalnızca görünüm değişir; saydam düğmeler dokunmaları kabul etmeye devam eder.</string>
+    <string name="settings_help_analog_multiplier" formatted="false">Fiziksel analog çubuk hareketini oyuna göndermeden önce çarpar. 1,0 üzeri tam sapmaya daha erken ulaşır; 1,0 altı en yüksek girişi azaltır. Merkez ölü bölgesi ve düğme eşlemesi ayrı ayarlanır.</string>
     <string name="settings_reset_toast">%1$s varsayılana sıfırlandı</string>
     <string name="settings_app_language">Uygulama dili</string>
     <string name="settings_app_language_system">Sistem varsayılanı</string>
@@ -1121,7 +1121,7 @@ Emin değilseniz bu ayarı değiştirmeyin.</string>
     <string name="core_help_video_anisotropic_filter_override" formatted="false">Daha yüksek değerler, GPU kaynakları pahasına eğimli yüzeylerdeki dokuların keskinliğini artırır.
 Modern GPU\'lar bu ayarı 16x\'te bile gayet iyi bir şekilde işleyebilir.
 Gerçek bir PS3 tarafından kullanılan orijinal ayarı kullanmak istiyorsanız bunu Otomatik\'te tutun.</string>
-    <string name="core_help_video_aspect_ratio" formatted="false">4:3 monitörünüz yoksa bunu 16:9\'da bırakın.</string>
+    <string name="core_help_video_aspect_ratio" formatted="false">Oyun görüntüsünün en boy oranını seçer. Oyunun desteklediği oranı, genellikle 16:9 kullanın. Başka bir oran görüntüyü bozabilir; ekrana germe ayrı ayarlanır.</string>
     <string name="core_help_audio_rsxaudio_avport" formatted="false">Ses verilerini örneklemek için hangi avport\'un kullanıldığını kontrol eder.</string>
     <string name="core_help_audio_desired_audio_buffer_duration" formatted="false">Milisaniye cinsinden hedef arabellek süresi.
 Daha yüksek değerler ara belleğe alma algoritmasının işini kolaylaştırır ancak fark edilebilir ses gecikmesine neden olabilir.</string>
@@ -1138,15 +1138,14 @@ Bu değerlerin değiştirilmesi oyunun yeniden başlatılmasını gerektirir.
 Manuel ayar seçtiğiniz formatları kullanacak, otomatik ayar ise oyunun mevcut tüm formatlar arasından seçim yapmasına izin verecektir.</string>
     <string name="core_help_audio_audio_provider" formatted="false">Hangi PS3 ses API\'sinin kullanıldığını kontrol eder.
 Oyunlar CellAudio\'yu kullanırken VSH, RSXAudio\'yu gerektirir.</string>
-    <string name="core_help_audio_renderer" formatted="false">Cubeb, platformlar arası bir yaklaşım kullanır ve ses arabelleğe almayı destekler, bu nedenle önerilen seçenektir.
-Mevcut değilse bunun yerine FAudio kullanılabilir.</string>
+    <string name="core_help_audio_renderer" formatted="false">Ses çıkış altyapısını seçer. Eksik veya bozuk sesi araştırmıyorsanız platform varsayılanını koruyun. Değişiklik oyunun yeniden başlatılmasını gerektirir; Null sesi kapatır.</string>
     <string name="core_help_input_output_background_input_enabled" formatted="false">Oyun penceresi odaklanmadığında tuş takımı ve klavye girişine izin verir.</string>
     <string name="core_help_net_bind_address" formatted="false">Bağlanılacak arayüz IP Adresi.
 Yalnızca özel konfigürasyonlarda mevcuttur.</string>
     <string name="core_help_input_output_buzz_emulated_controller" formatted="false">Vızıltı! Destek.
 Oyun Buzz\'ı gerektiriyorsa 1 veya 2 kontrol cihazı seçin! kontrolörleriniz var ve gerçek kontrolörleriniz yok.
 Oyunun DualShock desteği varsa veya gerçek Buzz\'ınız varsa Null\'u seçin! kontrolörler.</string>
-    <string name="core_help_input_output_camera" formatted="false">İşletim sisteminizin varsayılan kamera cihazını kullanmak için Qt Kamera\'yı seçin.</string>
+    <string name="core_help_input_output_camera" formatted="false">Android, gerçek görüntü vermeyen sahte bir PS3 kamera bağlantısını veya kamerasız durumu destekler. Fiziksel kamera yakalama uygulanmamıştır; Fake bazı bağlantı denetimlerini geçebilir ancak canlı video vermez.</string>
     <string name="core_help_input_output_camera_flip" formatted="false">Kamera görüntüsünü yatay, dikey veya her iki eksende döndürür.</string>
     <string name="core_help_input_output_camera_id" formatted="false">Oyun sırasında kullanmak istediğiniz kamerayı seçin.</string>
     <string name="core_help_input_output_camera_type" formatted="false">Oyuna bağlı olarak belirli bir kamera türü seçmeniz gerekebilir.</string>
@@ -1158,14 +1157,8 @@ Bu mod kapalıyken bazı oyunlar kayıt durumu yapılmasına izin vermeyebilir v
 &quot;Şimdiye Ayarla&quot; seçeneği tıklatılarak geçerli duvar saati saatine sıfırlanabilir.</string>
     <string name="core_help_audio_convert_to_16_bit" formatted="false">Varsayılan 32 bit kayan nokta yerine 16 bit ses örnekleri kullanır.
 Sesiniz yoksa ya da tamamen bozuksa buggy ses sürücüleriyle kullanın.</string>
-    <string name="core_help_video_custom_anaglyph_matrices_matrix_left" formatted="false">3D stereo oluşturma modunu ayarlar (yalnızca 720p varsayılan çözünürlüğe sahip özel yapılandırmalarda kullanılabilir).
-Anaglyph her göz için farklı renkler kullanıyor ve bu renkler daha sonra belirli gözlüklerle filtrelenebiliyor.
-Yan Yana, VR görüntüleyici uygulamaları tarafından daha yaygın olarak desteklenir.
-Over-Under, yerel stereo çıkışına daha yakındır ancak daha az desteklenir.</string>
-    <string name="core_help_video_custom_anaglyph_matrices_matrix_right" formatted="false">3D stereo oluşturma modunu ayarlar (yalnızca 720p varsayılan çözünürlüğe sahip özel yapılandırmalarda kullanılabilir).
-Anaglyph her göz için farklı renkler kullanıyor ve bu renkler daha sonra belirli gözlüklerle filtrelenebiliyor.
-Yan Yana, VR görüntüleyici uygulamaları tarafından daha yaygın olarak desteklenir.
-Over-Under, yerel stereo çıkışına daha yakındır ancak daha az desteklenir.</string>
+    <string name="core_help_video_custom_anaglyph_matrices_matrix_left" formatted="false">Anaglif 3D çıkışında bu gözün özel 3×3 renk matrisidir. Belirli renkli gözlükler veya kalibrasyon için ayarlayın; yanlış değerler renkleri bozabilir. Normal 2D çıkışını etkilemez.</string>
+    <string name="core_help_video_custom_anaglyph_matrices_matrix_right" formatted="false">Anaglif 3D çıkışında bu gözün özel 3×3 renk matrisidir. Belirli renkli gözlükler veya kalibrasyon için ayarlayın; yanlış değerler renkleri bozabilir. Normal 2D çıkışını etkilemez.</string>
     <string name="core_help_system_date_format" formatted="false">PS3\'ün tarih formatını seçin.</string>
     <string name="core_help_core_debug_console_mode" formatted="false">Bir DECR konsolu ve daha fazlasıyla eşleşecek şekilde kullanılabilir sistem belleği miktarını artırır.
 Bazı yazılımların perakende donanımlardan farklı davranmasına neden olur.</string>
@@ -1242,11 +1235,7 @@ Bu seçenek, performans kaybının yanı sıra görsel bozulma riskini de berabe
 · Otomatik, derinliğe yönelik mevcut davranıştır.
 · Renk Tercih Et, renkli yazma etkinleştirildiğinde ve derinlemesine yazma etkinleştirilmediğinde renk bağlamayı korur. Bazı ertelenmiş oluşturuculardaki (örn. Starhawk) eksik geometriyi, o çizim için derinlik testini atlama pahasına düzeltir.
 · Derinlik Tercihi şimdilik Otomatik ile aynıdır.</string>
-    <string name="core_help_video_frame_limit" formatted="false">Kapalı en hızlı seçenektir.
-Çerçeve sınırlayıcıyı kullanmak ekstra yük oluşturacak ve oyunu yavaşlatacaktır. Ancak kare hızı çok yüksekse bazı oyunlar çökebilir.
-Çerçeve ilerleme hızı sorunlarına yol açabileceği için PS3 yerel yalnızca Otomatik düzgün çalışmıyorsa kullanılmalıdır.
-Infinite, kare başına başka bir vblank sinyali ekleyen olumlu bir geri bildirim döngüsü ekleyerek daha fazla oyunun sınırsız fps olmasını sağlar.
-Diğer çerçeve sınırlarına ihtiyaç duyan deneyimli kullanıcılar, yapılandırma dosyasındaki &quot;İkinci Çerçeve Sınırı&quot; ayarını kullanmalıdır.</string>
+    <string name="core_help_video_frame_limit" formatted="false">Oyunun saniyedeki kare sayısını sınırlar. PS3 Native konsol zamanlamasını izler; sabit değerler oyun hızını veya fiziği değiştirebilir. Sınırı kaldırmak ısıyı artırabilir ya da sınır bekleyen oyunları bozabilir.</string>
     <string name="core_help_video_fidelityfx_cas_sharpening_intensity" formatted="false">FidelityFX Süper Çözünürlük tarafından uygulanan keskinleştirme gücünü kontrol edin. Daha yüksek değerler daha keskin çıktı verir ancak bozulmalara neden olabilir.</string>
     <string name="core_help_input_output_ghltar_emulated_controller" formatted="false">Guitar Hero Live (GHL) Gitar denetleyici desteği.
 Oyun GHL Gitar kontrol cihazları gerektiriyorsa ve gerçek gitar kontrol cihazlarınız yoksa 1 veya 2 kontrol cihazı seçin.
@@ -1288,9 +1277,7 @@ Emin değilseniz bu seçeneği kullanmayın.</string>
 Oyunlar, verileri sistem belleğinin dışında geçici olarak depolamak için önbellek klasörünü kullanabilir. Uzun süreli depolama için kullanılmaz.
 
 Bu ayar yalnızca genel yapılandırmada kullanılabilir.</string>
-    <string name="core_help_core_max_llvm_compile_threads" formatted="false">İlk PPU ve SPU modülü derlemesi için kullanılan maksimum iş parçacığı sayısını sınırlar.
-Diğer açık uygulamaların performansını artırmak için bunu düşürün.
-Varsayılan, mevcut tüm konuları kullanır.</string>
+    <string name="core_help_core_max_llvm_compile_threads" formatted="false">İlk PPU/SPU derlemesindeki en fazla paralel görev sayısı. 0, CPU ve kullanılabilir belleğe göre otomatik planlama yapar. Daha düşük elle seçilen değer derlemeyi yavaşlatabilir; daha yükseği RAM tüketimini ve ısıyı artırır.</string>
     <string name="core_help_core_max_cpu_preempt_count" formatted="false">Mobil cihazlarda pil ömrünü artırarak CPU kullanımını ve güç tüketimini azaltır. (0 devre dışı anlamına gelir)
 Daha yüksek değerler daha belirgin bir etkiye neden olur ancak ses veya performans sorunlarına neden olabilir. 50 veya daha düşük bir değer önerilir.
 Bu seçenek, kare hızı sabit olduğunda etkin olduğundan bir FPS sınırını zorlar.
@@ -1303,10 +1290,7 @@ Performansı ciddi şekilde düşürür! Emin değilseniz bu seçeneği kullanma
     <string name="core_help_core_mfc_debug" formatted="false">MFC günlükleri oluşturur.
 Yalnızca geliştiriciler için faydalıdır.
 Bunu asla kullanmayın.</string>
-    <string name="core_help_audio_microphone_devices" formatted="false">Çoğu oyun için standart kullanılmalıdır.
-SingStar, bir SingStar cihazını taklit eder ve SingStar oyunlarıyla birlikte kullanılmalıdır.
-Gerçek SingStar yalnızca SingStar oyunlarına sahip GERÇEK bir SingStar cihazıyla kullanılmalıdır.
-Rocksmith, Rocksmith dongle\'ı ile kullanılmalıdır.</string>
+    <string name="core_help_audio_microphone_devices" formatted="false">Benzetilen mikrofonun fiziksel kayıt aygıtını seçer. Android mikrofon izni gerekir. Mikrofon türü oyunun gördüğü PS3 aksesuarını belirler; bu seçenek ses kaynağını seçer.</string>
     <string name="core_help_audio_microphone_type" formatted="false">Çoğu oyun için standart kullanılmalıdır.
 SingStar, bir SingStar cihazını taklit eder ve SingStar oyunlarıyla birlikte kullanılmalıdır.
 Gerçek SingStar yalnızca SingStar oyunlarına sahip GERÇEK bir SingStar cihazıyla kullanılmalıdır.
@@ -1357,10 +1341,10 @@ Bu durumda, ana menü her açıldığında öykünmeyi duraklatmak yararlı olab
     <string name="core_help_video_performance_overlay_show_header" formatted="false">Uygulama, derleme ve çekirdek sürümünü üstte, CPU ve GPU satırlarını ise performans katmanının altında gösterir.</string>
     <string name="core_help_video_performance_overlay_font_size_px" formatted="false">Performans katmanının yazı tipi boyutunu ayarlar (piksel cinsinden ölçülür).</string>
     <string name="core_help_video_performance_overlay_framerate_datapoints" formatted="false">Kare hızı grafiğinde kullanılan veri noktalarının miktarını ayarlar.</string>
-    <string name="core_help_video_performance_overlay_framerate_graph_detail_level" formatted="false">Performans katmanında görüntülenen bilgi miktarını kontrol eder.</string>
+    <string name="core_help_video_performance_overlay_framerate_graph_detail_level" formatted="false">FPS grafiğinde gösterilen açıklama ve istatistikleri seçer. Daha fazla ayrıntı kare sunumunun düzenini incelemeye yardım eder; oyun performansını artırmaz.</string>
     <string name="core_help_video_performance_overlay_enable_framerate_graph" formatted="false">Kare hızı grafiğini etkinleştirir veya devre dışı bırakır.</string>
     <string name="core_help_video_performance_overlay_frametime_datapoints" formatted="false">Çerçeve süresi grafiğinde kullanılan veri noktalarının miktarını ayarlar.</string>
-    <string name="core_help_video_performance_overlay_frametime_graph_detail_level" formatted="false">Performans katmanında görüntülenen bilgi miktarını kontrol eder.</string>
+    <string name="core_help_video_performance_overlay_frametime_graph_detail_level" formatted="false">Kare süresi grafiğindeki açıklama ve istatistikleri seçer. Sıçramalar düzensiz kare sunumunu gösterir; yalnızca grafiği değiştirir, oyun zamanlamasını değil.</string>
     <string name="core_help_video_performance_overlay_enable_frametime_graph" formatted="false">Çerçeve süresi grafiğini etkinleştirir veya devre dışı bırakır.</string>
     <string name="core_help_video_performance_overlay_horizontal_margin" formatted="false">Ekran çeyreğine göre ekran sınırına olan yatay mesafeyi ayarlar (% olarak ölçülür).</string>
     <string name="core_help_video_performance_overlay_vertical_margin" formatted="false">Ekran çeyreğine göre ekran sınırına dikey mesafeyi ayarlar (% olarak ölçülür).</string>
@@ -1374,10 +1358,7 @@ Performans katmanı yenileme hızı, çerçeve grafiği istatistiklerini etkilem
     <string name="core_help_core_ppu_debug" formatted="false">PPU günlükleri oluşturur.
 Yalnızca geliştiriciler için faydalıdır.
 Bunu asla kullanmayın.</string>
-    <string name="core_help_core_ppu_decoder" formatted="false">Oyunu ilk kez çalıştırmadan önce LLVM Yeniden Derleyicisini kullanarak oyunun PPU kodunu yeniden derler ve önbelleğe alır.
-Bu şimdiye kadarki en hızlı seçenektir ve her zaman kullanılmalıdır.
-Uyumluluk sorunlarıyla karşılaşırsanız Tercümanlardan birine başvurun ve yeniden deneyin.
-Emin değilseniz bu seçeneği kullanın.</string>
+    <string name="core_help_core_ppu_decoder" formatted="false">PPU kodunun nasıl çalışacağını seçer. LLVM genellikle daha hızlıdır; kod veya ilgili ayarlar değişene kadar modülleri yeniden kullanır. Yorumlayıcıyı yalnızca belirli bir uyumluluk sorunu için deneyin.</string>
     <string name="core_help_core_ppu_reservation_priority_over_spus" formatted="false">SPU\'lar rezervasyonları kullanırken PPU\'lara yürütme avantajı sağlayın.
 Bu ayar, performansı artırmak amacıyla yalnızca birkaç oyun için önerilir.
 Potansiyel performans düşüşü nedeniyle tavsiye edilmeden KULLANMAYIN.</string>
@@ -1397,8 +1378,8 @@ Mevcut platform ekran uyku kontrolünü desteklemiyorsa bu seçenek devre dış�
     <string name="core_help_net_psn_status" formatted="false">RPCN olarak ayarlanırsa RPCS3, oyun destekleniyorsa PSN bağlantısı olarak RPCN sunucusunu kullanacaktır.
 Simüle edilmiş olarak ayarlanırsa, RPCS3 PSN bağlantısını taklit etmeye çalışacaktır ancak PSN işlevini kullanmaya yönelik herhangi bir fiili girişim, hatalara veya çökmelere neden olabilir.
 Simüle edilmiş yalnızca özel yapılandırmalarda kullanılabilir.</string>
-    <string name="core_help_video_read_color_buffers" formatted="false">Vm belleğini kullanarak oluşturma hedefi belleğini başlatır.</string>
-    <string name="core_help_video_read_depth_buffer" formatted="false">Vm belleğini kullanarak oluşturma hedefi belleğini başlatır.</string>
+    <string name="core_help_video_read_color_buffers" formatted="false">Çizimden önce benzetilen PS3 belleğinden renk verilerini okur. Oyun, işleme hedeflerini CPU ile değiştiriyorsa eksik görüntü veya efektleri düzeltebilir; ek aktarımlar hızı düşürebilir.</string>
+    <string name="core_help_video_read_depth_buffer" formatted="false">Çizimden önce benzetilen PS3 belleğinden derinlik verilerini okur. Derinlikle ilgili grafik hataları olan oyunlarda kullanın; ek aktarımlar performansı düşürebilir.</string>
     <string name="core_help_video_record_with_overlays" formatted="false">Kaplamalarla kaydetmeyi etkinleştirir.
 Bu aynı zamanda ekran görüntülerini de etkiler.</string>
     <string name="core_help_video_relaxed_zcull_sync" formatted="false">ZCULL rapor senkronizasyon davranışını değiştirir. Oyununuz için en iyi seçeneği bulmak için denemeler yapın. Çoğu oyun için yaklaşık mod önerilir.
@@ -1417,10 +1398,7 @@ Nadiren de olsa emülasyon hatalarından dolayı bazı oyunlar yalnızca 480p gi
 Temel çözünürlük her zaman 1280x720\'dir.
 Normal Çözünürlük seçeneklerini kullanmak istiyorsanız bu değeri %100 olarak ayarlayın.
 %100\'ün altındaki değerler genellikle performansı iyileştirmez.</string>
-    <string name="core_help_video_screen_size_in_inches" formatted="false">3D stereo oluşturma modunu ayarlar (yalnızca 720p varsayılan çözünürlüğe sahip özel yapılandırmalarda kullanılabilir).
-Anaglyph her göz için farklı renkler kullanıyor ve bu renkler daha sonra belirli gözlüklerle filtrelenebiliyor.
-Yan Yana, VR görüntüleyici uygulamaları tarafından daha yaygın olarak desteklenir.
-Over-Under, yerel stereo çıkışına daha yakındır ancak daha az desteklenir.</string>
+    <string name="core_help_video_screen_size_in_inches" formatted="false">PS3 video API üzerinden oyunlara ekran köşegenini inç olarak bildirir. Stereoskopik kalibrasyonda kullanılır; Android çözünürlüğünü veya görüntü ölçeğini değiştirmez.</string>
     <string name="core_help_input_output_load_sdl_gamecontroller_mappings" formatted="false">Gelişmiş oyun kumandası uyumluluğu için SDL GameController veritabanını yükler. Yalnızca SDL ped işleyicisinde kullanılır.</string>
     <string name="core_help_core_set_daz_and_ftz" formatted="false">SSE işlemlerinde hata ayıklamak için özel MXCSR bayraklarını ayarlar.
 Doğruluk pahasına PPU performansını hızlandırır.</string>
@@ -1432,9 +1410,7 @@ Bu, okunabilirliği ve/veya estetiği geliştirmek için kullanılabilir.</strin
 Bu, okunabilirliği ve/veya estetiği geliştirmek için kullanılabilir.</string>
     <string name="core_help_video_shader_loading_dialog_allow_custom_background" formatted="false">Yerel gölgelendirici yükleme iletişim kutusu/yükleme ekranı sırasında bir arka plan resmi gösterir.
 Varsayılan olarak kullanılan görüntü /PS3_GAME/PIC1.PNG olacaktır.</string>
-    <string name="core_help_video_shader_mode" formatted="false">Bu önerilen seçenektir.
-Önbellekte bir gölgelendirici bulunamazsa, derlenene kadar bu gölgelendirici için hiçbir şey oluşturulmayacaktır.
-Grafik açılır pencereleriyle karşılaşabilirsiniz.</string>
+    <string name="core_help_video_shader_mode" formatted="false">Eksik GPU gölgelendiricilerinin hazırlanmasını belirler. Eşzamansız kipler duraklamaları azaltır fakat bazı efektler geçici olarak görünmeyebilir. Gölgelendirici yorumlayıcısı bu eksikleri daha fazla başlangıç işi ve GPU yükü karşılığında azaltır.</string>
     <string name="core_help_video_shader_precision" formatted="false">Oluşturulan gölgelendiricilerin hassasiyet düzeyini kontrol eder. Düşük hassasiyet, donanıma bağlı olarak çok daha hızlı kod üretir ancak bazen küçük görsel aksaklıklara veya titremeye neden olabilir.</string>
     <string name="core_help_miscellaneous_show_analog_limiter_toggle_hint" formatted="false">Yerel kaplamayı kullanarak analog sınırlayıcı geçiş ipucunu gösterir.</string>
     <string name="core_help_miscellaneous_show_autosave_autoload_hint" formatted="false">Yerel kaplamayı kullanarak otomatik kaydetme/otomatik yükleme ipucunu gösterir.</string>
@@ -1455,15 +1431,11 @@ Bu, kalibrasyon ekranları sırasında çok yararlı olabilir.</string>
 Performansı beklenmedik şekillerde etkileyebilir.</string>
     <string name="core_help_core_spu_block_size" formatted="false">Bu seçenek SPU analizörünü, özellikle de derlenmiş birimlerin boyutunu kontrol eder. Mega ve Giga modları, daha küçük birimleri birbirine bağlayarak, derlenmiş birimlerin sayısını azaltarak ancak boyutlarını artırarak performansı artırabilir.
 Maksimum uyumluluk için Güvenli modu kullanın.</string>
-    <string name="core_help_core_spu_cache" formatted="false">Çalıştırmadan önce LLVM Recompiler\'ı kullanarak oyunun SPU kodunu yeniden derler ve önbelleğe alır; bu da ekstra başlatma süresi sağlar.
-Bu çok iyi uyumluluğa sahip en hızlı seçenektir.
-Sorunlarla karşılaşırsanız ASMJIT Yeniden Derleyicisini kullanın.</string>
+    <string name="core_help_core_spu_cache" formatted="false">Bulunan SPU programlarını kaydeder ve oyundan önce önbelleği hazırlar. Sonraki açılışlarda yeniden derlemeyi azaltır. Yeni kod oyun sırasında derlenebilir; kapatılması takılmaları artırabilir.</string>
     <string name="core_help_core_spu_debug" formatted="false">SPU günlükleri oluşturur.
 Yalnızca geliştiriciler için faydalıdır.
 Bunu asla kullanmayın.</string>
-    <string name="core_help_core_spu_decoder" formatted="false">Çalıştırmadan önce LLVM Recompiler\'ı kullanarak oyunun SPU kodunu yeniden derler ve önbelleğe alır; bu da ekstra başlatma süresi sağlar.
-Bu çok iyi uyumluluğa sahip en hızlı seçenektir.
-Sorunlarla karşılaşırsanız ASMJIT Yeniden Derleyicisini kullanın.</string>
+    <string name="core_help_core_spu_decoder" formatted="false">SPU kodunun nasıl çalışacağını seçer. LLVM daha yüksek hız için yerel kod üretir; yorumlayıcılar çoğunlukla uyumluluk kontrolü içindir ve çok daha yavaş olabilir. Kod çözücü değişirse önbelleğin yeniden oluşturulması gerekebilir.</string>
     <string name="core_help_core_spu_loop_detection" formatted="false">SPU çekirdeklerindeki döngü koşullarını tespit etmeye çalışın ve bunları planlama ipuçları olarak kullanın.
 Performansı artırır ve CPU kullanımını azaltır.
 Nadir durumlarda ciddi ses kekemeliğine neden olabilir.</string>
@@ -1506,9 +1478,7 @@ Gerçek bir döner tabla denetleyicisi, taklit edilmiş bir döner tabla denetle
     <string name="core_help_miscellaneous_use_native_user_interface" formatted="false">Oyun penceresi içinde oyun kumandalarıyla etkileşime girebilecek yerel HUD\'ın kullanılmasını sağlar.
 Devre dışı bırakıldığında bunun yerine normal Qt diyalogları kullanılır.
 Şu anda ekran klavyesi yalnızca İngilizce tuş düzenini desteklemektedir.</string>
-    <string name="core_help_video_vulkan_use_re_bar_for_gpu_uploads" formatted="false">Etkinleştirildiğinde Vulkan, zamanlamaya duyarlı verilerin GPU\'ya yüklenmesi için PCI-e yeniden boyutlandırılabilir çubuk adres alanını kullanmaya çalışacak.
-Bu, temel kare hızı düşük olduğunda NVIDIA kartlarında büyük bir performans kazancı sağlar.
-Çok yüksek kare hızlarına sahip oyunlarda bu seçenek, tüm GPU satıcıları için daha kötü performansa neden olabilir.</string>
+    <string name="core_help_video_vulkan_use_re_bar_for_gpu_uploads" formatted="false">Zamanlamaya duyarlı Vulkan yüklemeleri için CPU erişimli tutarlı bellek seçer. Android, masaüstü PCIe Re-BAR donanımı yerine ortak RAM kullanır. Sonuç GPU sürücüsüne bağlıdır; aynı sahneyi karşılaştırın.</string>
     <string name="core_help_miscellaneous_use_recursive_scan" formatted="false">Seçilen klasördeki oyunları tararken alt klasörlerde yinelemeli taramanın kullanılmasını sağlar.
 Devre dışı bırakıldığında oyunlar yalnızca seçilen klasörde taranır.</string>
     <string name="core_help_video_vblank_ntsc_fixup" formatted="false">59,94Hz gibi değerler için VBLANK oranını 1000/1001 ile çarpar.
@@ -1531,7 +1501,7 @@ Bunu değiştirmek ve/veya kare hızını eklemek hatalı veya güncel olmayan k
     <string name="core_help_video_write_color_buffers" formatted="false">Oyun içinde eksik grafikler veya bozuk aydınlatmayla karşılaşırsanız bu seçeneği etkinleştirin.
 Performansı düşürebilir ve bazı durumlarda kekemeliğe neden olabilir.
 Demon\'s Souls için gereklidir.</string>
-    <string name="core_help_video_write_depth_buffer" formatted="false">Derinlik arabelleği değerlerini vm belleğine yazar.</string>
+    <string name="core_help_video_write_depth_buffer" formatted="false">Hesaplanan derinliği benzetilen PS3 belleğine geri yazar. Bazı oyunların efektleri veya görünürlük denetimleri için gereklidir. GPU geri okuması pahalı olabildiğinden belirli bir grafik sorunu için açın.</string>
     <string name="core_help_core_spu_xfloat_accuracy" formatted="false">SPU kayan vektörlerin işlenmesinde kontrol doğruluğu.
 Performans pahasına çeşitli oyunlardaki hataları düzeltir.
 Bu ayar yalnızca SPU Kod Çözücü Dinamik veya LLVM olarak ayarlandığında uygulanır.</string>
@@ -2111,4 +2081,31 @@ Bu ayar yalnızca SPU Kod Çözücü Dinamik veya LLVM olarak ayarlandığında 
     <string name="customization_font_help" formatted="false">Uygulama yazı tipini seçin veya bir TTF ya da OTF dosyası içe aktarın. Sistem, cihaz yazı tipini kullanır.</string>
     <string name="customization_text_size_help" formatted="false">Uygulamadaki tüm metinleri ölçekleyin. Büyük metinler bazı etiketlerin daha fazla satıra yayılmasına neden olabilir.</string>
     <string name="settings_customization_drawer_help" formatted="false">Gezinme çekmecesinin görünümünü seçin. Önizlemeler, seçmeden önce her stili gösterir.</string>
+    <string name="emulation_game_preparing">Oyun hazırlanıyor…</string>
+    <string name="settings_group_display_scaling">Görüntü ve ölçekleme</string>
+    <string name="settings_group_rendering_compatibility">İşleme uyumluluğu</string>
+    <string name="settings_group_shaders_cache">Gölgelendiriciler ve önbellek</string>
+    <string name="settings_group_audio_output">Ses çıkışı</string>
+    <string name="settings_group_audio_buffering">Ses arabelleği</string>
+    <string name="settings_group_input_devices">Giriş aygıtları</string>
+    <string name="settings_group_cpu_compilation">CPU ve derleme</string>
+    <string name="settings_group_diagnostics">Tanılama</string>
+    <string name="home_library_options">Kitaplık seçenekleri</string>
+    <string name="home_view_list">Liste olarak göster</string>
+    <string name="home_view_grid">Izgara olarak göster</string>
+    <string name="home_search">Oyun ara</string>
+    <string name="home_search_clear">Aramayı temizle</string>
+    <string name="home_sort_title_asc">İsim A-Z</string>
+    <string name="home_sort_title_desc">İsim Z-A</string>
+    <string name="home_sort_recent_desc">Son güncellenenler</string>
+    <string name="home_sort_recent_asc">En eski güncellenenler</string>
+    <string name="home_sort_size_desc">En büyük</string>
+    <string name="home_sort_size_asc">En küçük</string>
+    <string name="emulation_close_menu">Menüyü kapat</string>
+    <string name="emulation_play_time_badge">Oynama süresi %1$s</string>
+    <string name="emulation_menu_subtitle">Oyundan çıkmadan mevcut oturumu yönetin.</string>
+    <string name="home_empty_search_title">Sonuç yok</string>
+    <string name="home_empty_search_subtitle">Farklı bir isim deneyin veya sıralamayı değiştirin.</string>
+    <string name="save_manager_no_results_body">Başka bir oyun başlığı veya kayıt klasörü adı deneyin.</string>
+    <string name="profile_no_recent_events">Henüz yeni etkinlik yok.</string>
 </resources>

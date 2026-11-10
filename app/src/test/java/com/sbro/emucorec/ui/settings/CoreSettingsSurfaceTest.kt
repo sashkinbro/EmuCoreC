@@ -17,18 +17,23 @@ class CoreSettingsSurfaceTest {
     }
 
     @Test
-    fun inGameSurfaceOffersBootSettingsThroughTheDeferredApplyFlow() {
-        assertTrue(isCoreSettingVisibleOnSurface("Core@@PPU Decoder", Ps3CoreSettingsSurface.InGame))
-        assertTrue(isCoreSettingVisibleOnSurface("Video@@Renderer", Ps3CoreSettingsSurface.InGame))
+    fun inGameSurfaceKeepsUsefulCompatibilityOptionsAndHidesBootConfiguration() {
+        assertFalse(isCoreSettingVisibleOnSurface("Core@@PPU Decoder", Ps3CoreSettingsSurface.InGame))
+        assertFalse(isCoreSettingVisibleOnSurface("Video@@Renderer", Ps3CoreSettingsSurface.InGame))
         assertTrue(isCoreSettingVisibleOnSurface("Video@@Write Color Buffers", Ps3CoreSettingsSurface.InGame))
+        assertTrue(isCoreSettingVisibleOnSurface("Video@@MSAA", Ps3CoreSettingsSurface.InGame))
         assertFalse(isCoreSettingVisibleOnSurface("Video@@Vulkan@@Adapter", Ps3CoreSettingsSurface.InGame))
     }
 
     @Test
-    fun inGameSurfaceOffersAudioBackendsAndCompilationNotices() {
-        assertTrue(isCoreSettingVisibleOnSurface("Audio@@Recording Compatible", Ps3CoreSettingsSurface.InGame))
-        assertTrue(isCoreSettingVisibleOnSurface("Audio@@Cubeb Backend", Ps3CoreSettingsSurface.InGame))
-        assertTrue(isCoreSettingVisibleOnSurface("Miscellaneous@@Show SPU compilation hint", Ps3CoreSettingsSurface.InGame))
+    fun inGameSurfaceHidesAudioBackendsDebuggingAndCompilationConfiguration() {
+        assertFalse(isCoreSettingVisibleOnSurface("Audio@@Recording Compatible", Ps3CoreSettingsSurface.InGame))
+        assertFalse(isCoreSettingVisibleOnSurface("Audio@@Cubeb Backend", Ps3CoreSettingsSurface.InGame))
+        assertFalse(isCoreSettingVisibleOnSurface("Miscellaneous@@Show SPU compilation hint", Ps3CoreSettingsSurface.InGame))
+        assertFalse(isCoreSettingVisibleOnSurface("Video@@Disable On-Disk Shader Cache", Ps3CoreSettingsSurface.InGame))
+        assertFalse(isCoreSettingVisibleOnSurface("Video@@Disable Vulkan Memory Allocator", Ps3CoreSettingsSurface.InGame))
+        assertFalse(isCoreSettingVisibleOnSurface("Video@@Disable FIFO Reordering", Ps3CoreSettingsSurface.InGame))
+        assertTrue(isCoreSettingVisibleOnSurface("Audio@@Enable Time Stretching", Ps3CoreSettingsSurface.InGame))
         assertEquals(Ps3CoreSettingsCategory.Overlay, coreSettingsCategory("Miscellaneous@@Show SPU compilation hint"))
     }
 

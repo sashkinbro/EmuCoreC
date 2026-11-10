@@ -12,10 +12,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
+import com.sbro.emucorec.ui.common.AppAlertDialog as AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import com.sbro.emucorec.ui.common.appFilterChipColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -57,7 +58,7 @@ internal fun TouchComboEditorDialog(
                     Text(actions.firstOrNull { it.first == selectedPrimary }?.second ?: selectedPrimary)
                 }
                 Text(stringResource(R.string.controls_editor_secondary_action))
-                FilterChip(shape = neonPillShape(), selected = selectedSecondary == null, onClick = { selectedSecondary = null },
+                FilterChip(colors = appFilterChipColors(), shape = neonPillShape(), selected = selectedSecondary == null, onClick = { selectedSecondary = null },
                     label = { Text(stringResource(R.string.controls_editor_none)) }, modifier = Modifier.testTag("combo_secondary_none"))
                 ActionChips(actions.filterNot { it.first == selectedPrimary }, selectedSecondary, "secondary") {
                     selectedSecondary = it
@@ -79,7 +80,7 @@ internal fun TouchComboEditorDialog(
 private fun ActionChips(actions: List<Pair<String, String>>, selected: String?, prefix: String, onSelected: (String) -> Unit) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         actions.forEach { (id, label) ->
-            FilterChip(shape = neonPillShape(), selected = selected == id, onClick = { onSelected(id) }, label = { Text(label) },
+            FilterChip(colors = appFilterChipColors(), shape = neonPillShape(), selected = selected == id, onClick = { onSelected(id) }, label = { Text(label) },
                 modifier = Modifier.testTag("combo_${prefix}_$id"))
         }
     }

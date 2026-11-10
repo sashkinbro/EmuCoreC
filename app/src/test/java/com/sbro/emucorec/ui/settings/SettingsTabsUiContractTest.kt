@@ -50,6 +50,8 @@ class SettingsTabsUiContractTest {
         assertTrue("Game manager must expose per-title core settings", "Ps3CoreSettingsScope.Game" in manager)
         assertTrue("In-game menu must expose per-title core settings", "Ps3CoreSettingsScope.Game" in menu)
         assertTrue("Game manager must keep Vulkan driver and controller settings", "GameManagerTab.Graphics" in manager && "GameManagerTab.Controls" in manager)
+        assertTrue("Performance overlay needs its own manager tab", "GameManagerTab.Overlay -> GameCoreSettings(Ps3CoreSettingsCategory.Overlay" in manager)
+        assertFalse("Graphics must not render overlay settings a second time", "additionalCategories = setOf(Ps3CoreSettingsCategory.Overlay)" in manager)
         assertFalse("Raw core tab must not return to game manager", "GameManagerTab.Core" in manager)
         assertFalse("Raw core tab must not return to in-game menu", "EmulationMenuTab.Core" in menu)
         assertFalse("Global network settings do not belong in the live game menu", "EmulationMenuTab.Network" in menu)

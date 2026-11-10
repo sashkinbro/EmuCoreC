@@ -1,5 +1,7 @@
 package com.sbro.emucorec.ui.settings
 
+import com.sbro.emucorec.ui.common.appSliderColors
+
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -25,7 +27,7 @@ import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Restore
 import androidx.compose.material.icons.rounded.TextFields
-import androidx.compose.material3.AlertDialog
+import com.sbro.emucorec.ui.common.AppAlertDialog as AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -33,6 +35,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import com.sbro.emucorec.ui.common.appFilterChipColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -302,7 +305,7 @@ private fun ThemeChip(
     enabled: Boolean = true,
     onClick: () -> Unit
 ) {
-    FilterChip(shape = neonChipShape(), 
+    FilterChip(colors = appFilterChipColors(), shape = neonChipShape(),
         selected = selected,
         onClick = onClick,
         enabled = enabled,
@@ -429,7 +432,7 @@ private fun CustomizationSlider(
                 Text(valueLabel, color = MaterialTheme.colorScheme.primary)
             }
         }
-        Slider(
+        Slider(colors = appSliderColors(),
             value = value.toFloat(),
             onValueChange = { raw ->
                 val stepped = ((raw.toInt() + 2) / 5) * 5
@@ -447,7 +450,7 @@ private fun FontChip(
     label: String,
     onClick: () -> Unit
 ) {
-    FilterChip(shape = neonChipShape(), 
+    FilterChip(colors = appFilterChipColors(), shape = neonChipShape(),
         selected = selected,
         onClick = onClick,
         label = { Text(label) }
@@ -462,7 +465,7 @@ private fun CustomizationActionRow(
     selected: Boolean = false,
     onClick: () -> Unit
 ) {
-    val accent = if (selected) Color(0xFF4FC3A1) else MaterialTheme.colorScheme.primary
+    val accent = MaterialTheme.colorScheme.primary
     Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),

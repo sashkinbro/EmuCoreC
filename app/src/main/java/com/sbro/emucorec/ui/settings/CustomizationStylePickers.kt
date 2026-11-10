@@ -20,6 +20,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import com.sbro.emucorec.ui.common.appFilterChipColors
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,7 +63,7 @@ internal fun TouchControlStyleSection(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(TouchControlVisualStyle.entries, key = { it.name }) { style ->
-                FilterChip(shape = neonChipShape(), 
+                FilterChip(colors = appFilterChipColors(), shape = neonChipShape(),
                     selected = settings.touchControlVisualStyle == style,
                     onClick = { onStyleSelected(style) },
                     label = { Text(touchStyleLabel(style)) }
@@ -80,7 +81,7 @@ internal fun TouchControlStyleSection(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(TouchControlPressEffect.entries, key = { it.name }) { effect ->
-                FilterChip(shape = neonChipShape(), 
+                FilterChip(colors = appFilterChipColors(), shape = neonChipShape(),
                     selected = settings.touchControlPressEffect == effect,
                     onClick = { onPressEffectSelected(effect) },
                     label = { Text(touchPressEffectLabel(effect)) }

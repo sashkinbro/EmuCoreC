@@ -1,5 +1,6 @@
 package com.sbro.emucorec.ui.saves
 
+import com.sbro.emucorec.ui.common.EmptyStateCard
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -38,7 +39,7 @@ import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material3.AlertDialog
+import com.sbro.emucorec.ui.common.AppAlertDialog as AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -206,6 +207,8 @@ fun SaveDataScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
+ Column {
+
             SaveManagerHeader(
                 searchExpanded = searchExpanded,
                 onBackClick = backClick,
@@ -221,13 +224,14 @@ fun SaveDataScreen(
                     importLauncher.launch(arrayOf("application/zip", "application/octet-stream", "*/*"))
                 }
             )
-        }
-        item {
+        
+
             AnimatedVisibility(
                 visible = searchExpanded,
                 enter = fadeIn() + expandVertically(),
                 exit = fadeOut() + shrinkVertically()
             ) {
+ Box(Modifier.padding(top = 12.dp)) {
                 OutlinedTextField(
                     value = uiState.query,
                     onValueChange = viewModel::updateQuery,
@@ -242,8 +246,12 @@ fun SaveDataScreen(
                         unfocusedContainerColor = MaterialTheme.colorScheme.surface
                     )
                 )
-            }
-        }
+            
+ }
+}
+        
+ }
+ }
         item {
             SaveBackupCard(
                 busy = uiState.bulkBusy,
@@ -269,9 +277,15 @@ fun SaveDataScreen(
                     EmuCoreLoadingAnimation()
                 }
             }
-        } else if (uiState.saves.isEmpty()) {
+        } else if (uiState.saves.isEmpty() && !uiState.isLoading) {
             item {
-                EmptySaveState(
+                if (uiState.query.isNotBlank()) {
+                    EmptyStateCard(
+                        icon = Icons.Rounded.Search,
+                        title = stringResource(R.string.catalog_no_results_title),
+                        body = stringResource(R.string.save_manager_no_results_body),
+                    )
+                } else EmptySaveState(
                     focusTitle = uiState.focusTarget?.title,
                     onImportClick = {
                         pendingImportSaveId = uiState.focusTarget?.saveId
@@ -382,7 +396,7 @@ private fun SaveBackupCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Button(shape = neonButtonShape(), 
+                Button(shape = neonButtonShape(),
                     onClick = onBackupAll,
                     enabled = exportEnabled,
                     modifier = Modifier.weight(1f)
@@ -390,7 +404,7 @@ private fun SaveBackupCard(
                     Icon(Icons.Rounded.Save, contentDescription = null)
                     Text(stringResource(R.string.save_manager_backup_all), modifier = Modifier.padding(start = 8.dp))
                 }
-                OutlinedButton(shape = neonButtonShape(), 
+                OutlinedButton(shape = neonButtonShape(),
                     onClick = onRestoreAll,
                     enabled = restoreEnabled,
                     modifier = Modifier.weight(1f)
@@ -514,7 +528,7 @@ private fun SaveDataCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Button(shape = neonButtonShape(), 
+                Button(shape = neonButtonShape(),
                     onClick = onExport,
                     enabled = !busy,
                     modifier = Modifier.weight(1f)
@@ -522,7 +536,7 @@ private fun SaveDataCard(
                     Icon(Icons.Rounded.Save, contentDescription = null)
                     Text(stringResource(R.string.save_manager_export), modifier = Modifier.padding(start = 8.dp))
                 }
-                OutlinedButton(shape = neonButtonShape(), 
+                OutlinedButton(shape = neonButtonShape(),
                     onClick = onImport,
                     enabled = !busy,
                     modifier = Modifier.weight(1f)
@@ -531,7 +545,7 @@ private fun SaveDataCard(
                     Text(stringResource(R.string.save_manager_import), modifier = Modifier.padding(start = 8.dp))
                 }
             }
-            OutlinedButton(shape = neonButtonShape(), 
+            OutlinedButton(shape = neonButtonShape(),
                 onClick = onDelete,
                 enabled = !busy,
                 modifier = Modifier.fillMaxWidth()
@@ -548,42 +562,18 @@ private fun EmptySaveState(
     focusTitle: String?,
     onImportClick: () -> Unit
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 360.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            modifier = Modifier.widthIn(max = 520.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Text(
-                text = focusTitle?.let { stringResource(R.string.save_manager_empty_game_title, it) }
-                    ?: stringResource(R.string.save_manager_empty_title),
-                modifier = Modifier.fillMaxWidth(),
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onBackground,
-                textAlign = TextAlign.Center
-            )
-            Text(
-                text = if (focusTitle != null) {
-                    stringResource(R.string.save_manager_empty_game_body)
-                } else {
-                    stringResource(R.string.save_manager_empty_body)
-                },
-                modifier = Modifier.fillMaxWidth(),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
+    EmptyStateCard(
+        icon = Icons.Rounded.FolderOpen,
+        title = focusTitle?.let { stringResource(R.string.save_manager_empty_game_title, it) }
+            ?: stringResource(R.string.save_manager_empty_title),
+        body = stringResource(if (focusTitle != null) R.string.save_manager_empty_game_body else R.string.save_manager_empty_body),
+        action = {
             Button(shape = neonButtonShape(), onClick = onImportClick) {
                 Icon(Icons.Rounded.FolderOpen, contentDescription = null)
                 Text(stringResource(R.string.save_manager_import), modifier = Modifier.padding(start = 8.dp))
             }
         }
-    }
+    )
 }
 
 private fun formatSaveSize(bytes: Long): String {

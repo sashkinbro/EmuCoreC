@@ -133,7 +133,7 @@ class Ps3Core {
     external fun patchSetEnabled(hash: String, description: String, serial: String, appVersion: String, enabled: Boolean): Boolean
 
     companion object {
-        var initialized = false
+        @Volatile var initialized = false
         val instance = Ps3Core()
         var rootDirectory = ""
         var activeLibrary = mutableStateOf<String?>(null)

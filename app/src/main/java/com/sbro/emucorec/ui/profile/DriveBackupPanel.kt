@@ -1,5 +1,9 @@
 package com.sbro.emucorec.ui.profile
 
+import com.sbro.emucorec.ui.common.appSwitchColors
+
+import com.sbro.emucorec.ui.common.appFilterChipColors
+
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -163,7 +167,7 @@ internal fun DriveBackupPanel(viewModel: DriveBackupViewModel = sharedDriveViewM
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     listOf(0, 6, 12, 24).forEach { hours ->
-                        FilterChip(
+                        FilterChip(colors = appFilterChipColors(),
                             shape = neonChipShape(),selected = settings.intervalHours == hours, enabled = !state.busy,
                             onClick = { viewModel.configure { it.copy(intervalHours = hours) } },
                             label = { Text(if (hours == 0) stringResource(R.string.drive_manual) else stringResource(R.string.drive_hours, hours)) })
@@ -181,7 +185,7 @@ internal fun DriveBackupPanel(viewModel: DriveBackupViewModel = sharedDriveViewM
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     listOf(1, 3, 5, 10, 20).forEach { count ->
-                        FilterChip(
+                        FilterChip(colors = appFilterChipColors(),
                             shape = neonChipShape(),selected = settings.keepCopies == count, enabled = !state.busy,
                             onClick = { viewModel.configure { it.copy(keepCopies = count) } }, label = { Text(count.toString()) })
                     }
@@ -333,7 +337,7 @@ private fun DriveToggle(label: Int, checked: Boolean, enabled: Boolean, onChange
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), border = profileCardBorder()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(label), Modifier.weight(1f).padding(end = 12.dp), style = MaterialTheme.typography.bodyMedium)
-            Switch(checked, onChange, enabled = enabled)
+            Switch(checked = checked, onCheckedChange = onChange, enabled = enabled, colors = appSwitchColors())
         }
     }
 }

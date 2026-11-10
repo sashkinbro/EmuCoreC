@@ -10,6 +10,7 @@ data class SaveStateSlot(
     val sizeBytes: Long,
     val statePath: String? = null,
     val thumbnailPath: String? = null,
+    val thumbnailRevision: Long = 0L,
 ) {
     val slot: Int get() = index
     val timestamp: Long get() = modifiedSeconds * 1000

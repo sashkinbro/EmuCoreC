@@ -1,5 +1,8 @@
 package com.sbro.emucorec.ui.discord
 
+import com.sbro.emucorec.ui.common.EmptyStateCard
+import com.sbro.emucorec.ui.common.appSwitchColors
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -472,31 +475,11 @@ private fun DiscordInfoDialog(onDismiss: () -> Unit) {
 
 @Composable
 private fun DiscordEmptyFriendsRow() {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        shape = neonShape(18.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
-    ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Group,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Text(
-                text = stringResource(R.string.discord_friends_empty),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
+    EmptyStateCard(
+        icon = Icons.Rounded.Group,
+        title = stringResource(R.string.discord_friends_empty),
+        modifier = Modifier.padding(horizontal = 16.dp),
+    )
 }
 
 @Composable
@@ -664,7 +647,7 @@ private fun DiscordToggleRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (enabled) 1f else 0.55f)
                 )
             }
-            Switch(
+            Switch(colors = appSwitchColors(),
                 checked = checked,
                 enabled = enabled,
                 onCheckedChange = null,

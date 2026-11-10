@@ -1,5 +1,6 @@
 package com.sbro.emucorec.ui.settings
 
+import com.sbro.emucorec.ui.common.EmptyStateCard
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -58,6 +59,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import com.sbro.emucorec.ui.common.appFilterChipColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -276,9 +278,9 @@ fun GpuDriverScreen(
                 )
             }
         }
-        item {
+        if (searchVisible) item {
             AnimatedVisibility(
-                visible = searchVisible,
+                visible = true,
                 enter = fadeIn(animationSpec = tween(180)) + expandVertically(animationSpec = tween(220)),
                 exit = fadeOut(animationSpec = tween(120)) + shrinkVertically(animationSpec = tween(180))
             ) {
@@ -292,9 +294,9 @@ fun GpuDriverScreen(
                 )
             }
         }
-        item {
+        if (filtersVisible && uiState.remoteGpuDrivers.isNotEmpty()) item {
             AnimatedVisibility(
-                visible = filtersVisible && uiState.remoteGpuDrivers.isNotEmpty(),
+                visible = true,
                 enter = fadeIn(animationSpec = tween(180)) + expandVertically(animationSpec = tween(220)),
                 exit = fadeOut(animationSpec = tween(120)) + shrinkVertically(animationSpec = tween(180))
             ) {
@@ -318,7 +320,7 @@ fun GpuDriverScreen(
                     text = stringResource(R.string.settings_gpu_driver_catalog),
                     modifier = Modifier.weight(1f)
                 )
-                OutlinedButton(shape = neonButtonShape(), 
+                OutlinedButton(shape = neonButtonShape(),
                     onClick = viewModel::refreshGpuDriverCatalog,
                     enabled = !uiState.gpuDriverCatalogLoading
                 ) {
@@ -345,14 +347,19 @@ fun GpuDriverScreen(
         }
         if (!uiState.gpuDriverCatalogLoading && uiState.remoteGpuDrivers.isEmpty() && uiState.gpuDriverCatalogError == null) {
             item {
-                LoadingCard(text = stringResource(R.string.settings_gpu_driver_catalog_empty))
+                EmptyStateCard(
+                    icon = Icons.Rounded.CloudDownload,
+                    title = stringResource(R.string.settings_gpu_driver_catalog),
+                    body = stringResource(R.string.settings_gpu_driver_catalog_empty),
+                )
             }
         }
         if (!uiState.gpuDriverCatalogLoading && uiState.remoteGpuDrivers.isNotEmpty() && remoteDrivers.isEmpty()) {
             item {
-                ErrorCard(
+                EmptyStateCard(
+                    icon = Icons.Rounded.Search,
                     title = stringResource(R.string.settings_gpu_driver_no_matches),
-                    message = stringResource(R.string.settings_gpu_driver_no_matches_desc)
+                    body = stringResource(R.string.settings_gpu_driver_no_matches_desc),
                 )
             }
         }
@@ -469,7 +476,7 @@ private fun FilterChipRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items(filters) { filter ->
-            FilterChip(shape = neonChipShape(), 
+            FilterChip(colors = appFilterChipColors(), shape = neonChipShape(),
                 selected = selected == filter,
                 onClick = { onSelected(filter) },
                 label = {
@@ -585,20 +592,20 @@ private fun ActiveDriverCard(
             )
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (isGameScoped) {
-                    FilterChip(shape = neonChipShape(), 
+                    FilterChip(colors = appFilterChipColors(), shape = neonChipShape(),
                         selected = gameDriverOverride == null,
                         onClick = onUseGlobal,
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text(stringResource(R.string.settings_gpu_driver_global)) }
                     )
                 }
-                FilterChip(shape = neonChipShape(), 
+                FilterChip(colors = appFilterChipColors(), shape = neonChipShape(),
                     selected = if (isGameScoped) gameDriverOverride != null && gameDriverOverride.isBlank() else selectedDriver == null,
                     onClick = onUseSystem,
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text(stringResource(R.string.settings_gpu_driver_system)) }
                 )
-                Button(shape = neonButtonShape(), 
+                Button(shape = neonButtonShape(),
                     onClick = onInstallFromFile,
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -610,7 +617,7 @@ private fun ActiveDriverCard(
                 }
             }
             if (selectedDriver != null && canRemove) {
-                OutlinedButton(shape = neonButtonShape(), 
+                OutlinedButton(shape = neonButtonShape(),
                     onClick = onRemove,
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -670,7 +677,7 @@ private fun InstalledDriverRow(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = neonShape(18.dp),
-        color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.58f)),
         onClick = onSelect
     ) {
@@ -683,7 +690,7 @@ private fun InstalledDriverRow(
                 Text(
                     text = driver.name,
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                    color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface
+                    color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     text = driver.mainLibrary,
@@ -758,7 +765,7 @@ private fun RemoteDriverRow(
             }
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (installedDriver == null) {
-                    Button(shape = neonButtonShape(), 
+                    Button(shape = neonButtonShape(),
                         onClick = onDownload,
                         enabled = !downloading,
                         modifier = Modifier.fillMaxWidth()

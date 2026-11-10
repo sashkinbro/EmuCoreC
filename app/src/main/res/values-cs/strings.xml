@@ -299,10 +299,10 @@
     <string name="settings_help_content_description">Otevřít nápovědu k nastavení</string>
     <string name="settings_help_dialog_label">Průvodce nastavením</string>
     <string name="settings_help_dialog_tip">Měňte vždy jen jednu možnost a poté otestujte stejnou scénu ve hře, ať vidíte, co se skutečně zlepšilo.</string>
-    <string name="settings_help_gamepad_overlay">Zobrazuje ovládání na obrazovce, když nepoužíváte fyzický ovladač.\n\nPoužijte, aby dotykové ovládání nebo ovladač působily blíže způsobu, jakým hrajete. Neměňte, pokud ovládání již působí správně, protože extrémní hodnoty mohou ztížit míření, nabídky nebo funkce dotykové obrazovky.</string>
-    <string name="settings_help_overlay_scale">Mění velikost ovládání na obrazovce.\n\nPoužijte, aby dotykové ovládání nebo ovladač působily blíže způsobu, jakým hrajete. Neměňte, pokud ovládání již působí správně, protože extrémní hodnoty mohou ztížit míření, nabídky nebo funkce dotykové obrazovky.</string>
-    <string name="settings_help_overlay_opacity">Mění průhlednost ovládání na obrazovce.\n\nPoužijte, aby dotykové ovládání nebo ovladač působily blíže způsobu, jakým hrajete. Neměňte, pokud ovládání již působí správně, protože extrémní hodnoty mohou ztížit míření, nabídky nebo funkce dotykové obrazovky.</string>
-    <string name="settings_help_analog_multiplier">Mění citlivost analogové páčky.\n\nPoužijte, aby dotykové ovládání nebo ovladač působily blíže způsobu, jakým hrajete. Neměňte, pokud ovládání již působí správně, protože extrémní hodnoty mohou ztížit míření, nabídky nebo funkce dotykové obrazovky.</string>
+    <string name="settings_help_gamepad_overlay" formatted="false">Zobrazuje dotykový ovladač přes hru. Skryjte jej při použití fyzického ovladače nebo když překrývá důležitou část obrazu. Herní nabídka zůstává dostupná tlačítkem Zpět.</string>
+    <string name="settings_help_overlay_scale" formatted="false">Mění velikost všech dotykových prvků společně. Zvětšete je pro snazší ovládání nebo zmenšete pro větší viditelnou plochu hry. Jednotlivá tlačítka lze posouvat a měnit v dotykovém editoru.</string>
+    <string name="settings_help_overlay_opacity" formatted="false">Mění viditelnost dotykových prvků: 100% znamená plně neprůhledné, nižší hodnoty více odhalují hru. Mění pouze vzhled; průhledná tlačítka stále přijímají dotyky.</string>
+    <string name="settings_help_analog_multiplier" formatted="false">Násobí pohyb fyzických analogových páček před odesláním do hry. Nad 1,0 dosáhne plné výchylky dříve; pod 1,0 sníží maximální vstup. Mrtvá zóna uprostřed a mapování tlačítek se nastavují zvlášť.</string>
     <string name="settings_help_gamepad_deadzone">Filtruje drobné pohyby páčky blízko středu, aby se omezilo driftování. Zvyšte ji, pokud se kamera nebo postava pohybuje sama; snižte ji, pokud míření nereaguje.</string>
     <string name="settings_help_gamepad_trigger_threshold">Nastavuje, jak daleko se musí analogové spouště posunout, než se odešle vstup. Zvyšte ji u nespolehlivých spouští; snižte ji pro závodní hry nebo tlakově citlivé ovládání.</string>
     <string name="settings_help_gamepad_button_profile">Změní přiřazení čelních tlačítek fyzického ovladače před předáním vstupu emulátoru. Použijte, pokud rozmístění tlačítek ovladače neodpovídá křížku, kolečku, čtverci a trojúhelníku na PS3.</string>
@@ -1117,7 +1117,7 @@ Pokud si nejste jisti, toto nastavení neměňte.</string>
     <string name="core_help_video_anisotropic_filter_override" formatted="false">Vyšší hodnoty zvyšují ostrost textur na šikmých površích za cenu zdrojů GPU.
 Moderní GPU zvládnou toto nastavení v pohodě, dokonce i při 16x.
 Nechte toto na Automaticky, pokud chcete použít původní nastavení používané skutečným PS3.</string>
-    <string name="core_help_video_aspect_ratio" formatted="false">Nechte to na 16:9, pokud nemáte monitor 4:3.</string>
+    <string name="core_help_video_aspect_ratio" formatted="false">Vybírá poměr stran herního obrazu. Použijte poměr podporovaný hrou, zpravidla 16:9. Jiný poměr může obraz deformovat; roztažení na displej se nastavuje zvlášť.</string>
     <string name="core_help_audio_rsxaudio_avport" formatted="false">Určuje, který avport se používá k vzorkování zvukových dat.</string>
     <string name="core_help_audio_desired_audio_buffer_duration" formatted="false">Cílová doba trvání vyrovnávací paměti v milisekundách.
 Vyšší hodnoty usnadňují práci algoritmu ukládání do vyrovnávací paměti, ale mohou způsobit znatelné zpoždění zvuku.</string>
@@ -1134,12 +1134,11 @@ Změna těchto hodnot vyžaduje restart hry.
 Ruční nastavení použije vámi vybrané formáty, zatímco automatické nastavení umožní hře vybrat si ze všech dostupných formátů.</string>
     <string name="core_help_audio_audio_provider" formatted="false">Řídí, které PS3 audio API se používá.
 Hry používají CellAudio, zatímco VSH vyžaduje RSXAudio.</string>
-    <string name="core_help_audio_renderer" formatted="false">Cubeb používá multiplatformní přístup a podporuje ukládání do vyrovnávací paměti zvuku, takže je to doporučená možnost.
-Pokud není k dispozici, lze místo něj použít FAudio.</string>
+    <string name="core_help_audio_renderer" formatted="false">Vybírá systém zvukového výstupu. Ponechte výchozí volbu platformy, pokud neřešíte chybějící či poškozený zvuk. Změna vyžaduje restart hry; Null vypne zvuk.</string>
     <string name="core_help_input_output_background_input_enabled" formatted="false">Umožňuje zadávání pomocí padu a klávesnice, když není okno hry zaostřeno.</string>
     <string name="core_help_net_bind_address" formatted="false">IP adresa síťového rozhraní, na které se má naslouchat. Dostupné pouze ve vlastních konfiguracích.</string>
     <string name="core_help_input_output_buzz_emulated_controller" formatted="false">Podpora ovladačů Buzz!. Pokud hra vyžaduje Buzz! a nemáte fyzické ovladače, vyberte 1 nebo 2 ovladače. Pokud hra podporuje DualShock nebo máte fyzické ovladače Buzz!, vyberte Žádný.</string>
-    <string name="core_help_input_output_camera" formatted="false">Chcete-li použít výchozí kamerové zařízení vašeho operačního systému, vyberte Qt Kamera.</string>
+    <string name="core_help_input_output_camera" formatted="false">Android podporuje předstírané připojení kamery PS3 bez skutečného obrazu nebo žádnou kameru. Fyzické snímání není implementováno; Fake může splnit některé kontroly připojení, ale neposkytuje živé video.</string>
     <string name="core_help_input_output_camera_flip" formatted="false">Převrátí obraz kamery vodorovně, svisle nebo na obou osách.</string>
     <string name="core_help_input_output_camera_id" formatted="false">Vyberte kameru, kterou chcete používat během hraní.</string>
     <string name="core_help_input_output_camera_type" formatted="false">V závislosti na hře možná budete muset vybrat konkrétní typ kamery.</string>
@@ -1148,8 +1147,8 @@ Ovlivňuje software, který používá systémový čas k výpočtu věcí, jako
     <string name="core_help_savestate_compatible_savestate_mode" formatted="false">Tento režim upřednostňuje v emulaci SPU kompatibilitu uložených stavů, ale může mírně snížit výkon. Při vypnutí nemusí některé hry dovolit uložit stav a do protokolu zapíší chybu pozastavení SPU.</string>
     <string name="core_help_system_console_time_offset_s" formatted="false">Nastaví čas konzole jako posun vůči skutečnému času. Tlačítkem Nastavit na aktuální čas jej lze obnovit na aktuální čas systému.</string>
     <string name="core_help_audio_convert_to_16_bit" formatted="false">Používá 16bitové zvukové vzorky místo výchozích 32bitových vzorků s plovoucí řádovou čárkou. Pomůže s chybnými zvukovými ovladači, pokud zvuk chybí nebo je zcela poškozený.</string>
-    <string name="core_help_video_custom_anaglyph_matrices_matrix_left" formatted="false">Nastaví stereoskopické 3D vykreslování; dostupné jen ve vlastních konfiguracích s výchozím rozlišením 720p. Anaglyf používá pro každé oko jinou barvu, kterou odfiltrují vhodné brýle. Režim Vedle sebe běžně podporují aplikace pro VR. Režim Nad sebou je bližší nativnímu stereoskopickému výstupu, ale podporuje jej méně aplikací.</string>
-    <string name="core_help_video_custom_anaglyph_matrices_matrix_right" formatted="false">Nastaví stereoskopické 3D vykreslování; dostupné jen ve vlastních konfiguracích s výchozím rozlišením 720p. Anaglyf používá pro každé oko jinou barvu, kterou odfiltrují vhodné brýle. Režim Vedle sebe běžně podporují aplikace pro VR. Režim Nad sebou je bližší nativnímu stereoskopickému výstupu, ale podporuje jej méně aplikací.</string>
+    <string name="core_help_video_custom_anaglyph_matrices_matrix_left" formatted="false">Vlastní barevná matice 3×3 pro toto oko v anaglyfním 3D. Upravujte pro konkrétní barevné brýle nebo kalibraci; nevhodné hodnoty zkreslí barvy. Běžný 2D výstup neovlivňuje.</string>
+    <string name="core_help_video_custom_anaglyph_matrices_matrix_right" formatted="false">Vlastní barevná matice 3×3 pro toto oko v anaglyfním 3D. Upravujte pro konkrétní barevné brýle nebo kalibraci; nevhodné hodnoty zkreslí barvy. Běžný 2D výstup neovlivňuje.</string>
     <string name="core_help_system_date_format" formatted="false">Vyberte formát data PS3.</string>
     <string name="core_help_core_debug_console_mode" formatted="false">Zvýší dostupnou systémovou paměť na úroveň konzole DECR nebo vyšší. Některý software se pak chová jinak než na běžné prodávané konzoli.</string>
     <string name="core_help_video_debug_output" formatted="false">Povolí vestavěnou funkci ladění vybraného rozhraní API.
@@ -1214,11 +1213,7 @@ Pokud si nejste jisti, tuto možnost nepoužívejte.</string>
 · Auto je stávající chování, zaujaté směrem k hloubce.
 · Upřednostnit barvu zachová barevnou vazbu, když je povolen barevný zápis a hloubkový zápis není. Opravuje chybějící geometrii v některých odložených rendererech (např. Starhawk) za cenu vynechání testu hloubky pro dané kreslení.
 · Upřednostnit hloubku je prozatím stejný jako Auto.</string>
-    <string name="core_help_video_frame_limit" formatted="false">Vypnuto je nejrychlejší možností.
-Použití omezovače snímků přidá další režii a zpomalí hru. Některé hry však spadnou, pokud je snímková frekvence příliš vysoká.
-Nativní PS3 by se mělo používat pouze v případě, že Auto nefunguje správně, protože může způsobit problémy s rychlostí snímků.
-Nekonečný přidává pozitivní zpětnovazební smyčku, která přidává další signál vblank na snímek, což umožňuje, aby více her bylo neomezených fps.
-Zkušení uživatelé, kteří potřebují jiné limity rámců, by měli použít nastavení \"Druhý limit snímkové frekvence\" v konfiguračním souboru.</string>
+    <string name="core_help_video_frame_limit" formatted="false">Omezuje počet herních snímků za sekundu. PS3 Native dodržuje časování konzole; pevné hodnoty mohou změnit rychlost hry nebo fyziku. Bez limitu může vzrůst zahřívání nebo chybovost her očekávajících omezení.</string>
     <string name="core_help_video_fidelityfx_cas_sharpening_intensity" formatted="false">Určuje intenzitu doostření FidelityFX Super Rozlišení. Vyšší hodnoty dají ostřejší obraz, ale mohou způsobit grafické artefakty.</string>
     <string name="core_help_input_output_ghltar_emulated_controller" formatted="false">Guitar Hero Live (GHL) Podpora ovladače kytary.
 Vyberte 1 nebo 2 ovladače, pokud hra vyžaduje ovladače GHL Guitar a nemáte skutečné kytarové ovladače.
@@ -1254,9 +1249,7 @@ Toto nastavení je dostupné pouze v globální konfiguraci.</string>
 Hry mohou používat složku mezipaměti k dočasnému ukládání dat mimo systémovou paměť. Neslouží k dlouhodobému skladování.
 
 Toto nastavení je dostupné pouze v globální konfiguraci.</string>
-    <string name="core_help_core_max_llvm_compile_threads" formatted="false">Omezuje maximální počet vláken použitých pro počáteční kompilaci modulu PPU a SPU.
-Snižte tuto hodnotu, abyste zvýšili výkon jiných otevřených aplikací.
-Výchozí nastavení používá všechna dostupná vlákna.</string>
+    <string name="core_help_core_max_llvm_compile_threads" formatted="false">Maximum souběžných úloh počáteční kompilace PPU/SPU. 0 volí automatické plánování podle CPU a dostupné paměti. Nižší ruční hodnota může kompilaci zpomalit; vyšší zvyšuje spotřebu RAM a zahřívání.</string>
     <string name="core_help_core_max_cpu_preempt_count" formatted="false">Snižuje využití procesoru a spotřebu energie a prodlužuje výdrž baterie v mobilních zařízeních. (0 znamená zakázáno)
 Vyšší hodnoty způsobí výraznější efekt, ale mohou způsobit problémy se zvukem nebo výkonem. Doporučuje se hodnota 50 nebo méně.
 Tato možnost si vynutí limit FPS, protože je aktivní, když je snímková frekvence stabilní.
@@ -1268,10 +1261,7 @@ Omezení počtu vláken pravděpodobně způsobí pády; je doporučeno ponechat
     <string name="core_help_core_mfc_debug" formatted="false">Vytváří protokoly MFC.
 Užitečné pouze pro vývojáře.
 Toto nikdy nepoužívejte.</string>
-    <string name="core_help_audio_microphone_devices" formatted="false">Standardní by se měl používat pro většinu her.
-SingStar emuluje zařízení SingStar a měl by být používán s hrami SingStar.
-Fyzický SingStar by se měl používat pouze se zařízením REAL SingStar s hrami SingStar.
-Rocksmith by měl být použit s hardwarovým klíčem Rocksmith.</string>
+    <string name="core_help_audio_microphone_devices" formatted="false">Vybírá fyzické záznamové zařízení emulovaného mikrofonu. Vyžaduje oprávnění mikrofonu v Androidu. Typ mikrofonu určuje příslušenství PS3 viditelné hrou; tato volba vybírá zdroj zvuku.</string>
     <string name="core_help_audio_microphone_type" formatted="false">Standardní by se měl používat pro většinu her.
 SingStar emuluje zařízení SingStar a měl by být používán s hrami SingStar.
 Fyzický SingStar by se měl používat pouze se zařízením REAL SingStar s hrami SingStar.
@@ -1312,10 +1302,10 @@ Přestože v současné době také pozastavuje hraní, nedoporučuje se na něj
     <string name="core_help_video_performance_overlay_show_header" formatted="false">V horní části překryvu výkonu zobrazí aplikaci, sestavení a verzi jádra, dole řádky CPU a GPU.</string>
     <string name="core_help_video_performance_overlay_font_size_px" formatted="false">Nastaví velikost písma překryvu výkonu (měřeno v pixelech).</string>
     <string name="core_help_video_performance_overlay_framerate_datapoints" formatted="false">Nastavuje množství datových bodů použitých v grafu snímkové frekvence.</string>
-    <string name="core_help_video_performance_overlay_framerate_graph_detail_level" formatted="false">Řídí množství informací zobrazených na překryv výkonu.</string>
+    <string name="core_help_video_performance_overlay_framerate_graph_detail_level" formatted="false">Vybírá popisky a statistiky grafu FPS. Více podrobností pomáhá posoudit plynulost zobrazování, ale nezvyšuje výkon hry.</string>
     <string name="core_help_video_performance_overlay_enable_framerate_graph" formatted="false">Povolí nebo zakáže graf snímkové frekvence.</string>
     <string name="core_help_video_performance_overlay_frametime_datapoints" formatted="false">Nastavuje množství datových bodů použitých v grafu frametime.</string>
-    <string name="core_help_video_performance_overlay_frametime_graph_detail_level" formatted="false">Řídí množství informací zobrazených na překryv výkonu.</string>
+    <string name="core_help_video_performance_overlay_frametime_graph_detail_level" formatted="false">Vybírá popisky a statistiky grafu času snímku. Špičky odhalují nepravidelnost zobrazování; mění pouze graf, nikoli časování hry.</string>
     <string name="core_help_video_performance_overlay_enable_frametime_graph" formatted="false">Povolí nebo zakáže graf doby snímků.</string>
     <string name="core_help_video_performance_overlay_horizontal_margin" formatted="false">Nastavuje horizontální vzdálenost k okraji obrazovky vzhledem k kvadrantu obrazovky (měřeno v %).</string>
     <string name="core_help_video_performance_overlay_vertical_margin" formatted="false">Nastaví vertikální vzdálenost k okraji obrazovky vzhledem k kvadrantu obrazovky (měřeno v %).</string>
@@ -1329,7 +1319,7 @@ Obnovovací frekvence překryvu výkonu neovlivňuje statistiky snímkového gra
     <string name="core_help_core_ppu_debug" formatted="false">Vytváří protokoly PPU.
 Užitečné pouze pro vývojáře.
 Toto nikdy nepoužívejte.</string>
-    <string name="core_help_core_ppu_decoder" formatted="false">Před prvním spuštěním znovu zkompiluje a uloží kód PPU hry pomocí rekompilátoru LLVM. Toto je zdaleka nejrychlejší možnost a měla by se používat vždy. Pokud narazíte na problémy s kompatibilitou, vraťte se k některému z interpretů a zkuste to znovu. Pokud si nejste jisti, použijte tuto možnost.</string>
+    <string name="core_help_core_ppu_decoder" formatted="false">Určuje způsob vykonávání kódu PPU. LLVM bývá rychlejší a používá moduly znovu, dokud se nezmění kód nebo důležitá nastavení. Interpret vyzkoušejte pouze při konkrétním problému s kompatibilitou.</string>
     <string name="core_help_core_ppu_reservation_priority_over_spus" formatted="false">Poskytněte PPU výhodu při provádění, když SPU používají rezervace. Toto nastavení je doporučeno pouze pro několik her pro zlepšení výkonu. NEPOUŽÍVEJTE jej bez doporučení z důvodu možného snížení výkonu.</string>
     <string name="core_help_core_ppu_vector_nan_handling" formatted="false">Opravuje výsledky NaN ve vektorových instrukcích PPU. Pokud si nejste jisti, toto nastavení neměňte.</string>
     <string name="core_help_video_accurate_zcull_stats" formatted="false">Změní chování synchronizace sestavy ZCULL. Experimentujte, abyste našli nejlepší možnost pro vaši hru. Pro většinu her se doporučuje přibližný režim. · Přesnost je nejpřesnější pro chování PS3. Vyžadováno pro přesné zobrazení v některých titulech, jako jsou Demon\'s Souls a The Darkness. · Přibližný je mnohem rychlejší způsob generování okluzních dat, která se nemusí vždy shodovat s tím, co by generoval PS3. Funguje dobře s většinou her PS3. · Volnější úplně změní metodu synchronizace a může výrazně zlepšit výkon v některých hrách nebo úplně zlomit jiné.</string>
@@ -1337,22 +1327,22 @@ Toto nikdy nepoužívejte.</string>
     <string name="core_help_miscellaneous_prevent_display_sleep_while_running_games" formatted="false">Zabraňte spánku displeje, když je spuštěna hra. To vyžaduje službu org.freedesktop.ScreenSaver D-Bus v systému Linux. Tato možnost bude deaktivována, pokud aktuální platforma nepodporuje ovládání spánku displeje.</string>
     <string name="core_help_net_psn_country" formatted="false">Změní zemi RPCN.</string>
     <string name="core_help_net_psn_status" formatted="false">Pokud je nastaveno na RPCN, RPCS3 použije server RPCN jako připojení PSN, pokud je hra podporována. Pokud je nastaveno na Simulované, RPCS3 se pokusí zfalšovat připojení PSN, ale jakýkoli skutečný pokus o použití funkce PSN může vést k chybám nebo selhání. Simulace je k dispozici pouze ve vlastních konfiguracích.</string>
-    <string name="core_help_video_read_color_buffers" formatted="false">Inicializuje paměť cíle vykreslování z paměti vm.</string>
-    <string name="core_help_video_read_depth_buffer" formatted="false">Inicializuje paměť cíle vykreslování z paměti vm.</string>
+    <string name="core_help_video_read_color_buffers" formatted="false">Před vykreslením čte barvy z emulované paměti PS3. Může opravit chybějící obraz či efekty, pokud hra mění vykreslovací cíle přes CPU; další přenosy mohou snížit rychlost.</string>
+    <string name="core_help_video_read_depth_buffer" formatted="false">Před vykreslením čte hloubku z emulované paměti PS3. Použijte u her s chybami hloubky; dodatečné přenosy mohou snížit výkon.</string>
     <string name="core_help_video_record_with_overlays" formatted="false">Umožňuje nahrávání s překryvy. To má vliv i na snímky obrazovky.</string>
     <string name="core_help_video_relaxed_zcull_sync" formatted="false">Změní chování synchronizace sestavy ZCULL. Experimentujte, abyste našli nejlepší možnost pro vaši hru. Pro většinu her se doporučuje přibližný režim. · Přesnost je nejpřesnější pro chování PS3. Vyžadováno pro přesné zobrazení v některých titulech, jako jsou Demon\'s Souls a The Darkness. · Přibližný je mnohem rychlejší způsob generování okluzních dat, která se nemusí vždy shodovat s tím, co by generoval PS3. Funguje dobře s většinou her PS3. · Volnější úplně změní metodu synchronizace a může výrazně zlepšit výkon v některých hrách nebo úplně zlomit jiné.</string>
     <string name="core_help_video_renderdoc_compatibility_mode" formatted="false">Umožňuje použití klasických vyrovnávacích pamětí OpenGL, které umožňují nástrojům pro zachycení pracovat se RPCS3, např. RenderDoc. Také umožňuje Vulkan používat značky ladění pro hezčí zachycení Renderdocu. Pokud si nejste jisti, tuto možnost nepoužívejte.</string>
     <string name="core_help_video_renderer" formatted="false">Vulkan se doporučuje pro Android. OpenGL používá backend kompatibility OpenGL ES a může pomoci s grafickými problémy specifickými pro hry.</string>
     <string name="core_help_video_resolution" formatted="false">Toto nastavení bude ignorováno, pokud je Měřítko rozlišení nastaveno na cokoliv jiného než 100 %! Nechte to na 1280x720. Každá hra PS3 je kompatibilní s tímto rozlišením. 1920x1080 používejte pouze v případě, že to hra podporuje. Zřídka kvůli chybám emulace se některé hry vykreslí pouze v nízkém rozlišení, jako je 480p.</string>
     <string name="core_help_video_resolution_scale" formatted="false">Změní rozlišení hry o dané procento. Základní rozlišení je vždy 1280x720. Pokud chcete použít normální možnosti rozlišení, nastavte tuto hodnotu na 100 %. Hodnoty pod 100 % obvykle výkon nezlepší.</string>
-    <string name="core_help_video_screen_size_in_inches" formatted="false">Nastaví stereoskopické 3D vykreslování; dostupné jen ve vlastních konfiguracích s výchozím rozlišením 720p. Anaglyf používá pro každé oko jinou barvu, kterou odfiltrují vhodné brýle. Režim Vedle sebe běžně podporují aplikace pro VR. Režim Nad sebou je bližší nativnímu stereoskopickému výstupu, ale podporuje jej méně aplikací.</string>
+    <string name="core_help_video_screen_size_in_inches" formatted="false">Hlásí hrám úhlopříčku displeje v palcích prostřednictvím video API PS3. Používá se při stereoskopické kalibraci; nemění rozlišení Androidu ani škálování obrazu.</string>
     <string name="core_help_input_output_load_sdl_gamecontroller_mappings" formatted="false">Načte databázi SDL GameController pro lepší kompatibilitu ovladačů. Používá se jen při obsluze ovladačů přes SDL.</string>
     <string name="core_help_core_set_daz_and_ftz" formatted="false">Nastavuje speciální příznaky MXCSR pro ladění chyb v operacích SSE. Zrychluje výkon PPU za cenu přesnosti.</string>
     <string name="core_help_video_shader_compiler_threads" formatted="false">Počet vláken, která se mají použít pro backend kompilátoru shaderu. Má vliv pouze tehdy, když je režim shaderu nastaven na jeden z asynchronních režimů.</string>
     <string name="core_help_video_shader_loading_dialog_blur_effect_strength" formatted="false">Mění intenzitu rozostření pozadí nativního dialogu načítání shaderů pro lepší čitelnost nebo vzhled.</string>
     <string name="core_help_video_shader_loading_dialog_darkening_effect_strength" formatted="false">Mění intenzitu ztmavení pozadí nativního dialogu načítání shaderů pro lepší čitelnost nebo vzhled.</string>
     <string name="core_help_video_shader_loading_dialog_allow_custom_background" formatted="false">Zobrazí obrázek na pozadí nativního dialogu nebo obrazovky načítání shaderů. Výchozí obrázek je /PS3_GAME/PIC1.PNG.</string>
-    <string name="core_help_video_shader_mode" formatted="false">Doporučená možnost. Pokud shader není v mezipaměti, nic se s ním nevykreslí, dokud se nezkompiluje. Části obrazu se proto mohou objevit se zpožděním.</string>
+    <string name="core_help_video_shader_mode" formatted="false">Určuje přípravu chybějících GPU shaderů. Asynchronní režimy omezují pauzy, ale efekty mohou dočasně chybět. Interpret shaderů tyto výpadky omezuje za cenu delší přípravy a vyšší zátěže GPU.</string>
     <string name="core_help_video_shader_precision" formatted="false">Řídí úroveň přesnosti generovaných shaderů. Nízká přesnost generuje mnohem rychlejší kód v závislosti na hardwaru, ale někdy může způsobit drobné vizuální závady nebo blikání.</string>
     <string name="core_help_miscellaneous_show_analog_limiter_toggle_hint" formatted="false">Zobrazuje nápovědu k přepnutí analogového omezovače pomocí nativního překrytí.</string>
     <string name="core_help_miscellaneous_show_autosave_autoload_hint" formatted="false">Zobrazí nápovědu automatického ukládání a načítání v nativním překryvu.</string>
@@ -1368,9 +1358,9 @@ Toto nikdy nepoužívejte.</string>
     <string name="core_help_miscellaneous_silence_all_logs" formatted="false">Zastavte zápis jakýchkoli protokolů po spuštění hry. Nepoužívejte, pokud si nemyslíte, že je to nutné.</string>
     <string name="core_help_core_sleep_timers_accuracy" formatted="false">Mění přesnost dob uspání. Volba Stejné jako hostitelský systém zachovává přesnost operačního systému, Všechny časovače se ji snaží zlepšit. Pouze usleep omezuje úpravy na systémové volání usleep. Výkon se může změnit neočekávaným způsobem.</string>
     <string name="core_help_core_spu_block_size" formatted="false">Řídí analyzátor SPU, zejména velikost zkompilovaných jednotek. Mega a Giga mohou zlepšit výkon spojením menších jednotek do větších; počet jednotek klesne, ale jejich velikost vzroste. Pro nejlepší kompatibilitu zvolte Bezpečný.</string>
-    <string name="core_help_core_spu_cache" formatted="false">Před spuštěním překompiluje a ukládá do mezipaměti kód SPU hry pomocí rekompilátoru LLVM, což zvyšuje dobu spouštění navíc. Jedná se o nejrychlejší možnost s velmi dobrou kompatibilitou. Pokud se setkáte s problémy, použijte rekompilátor ASMJIT.</string>
+    <string name="core_help_core_spu_cache" formatted="false">Ukládá nalezené programy SPU a připravuje jejich mezipaměť před hraním. Omezuje opakovanou kompilaci při dalších spuštěních. Nový kód se může kompilovat i během hry; vypnutí může zvýšit záškuby.</string>
     <string name="core_help_core_spu_debug" formatted="false">Vytváří protokoly SPU. Užitečné pouze pro vývojáře. Toto nikdy nepoužívejte.</string>
-    <string name="core_help_core_spu_decoder" formatted="false">Před spuštěním překompiluje a ukládá do mezipaměti kód SPU hry pomocí rekompilátoru LLVM, což zvyšuje dobu spouštění navíc. Jedná se o nejrychlejší možnost s velmi dobrou kompatibilitou. Pokud se setkáte s problémy, použijte rekompilátor ASMJIT.</string>
+    <string name="core_help_core_spu_decoder" formatted="false">Určuje způsob vykonávání kódu SPU. LLVM vytváří nativní kód pro vyšší rychlost; interprety slouží hlavně ke kontrole kompatibility a mohou být výrazně pomalejší. Změna dekodéru může vyžadovat obnovu mezipaměti.</string>
     <string name="core_help_core_spu_loop_detection" formatted="false">Pokuste se detekovat podmínky smyčky v jádrech SPU a použijte je jako rady pro plánování. Zlepšuje výkon a snižuje využití procesoru. Ve vzácných případech může způsobit vážné zasekávání zvuku.</string>
     <string name="core_help_core_spu_profiler" formatted="false">Je-li povoleno, výkon SPU se měří za běhu. Povolit pouze na žádost vývojáře, protože když je povoleno, samo o sobě trochu snižuje výkon.</string>
     <string name="core_help_miscellaneous_start_games_in_fullscreen_mode" formatted="false">Automaticky přepne okno hry na celou obrazovku. Dvojitým kliknutím na okno hry nebo stisknutím Alt+Enter přepnete režim celé obrazovky a okna.</string>
@@ -1388,7 +1378,7 @@ Toto nikdy nepoužívejte.</string>
     <string name="core_help_audio_time_stretching_threshold" formatted="false">Práh naplnění zvukové vyrovnávací paměti v procentech. Pod touto hodnotou se spustí časové roztažení zvuku.</string>
     <string name="core_help_input_output_turntable_emulated_controller" formatted="false">Podpora gramofonových ovladačů DJ Hero. Pokud je hra vyžaduje a nemáte fyzické ovladače, vyberte 1 nebo 2 ovladače. Pokud hra podporuje DualShock nebo máte fyzické ovladače, vyberte Žádný. Fyzický gramofonový ovladač lze používat současně s emulovaným.</string>
     <string name="core_help_miscellaneous_use_native_user_interface" formatted="false">Umožňuje použití nativního HUD v okně hry, které může komunikovat s herními ovladači. Když je zakázáno, použijí se místo něj běžné dialogy Qt. V současné době podporuje klávesnice na obrazovce pouze anglické rozložení kláves.</string>
-    <string name="core_help_video_vulkan_use_re_bar_for_gpu_uploads" formatted="false">Vulkan se pokusí využít adresní prostor PCI-e Resizable BAR pro přenos časově citlivých dat do GPU. Při nízké základní snímkové frekvenci může výrazně zrychlit karty NVIDIA. U her s velmi vysokou snímkovou frekvencí může naopak snížit výkon GPU všech výrobců.</string>
+    <string name="core_help_video_vulkan_use_re_bar_for_gpu_uploads" formatted="false">Vybírá koherentní paměť dostupnou CPU pro časově citlivé přenosy Vulkan. Android používá sdílenou RAM, nikoli desktopový hardware PCIe Re-BAR. Výsledek závisí na ovladači GPU; porovnávejte stejnou scénu.</string>
     <string name="core_help_miscellaneous_use_recursive_scan" formatted="false">Umožňuje použití rekurzivního skenování podsložek při skenování her z vybrané složky. Když je tato možnost zakázána, hry se kontrolují pouze ve vybrané složce.</string>
     <string name="core_help_video_vblank_ntsc_fixup" formatted="false">Vynásobí rychlost VBLANK 1000/1001 pro hodnoty jako 59,94 Hz. Je známo, že opravuje rytmickou hru Space Channel 5 Part 2</string>
     <string name="core_help_video_vblank_rate" formatted="false">Nastavuje frekvenci vertikálních zatemňovacích signálů, které emulátor vysílá. Ovlivňuje načasování událostí, které závisí na těchto signálech.</string>
@@ -1398,7 +1388,7 @@ Toto nikdy nepoužívejte.</string>
     <string name="core_help_video_vulkan_asynchronous_texture_streaming" formatted="false">Přenáší textury do GPU souběžně s 3D vykreslováním pomocí asynchronních výpočtů. Může zrychlit výkonnější GPU s volnou kapacitou. Funguje jen s Vulkanem a při dostatečně výkonném CPU výrazně těží ze zapnutého MTRSX.</string>
     <string name="core_help_miscellaneous_window_title_format" formatted="false">Nastaví název okna hry. Změna názvu nebo přidání snímkové frekvence může způsobit, že chybný či zastaralý nahrávací software RPCS3 nerozpozná.</string>
     <string name="core_help_video_write_color_buffers" formatted="false">Zapněte při chybějící grafice nebo rozbitém osvětlení ve hře. V některých případech sníží výkon a způsobí zadrhávání. Vyžadováno pro Demon’s Souls.</string>
-    <string name="core_help_video_write_depth_buffer" formatted="false">Zapisuje hodnoty vyrovnávací paměti hloubky do paměti vm.</string>
+    <string name="core_help_video_write_depth_buffer" formatted="false">Zapisuje vypočtenou hloubku zpět do emulované paměti PS3. Některé hry ji potřebují pro efekty a testy viditelnosti. Zapínejte kvůli konkrétní grafické chybě, protože čtení z GPU může být náročné.</string>
     <string name="core_help_core_spu_xfloat_accuracy" formatted="false">Určuje přesnost zpracování vektorů s plovoucí řádovou čárkou v SPU. Opravuje chyby v různých hrách za cenu výkonu. Platí jen při dekodéru SPU nastaveném na Dynamický nebo LLVM.</string>
     <string name="core_label_chinese_simplified">Čínština (zjednodušená)</string>
     <string name="core_label_chinese_traditional">Čínština (tradiční)</string>
@@ -1974,4 +1964,31 @@ Toto nikdy nepoužívejte.</string>
     <string name="customization_font_help" formatted="false">Vyberte písmo aplikace nebo importujte soubor TTF či OTF. Systém použije písmo zařízení.</string>
     <string name="customization_text_size_help" formatted="false">Změňte velikost textu v celé aplikaci. Větší text může některé popisky rozdělit do více řádků.</string>
     <string name="settings_customization_drawer_help" formatted="false">Vyberte vzhled navigačního panelu. Náhledy ukazují každý styl před výběrem.</string>
+    <string name="emulation_game_preparing">Příprava hry…</string>
+    <string name="settings_group_display_scaling">Obraz a škálování</string>
+    <string name="settings_group_rendering_compatibility">Kompatibilita vykreslování</string>
+    <string name="settings_group_shaders_cache">Shadery a mezipaměť</string>
+    <string name="settings_group_audio_output">Zvukový výstup</string>
+    <string name="settings_group_audio_buffering">Vyrovnávací paměť zvuku</string>
+    <string name="settings_group_input_devices">Vstupní zařízení</string>
+    <string name="settings_group_cpu_compilation">CPU a kompilace</string>
+    <string name="settings_group_diagnostics">Diagnostika</string>
+    <string name="home_library_options">Možnosti knihovny</string>
+    <string name="home_view_list">Zobrazit jako seznam</string>
+    <string name="home_view_grid">Zobrazit jako mřížku</string>
+    <string name="home_search">Hledat hry</string>
+    <string name="home_search_clear">Vymazat hledání</string>
+    <string name="home_sort_title_asc">Název A-Z</string>
+    <string name="home_sort_title_desc">Název Z-A</string>
+    <string name="home_sort_recent_desc">Nedávno aktualizované</string>
+    <string name="home_sort_recent_asc">Nejstarší aktualizované</string>
+    <string name="home_sort_size_desc">Největší</string>
+    <string name="home_sort_size_asc">Nejmenší</string>
+    <string name="emulation_close_menu">Zavřít menu</string>
+    <string name="emulation_play_time_badge">Doba hraní %1$s</string>
+    <string name="emulation_menu_subtitle">Spravujte aktuální relaci, aniž byste opustili hru.</string>
+    <string name="home_empty_search_title">Žádné výsledky</string>
+    <string name="home_empty_search_subtitle">Zkuste jiný název nebo změňte řazení.</string>
+    <string name="save_manager_no_results_body">Zkuste jiný název hry nebo složky s uloženými daty.</string>
+    <string name="profile_no_recent_events">Zatím žádné nedávné události.</string>
 </resources>

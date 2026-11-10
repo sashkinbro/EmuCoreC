@@ -1,5 +1,7 @@
 package com.sbro.emucorec.ui.detail
 
+import com.sbro.emucorec.ui.common.EmptyStateCard
+import androidx.compose.material.icons.rounded.SportsEsports
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.ContentValues
@@ -57,7 +59,7 @@ import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material.icons.rounded.SmartDisplay
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.VideoLibrary
-import androidx.compose.material3.AlertDialog
+import com.sbro.emucorec.ui.common.AppAlertDialog as AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -345,7 +347,7 @@ fun GameDetailScreen(
                                     DetailSourceCard(text = stringResource(R.string.detail_igdb_source_note))
                                 }
                                 if (launchGameClick != null) {
-                                    Button(shape = neonButtonShape(), 
+                                    Button(shape = neonButtonShape(),
                                         onClick = launchGameClick,
                                         modifier = Modifier.widthIn(min = 240.dp, max = 320.dp)
                                     ) {
@@ -460,7 +462,7 @@ fun GameDetailScreen(
                                     .widthIn(max = contentMaxWidth)
                                     .padding(horizontal = horizontalInset)
                             ) {
-                                Button(shape = neonButtonShape(), 
+                                Button(shape = neonButtonShape(),
                                     onClick = launchGameClick,
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
@@ -750,35 +752,13 @@ private fun SkeletonBlock(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun EmptyDetailState(
-    isCatalogAvailable: Boolean,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = neonShape(22.dp),
-        color = MaterialTheme.colorScheme.surface
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                text = stringResource(R.string.detail_empty_title),
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = stringResource(
-                    if (isCatalogAvailable) R.string.detail_empty_body
-                    else R.string.detail_catalog_missing_body
-                ),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
+private fun EmptyDetailState(isCatalogAvailable: Boolean, modifier: Modifier = Modifier) {
+    EmptyStateCard(
+        icon = Icons.Rounded.SportsEsports,
+        title = stringResource(R.string.detail_empty_title),
+        body = stringResource(if (isCatalogAvailable) R.string.detail_empty_body else R.string.detail_catalog_missing_body),
+        modifier = modifier,
+    )
 }
 
 @Composable
