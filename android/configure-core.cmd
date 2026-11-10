@@ -51,6 +51,13 @@ shift /4
 rem %~dp0..\core is the CMake project root (the emulator core lives under
 rem core/); this android/ directory at the repository root is added back in
 rem from core/CMakeLists.txt behind if(ANDROID).
+rem
+rem USE_LTO=ON is upstream's own default (ThinLTO through CMake IPO); the glue
+rem library joins it in android/CMakeLists.txt. Pass -DUSE_LTO=OFF to restore the
+rem bring-up setup.
+rem -g0: the NDK emits debug info in Release and the shipped .so is stripped
+rem anyway, so this only shrinks the build tree (~1 GB) and leaves the binary
+rem unchanged. Keep -O3 -DNDEBUG in step with what the NDK platform file sets.
 "%CMAKE_EXE%" -S "%~dp0..\core" -B "%BUILD_DIR%" -G Ninja ^
   -DCMAKE_TOOLCHAIN_FILE="%NDK_DIR%\build\cmake\android.toolchain.cmake" ^
   -DANDROID_ABI=arm64-v8a ^
@@ -73,7 +80,9 @@ rem from core/CMakeLists.txt behind if(ANDROID).
   -DBUILD_LLVM=ON ^
   -DSTATIC_LINK_LLVM=ON ^
   -DLLVM_ENABLE_LIBCXX=ON ^
-  -DUSE_LTO=OFF ^
+  -DUSE_LTO=ON ^
+  "-DCMAKE_C_FLAGS_RELEASE=-O3 -DNDEBUG -g0" ^
+  "-DCMAKE_CXX_FLAGS_RELEASE=-O3 -DNDEBUG -g0" ^
   -DASMJIT_NO_SHM_OPEN=ON ^
   -DPython3_EXECUTABLE="%PYTHON_EXE%" ^
   -DLLVM_HOST_TRIPLE=aarch64-linux-android ^

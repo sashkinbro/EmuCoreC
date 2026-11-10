@@ -86,6 +86,19 @@ app/src/main/jniLibs/arm64-v8a/libemucorec-core.so
 
 If the core sources are not present, Gradle skips the local build and uses the staged library as-is.
 
+The native toolchain flags that matter for performance:
+
+- LTO is on (upstream's own default; CMake IPO builds `rpcs3_emu` and `emucorec-core` as ThinLTO
+  bitcode, and the final link adds `-Wl,--lto-O3`). The configure scripts used to pin it `OFF` for
+  bring-up.
+- The release link also uses `--gc-sections`, `--icf=safe` and `-O2`, and release objects are built
+  with `-g0` (the shipped `.so` is stripped anyway).
+- FFmpeg is built with its AArch64 NEON assembly instead of plain C.
+
+`-DUSE_LTO=OFF`, `-DEMUCOREC_LINK_OPTIMIZE=OFF` and `FFMPEG_ASM=0` restore the older behaviour;
+Gradle detects the change in `app/build/emucorec-core-build/CMakeCache.txt` and in the FFmpeg
+mode stamp, so the affected steps rebuild instead of silently reusing the previous artefacts.
+
 The emulator tree is relocated under `core/`, and the Android fork has its own
 native changes. Fetch both sources, then reconcile their changes against the
 recorded integration snapshot:

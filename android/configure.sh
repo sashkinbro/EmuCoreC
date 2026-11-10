@@ -22,7 +22,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # compiler was not. rpcsx-ui-android pins the NDK 29 line for the same reason.
 : "${NDK_VERSION:=29.0.14206865}"
 : "${CMAKE_VERSION:=3.30.5}"
-: "${ANDROID_API:=33}"          # keep in step with emucorec-ui minSdk
+: "${ANDROID_API:=29}"          # keep in step with the app's minSdk (29) and configure-core.cmd
 : "${BUILD_DIR:=$ROOT/build-android}"
 
 NDK="$ANDROID_HOME/ndk/$NDK_VERSION"
@@ -56,7 +56,12 @@ exec "$CM/cmake" -S "$ROOT/core" -B "$BUILD_DIR" -G Ninja \
   -DWITH_LLVM=ON \
   -DBUILD_LLVM=ON \
   -DSTATIC_LINK_LLVM=ON \
-  `# LTO off for bring-up: large link RAM/disk cost, no benefit while iterating` \
-  -DUSE_LTO=OFF \
+  `# LTO on: upstream's own default (ThinLTO via CMake IPO). EMUCOREC_LTO=OFF restores the` \
+  `# bring-up setup. See android/CMakeLists.txt for the matching glue library settings.` \
+  -DUSE_LTO="${EMUCOREC_LTO:-ON}" \
+  `# No debug info in Release objects: the .so is stripped anyway, so the shipped binary is` \
+  `# unchanged while the build tree shrinks by ~1 GB.` \
+  "-DCMAKE_C_FLAGS_RELEASE=-O3 -DNDEBUG -g0" \
+  "-DCMAKE_CXX_FLAGS_RELEASE=-O3 -DNDEBUG -g0" \
   -DASMJIT_NO_SHM_OPEN=ON \
   "$@"

@@ -109,6 +109,9 @@ val updateConfigDb by tasks.registering(Exec::class) {
 // android/ffmpeg.cmake via 3rdparty_ffmpeg.
 // ---------------------------------------------------------------------------
 val ffmpegOutDir = File(projectDir, "build/ffmpeg-android")
+// build-ffmpeg.sh stamps the flavour it produced; "1" (asm, the default) enables
+// FFmpeg's AArch64 NEON code, "0" keeps the old plain-C build.
+val ffmpegAsmMode = if ((System.getenv("FFMPEG_ASM") ?: "1") == "0") "c" else "asm"
 
 val buildFfmpeg by tasks.registering(Exec::class) {
     description = "Build FFmpeg 8.1.1 for Android (aarch64)"
@@ -116,10 +119,16 @@ val buildFfmpeg by tasks.registering(Exec::class) {
     workingDir = rootProject.layout.projectDirectory.asFile
     commandLine("C:/Program Files/Git/bin/bash.exe", "android/build-ffmpeg.sh")
     onlyIf {
-        if (File(ffmpegOutDir, "lib/libavcodec.a").exists()) {
-            logger.lifecycle("FFmpeg already built at $ffmpegOutDir; skipping.")
+        val lib = File(ffmpegOutDir, "lib/libavcodec.a")
+        val modeFile = File(ffmpegOutDir, "ffmpeg-mode.txt")
+        val builtMode = if (modeFile.exists()) modeFile.readText().trim() else ""
+        if (lib.exists() && builtMode == ffmpegAsmMode) {
+            logger.lifecycle("FFmpeg already built at $ffmpegOutDir ($builtMode); skipping.")
             false
         } else {
+            if (lib.exists()) {
+                logger.lifecycle("FFmpeg at $ffmpegOutDir is '$builtMode', '$ffmpegAsmMode' requested; rebuilding.")
+            }
             true
         }
     }
@@ -140,7 +149,18 @@ val configureEmuCorecCore by tasks.registering(Exec::class) {
             logger.warn("Core sources missing at $coreRoot; using staged jniLibs core instead.")
             return@onlyIf false
         }
-        !File(buildDir2, "build.ninja").exists()
+        if (!File(buildDir2, "build.ninja").exists()) {
+            return@onlyIf true
+        }
+        // The tree is reused between runs, so a changed configure argument (LTO on, Release -g0)
+        // would otherwise never reach it. CMakeCache records USE_LTO.
+        val cache = File(buildDir2, "CMakeCache.txt")
+        val cacheText = if (cache.exists()) cache.readText() else ""
+        if (!cacheText.contains("USE_LTO:BOOL=ON")) {
+            logger.lifecycle("Core tree at $buildDir2 was configured without LTO; reconfiguring.")
+            return@onlyIf true
+        }
+        false
     }
 
     doFirst { buildDir2.mkdirs() }

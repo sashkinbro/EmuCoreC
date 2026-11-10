@@ -49,18 +49,41 @@ mkdir -p "$OUT_DIR"
   --target-os=android \
   --arch=aarch64 \
   --enable-cross-compile \
-  --extra-cflags="--target=aarch64-linux-android$API --sysroot=$SYSROOT -O3 -fPIC" \
+  `# mingw32-make lower-cases the .S prerequisites on Windows, so clang is handed a plain .s` \
+  `# and skips the C preprocessor -- but FFmpeg's aarch64 asm needs it (#include "asm.S",` \
+  `# the function/const macros). Pinning the language keeps that working whatever the case.` \
+  --as="$CC -x assembler-with-cpp" \
+  --extra-cflags="--target=aarch64-linux-android$API --sysroot=$SYSROOT -O3 -fPIC -fvisibility=hidden" \
   --extra-ldflags="--target=aarch64-linux-android$API --sysroot=$SYSROOT" \
   --enable-static --disable-shared --enable-pic \
-  --disable-asm \
+  `# -fvisibility=hidden (in extra-cflags above): the hand-written NEON asm addresses FFmpeg's` \
+  `# tables PC-relative, which only links into libemucorec-core.so while those symbols stay` \
+  `# unexported.` \
+  `# NEON assembly ON: it was --disable-asm, i.e. plain C for every decoder -- PS3 cutscene` \
+  `# video (MPEG-2/H.264/VC-1), scaling and audio resampling. FFMPEG_ASM=0 restores plain C.` \
+  $( [ "${FFMPEG_ASM:-1}" = "1" ] && echo "--enable-asm --enable-neon --enable-inline-asm" || echo "--disable-asm" ) \
   --disable-programs --disable-doc --disable-debug \
   --disable-avdevice --disable-avfilter \
   --disable-network --disable-autodetect
 
 # mingw32-make defaults to cmd.exe as its shell, which breaks ffmpeg's
 # response-file recipe (echo $^ > file). Force a POSIX shell.
-"$MAKE" SHELL="$(command -v sh)" -j"$JOBS" || true
-"$MAKE" SHELL="$(command -v sh)" install || true
+#
+# -k: that same recipe is what archives each library, so without -k make stops at
+# the first library and leaves most objects -- including every NEON .S -- unbuilt,
+# which then shows up much later as undefined ff_*_neon symbols in the core link.
+# The archive step is redone below from the object globs, so make may keep going.
+BUILD_LOG="$OUT_DIR/build.log"
+"$MAKE" SHELL="$(command -v sh)" -k -j"$JOBS" > "$BUILD_LOG" 2>&1 || true
+"$MAKE" SHELL="$(command -v sh)" install >> "$BUILD_LOG" 2>&1 || true
+
+# -k also means genuine compiler errors no longer abort the build, and re-archiving
+# would happily pack an incomplete library. Fail loudly instead.
+if grep -q "error:" "$BUILD_LOG"; then
+  echo "EmuCoreC: FFmpeg build failed, first compiler errors:" >&2
+  grep "error:" "$BUILD_LOG" | head -20 >&2
+  exit 1
+fi
 
 # The ar @response-file step is unreliable under Windows make (the .objs list
 # file is frequently missing when ar runs); re-archive from the object globs.
@@ -77,4 +100,9 @@ cp libavcodec/libavcodec.a libavformat/libavformat.a \
    libavutil/libavutil.a libswscale/libswscale.a libswresample/libswresample.a \
    "$OUT_DIR/lib/"
 
-echo "EmuCoreC: FFmpeg $VERSION built into $OUT_DIR"
+# Stamped for the Gradle task: it only skips the (slow) FFmpeg build while this
+# matches the mode the task expects, so flipping FFMPEG_ASM rebuilds instead of
+# silently linking the previous flavour.
+if [ "${FFMPEG_ASM:-1}" = "1" ]; then echo "asm" > "$OUT_DIR/ffmpeg-mode.txt"; else echo "c" > "$OUT_DIR/ffmpeg-mode.txt"; fi
+
+echo "EmuCoreC: FFmpeg $VERSION built into $OUT_DIR ($(cat "$OUT_DIR/ffmpeg-mode.txt"))"

@@ -115,6 +115,43 @@ target_link_libraries(emucorec-core
 )
 
 # ---------------------------------------------------------------------------
+# Link-time optimisation and release link tuning
+# ---------------------------------------------------------------------------
+#
+# USE_LTO is upstream's own switch (core/CMakeLists.txt, default ON) and it sets
+# INTERPROCEDURAL_OPTIMIZATION on rpcs3_emu -- the static archive with the hot RSX/SPU code. The
+# EmuCoreC configure scripts pinned it OFF for bring-up, which also meant the final link stayed
+# classic. Turning it back on only covers the archive: the shared library itself has to be built as
+# bitcode too, otherwise the linker sees a mix of bitcode and machine code and inlines across
+# nothing. So IPO is set on emucorec-core here as well, and the post-link LTO pipeline is raised to
+# O3 (lld defaults to O2 for the LTO step even when the compile step is -O3).
+#
+# --gc-sections and --icf=safe are safe here: the NDK already compiles with -ffunction-sections and
+# -fdata-sections, and everything the app resolves out of the library (emucorec_* and the JNI entry
+# points) is a dynamic symbol, which the linker never drops.
+#
+# Cost: the link now needs the bitcode of the whole core in memory at once, so expect several
+# minutes and a few GB of RAM for the link step. -DUSE_LTO=OFF restores the bring-up setup,
+# -DEMUCOREC_LINK_OPTIMIZE=OFF drops only the linker tuning.
+option(EMUCOREC_LINK_OPTIMIZE "Release link optimisations (gc-sections, ICF, -O2)" ON)
+
+if(USE_LTO)
+    set_target_properties(emucorec-core PROPERTIES INTERPROCEDURAL_OPTIMIZATION ON)
+    target_link_options(emucorec-core PRIVATE "$<$<CONFIG:Release>:-Wl,--lto-O3>")
+    message(STATUS "EmuCoreC: LTO ON for rpcs3_emu and emucorec-core")
+else()
+    message(STATUS "EmuCoreC: LTO OFF")
+endif()
+
+if(EMUCOREC_LINK_OPTIMIZE)
+    target_link_options(emucorec-core PRIVATE
+        "$<$<CONFIG:Release>:-Wl,--gc-sections>"
+        "$<$<CONFIG:Release>:-Wl,--icf=safe>"
+        "$<$<CONFIG:Release>:-Wl,-O2>")
+    message(STATUS "EmuCoreC: release link optimisations ON (gc-sections, ICF, -O2)")
+endif()
+
+# ---------------------------------------------------------------------------
 # Profile-guided optimisation
 # ---------------------------------------------------------------------------
 #
