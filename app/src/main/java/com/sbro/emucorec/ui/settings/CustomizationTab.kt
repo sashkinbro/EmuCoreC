@@ -60,6 +60,7 @@ import com.sbro.emucorec.data.AppPreferences
 import com.sbro.emucorec.data.CustomizationSettings
 import com.sbro.emucorec.ui.common.COVER_ART_ASPECT_RATIO
 import com.sbro.emucorec.ui.common.SectionCard
+import com.sbro.emucorec.ui.store.StoreEntryButton
 import com.sbro.emucorec.ui.theme.ThemeMode
 import com.sbro.emucorec.ui.library.LibraryGridSizing
 import java.io.File
@@ -147,6 +148,7 @@ fun CustomizationTab(
                     )
                 }
             }
+            StoreEntryButton(tab = "themes")
         }
 
         SectionCard(
@@ -172,6 +174,7 @@ fun CustomizationTab(
                 onClick = { backgroundPicker.launch(arrayOf("image/*", "video/*")) }
             )
             CustomizationHelpText(stringResource(R.string.customization_background_help))
+            StoreEntryButton(tab = "wallpapers")
         }
 
         SectionCard(
@@ -197,6 +200,7 @@ fun CustomizationTab(
             onStyleSelected = viewModel::updateTouchControlVisualStyle,
             onPressEffectSelected = viewModel::updateTouchControlPressEffect
         )
+        StoreEntryButton(tab = "controls")
 
         DrawerStyleSection(
             selected = settings.drawerVisualStyle,
@@ -250,6 +254,7 @@ fun CustomizationTab(
                 subtitle = stringResource(R.string.customization_import_font_hint),
                 onClick = { fontPicker.launch(arrayOf("font/ttf", "font/otf", "application/x-font-ttf", "application/x-font-opentype")) }
             )
+            StoreEntryButton(tab = "fonts")
             CustomizationSlider(
                 title = stringResource(R.string.customization_text_size),
                 valueLabel = stringResource(

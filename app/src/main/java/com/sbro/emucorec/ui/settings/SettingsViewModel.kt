@@ -369,7 +369,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch(Dispatchers.IO) {
             val result = runCatching {
                 val path = customizationFileStore.importFont(uri)
-                customizationPreferences.setAppFont(AppFont.CUSTOM, path)
+                customizationPreferences.setAppFont(AppFont.CUSTOM, path, storeFontId = null)
             }
             withContext(Dispatchers.Main) { onComplete(result) }
         }

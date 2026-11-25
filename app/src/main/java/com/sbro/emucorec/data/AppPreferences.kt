@@ -138,6 +138,25 @@ class AppPreferences(context: Context) {
         }
     }
 
+    /** Id of the applied Store controls skin pack (see data/store/StoreControlSkins), or null. */
+    var touchControlSkinPack: String?
+        get() = prefs.getString(KEY_TOUCH_CONTROL_SKIN_PACK, null)?.takeIf(String::isNotBlank)
+        set(value) = prefs.edit {
+            if (value.isNullOrBlank()) remove(KEY_TOUCH_CONTROL_SKIN_PACK) else putString(KEY_TOUCH_CONTROL_SKIN_PACK, value)
+        }
+
+    val touchControlSkinPackFlow: Flow<String?>
+        get() = callbackFlow {
+            trySend(touchControlSkinPack)
+            val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+                if (key == KEY_TOUCH_CONTROL_SKIN_PACK) {
+                    trySend(touchControlSkinPack)
+                }
+            }
+            prefs.registerOnSharedPreferenceChangeListener(listener)
+            awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+        }.distinctUntilChanged()
+
     var appLanguage: AppLanguage
         get() = AppLanguage.fromStorageValue(prefs.getInt(KEY_APP_LANGUAGE, AppLanguage.SYSTEM.storageValue))
         set(value) = prefs.edit { putInt(KEY_APP_LANGUAGE, value.storageValue) }
@@ -454,6 +473,7 @@ class AppPreferences(context: Context) {
         private const val KEY_LAST_CORE_BINARY_FINGERPRINT = "last_core_binary_fingerprint"
         private const val KEY_THEME_MODE = "theme_mode"
         private const val KEY_THEME_PACKAGE_ID = "theme_package_id"
+        private const val KEY_TOUCH_CONTROL_SKIN_PACK = "touch_control_skin_pack"
         private const val KEY_APP_LANGUAGE = "app_language"
         private const val KEY_SKIPPED_UPDATE_TAG = "skipped_update_tag"
         private const val KEY_KEEP_SCREEN_ON = "keep_screen_on"

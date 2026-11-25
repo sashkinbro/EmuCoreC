@@ -403,7 +403,11 @@ class Emulator : AppCompatActivity(), InputManager.InputDeviceListener {
                 themePackage = themePackage,
                 enableCrtOverlay = false
             ) {
-                EmulationOverlayHost(activity = this@Emulator)
+                androidx.compose.runtime.CompositionLocalProvider(
+                    com.sbro.emucorec.ui.common.LocalControlSkin provides com.sbro.emucorec.ui.common.rememberAppliedControlSkin()
+                ) {
+                    EmulationOverlayHost(activity = this@Emulator)
+                }
             }
         }
     }

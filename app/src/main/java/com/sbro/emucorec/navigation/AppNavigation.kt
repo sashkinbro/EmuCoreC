@@ -4,7 +4,10 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.core.EaseIn
 import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.tween
@@ -12,6 +15,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -19,7 +23,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.toMutableStateList
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,7 +40,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
+import androidx.navigation.NavType
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
+import com.sbro.emucorec.ui.hub.HubScreen
+import com.sbro.emucorec.ui.hub.detail.HubDetailScreen
+import com.sbro.emucorec.ui.store.LocalOpenStore
+import com.sbro.emucorec.ui.store.StoreInstalledScreen
+import com.sbro.emucorec.ui.store.StoreItemScreen
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.sbro.emucorec.R
@@ -90,6 +105,18 @@ private const val ROUTE_MY_LISTS = "my-lists"
 private const val ROUTE_DISCORD = "discord"
 private const val ROUTE_FEEDBACK = "feedback"
 private const val ROUTE_PROJECTS = "projects"
+private const val ROUTE_HUB = "hub"
+private const val ROUTE_HUB_PATTERN = "hub?tab={tab}&storeTab={storeTab}"
+private const val ROUTE_STORE_ITEM = "store-item/{id}"
+private const val ROUTE_STORE_INSTALLED = "store-installed"
+private fun hubRoute(tab: String? = null, storeTab: String? = null): String {
+    val query = listOfNotNull(
+        tab?.let { "tab=${android.net.Uri.encode(it)}" },
+        storeTab?.let { "storeTab=${android.net.Uri.encode(it)}" }
+    )
+    return if (query.isEmpty()) ROUTE_HUB else "$ROUTE_HUB?${query.joinToString("&")}"
+}
+private fun storeItemRoute(id: String): String = "store-item/${android.net.Uri.encode(id)}"
 private const val ROUTE_SETTINGS_WITH_TAB = "settings/{tab}"
 private const val ROUTE_APP_LANGUAGE = "app-language"
 private const val ROUTE_GPU_DRIVER = "gpu-driver"
@@ -230,6 +257,9 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
     val navigateProjects = {
         navController.navigate(ROUTE_PROJECTS) { launchSingleTop = true }
     }
+    val navigateHub = {
+        navController.navigate(hubRoute()) { launchSingleTop = true }
+    }
 
     Box(
         modifier = Modifier
@@ -295,6 +325,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     onNavigateProfile = navigateProfile,
                     onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
+                    onNavigateHub = navigateHub,
                     onNavigateProjects = navigateProjects,
                     onBackClick = navigateHome,
                     onLaunchSystemMenu = launchSystemMenu,
@@ -334,6 +365,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     onNavigateProfile = navigateProfile,
                     onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
+                    onNavigateHub = navigateHub,
                     onNavigateProjects = navigateProjects,
                     onLaunchSystemMenu = launchSystemMenu,
                     onInstallContent = openInstallChoiceDialog
@@ -386,6 +418,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     onNavigateProfile = navigateProfile,
                     onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
+                    onNavigateHub = navigateHub,
                     onNavigateProjects = navigateProjects,
                     onBackClick = navigateHome,
                     onLaunchSystemMenu = launchSystemMenu,
@@ -427,25 +460,32 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     onNavigateProfile = navigateProfile,
                     onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
+                    onNavigateHub = navigateHub,
                     onNavigateProjects = navigateProjects,
                     onBackClick = navigateHome,
                     onLaunchSystemMenu = launchSystemMenu,
                     onInstallContent = openInstallChoiceDialog
                 ) {
-                    SettingsScreen(
-                        initialTab = SettingsTab.General,
-                        onBackClick = navigateHome,
-                        onOpenLanguageSettings = {
-                            navController.navigate(ROUTE_APP_LANGUAGE) { launchSingleTop = true }
-                        },
-                        onOpenGpuDriverSettings = {
-                            navController.navigate(ROUTE_GPU_DRIVER) { launchSingleTop = true }
-                        },
-                        onOpenTouchControlsEditor = {
-                            navController.navigate(ROUTE_TOUCH_CONTROLS_EDITOR) { launchSingleTop = true }
-                        },
-                        viewModel = settingsViewModel
-                    )
+                    CompositionLocalProvider(
+                        LocalOpenStore provides { tab ->
+                            navController.navigate(hubRoute(tab = "store", storeTab = tab)) { launchSingleTop = true }
+                        }
+                    ) {
+                        SettingsScreen(
+                            initialTab = SettingsTab.General,
+                            onBackClick = navigateHome,
+                            onOpenLanguageSettings = {
+                                navController.navigate(ROUTE_APP_LANGUAGE) { launchSingleTop = true }
+                            },
+                            onOpenGpuDriverSettings = {
+                                navController.navigate(ROUTE_GPU_DRIVER) { launchSingleTop = true }
+                            },
+                            onOpenTouchControlsEditor = {
+                                navController.navigate(ROUTE_TOUCH_CONTROLS_EDITOR) { launchSingleTop = true }
+                            },
+                            viewModel = settingsViewModel
+                        )
+                    }
                 }
             }
             composable(ROUTE_SETTINGS_WITH_TAB) { entry ->
@@ -478,25 +518,32 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     onNavigateProfile = navigateProfile,
                     onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
+                    onNavigateHub = navigateHub,
                     onNavigateProjects = navigateProjects,
                     onBackClick = navigateHome,
                     onLaunchSystemMenu = launchSystemMenu,
                     onInstallContent = openInstallChoiceDialog
                 ) {
-                    SettingsScreen(
-                        initialTab = settingsTabFromRoute(entry.arguments?.getString("tab")),
-                        onBackClick = navigateHome,
-                        onOpenLanguageSettings = {
-                            navController.navigate(ROUTE_APP_LANGUAGE) { launchSingleTop = true }
-                        },
-                        onOpenGpuDriverSettings = {
-                            navController.navigate(ROUTE_GPU_DRIVER) { launchSingleTop = true }
-                        },
-                        onOpenTouchControlsEditor = {
-                            navController.navigate(ROUTE_TOUCH_CONTROLS_EDITOR) { launchSingleTop = true }
-                        },
-                        viewModel = settingsViewModel
-                    )
+                    CompositionLocalProvider(
+                        LocalOpenStore provides { tab ->
+                            navController.navigate(hubRoute(tab = "store", storeTab = tab)) { launchSingleTop = true }
+                        }
+                    ) {
+                        SettingsScreen(
+                            initialTab = settingsTabFromRoute(entry.arguments?.getString("tab")),
+                            onBackClick = navigateHome,
+                            onOpenLanguageSettings = {
+                                navController.navigate(ROUTE_APP_LANGUAGE) { launchSingleTop = true }
+                            },
+                            onOpenGpuDriverSettings = {
+                                navController.navigate(ROUTE_GPU_DRIVER) { launchSingleTop = true }
+                            },
+                            onOpenTouchControlsEditor = {
+                                navController.navigate(ROUTE_TOUCH_CONTROLS_EDITOR) { launchSingleTop = true }
+                            },
+                            viewModel = settingsViewModel
+                        )
+                    }
                 }
             }
             composable(ROUTE_APP_LANGUAGE) {
@@ -559,6 +606,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     onNavigateProfile = navigateProfile,
                     onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
+                    onNavigateHub = navigateHub,
                     onNavigateProjects = navigateProjects,
                     onBackClick = navigateHome,
                     onLaunchSystemMenu = launchSystemMenu,
@@ -600,6 +648,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     onNavigateProfile = navigateProfile,
                     onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
+                    onNavigateHub = navigateHub,
                     onNavigateProjects = navigateProjects,
                     onBackClick = navigateHome,
                     onLaunchSystemMenu = launchSystemMenu,
@@ -649,6 +698,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     onNavigateProfile = navigateProfile,
                     onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
+                    onNavigateHub = navigateHub,
                     onNavigateProjects = navigateProjects,
                     onBackClick = navigateHome,
                     onLaunchSystemMenu = launchSystemMenu,
@@ -692,6 +742,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     onNavigateProfile = navigateProfile,
                     onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
+                    onNavigateHub = navigateHub,
                     onNavigateProjects = navigateProjects,
                     onBackClick = navigateHome,
                     onLaunchSystemMenu = launchSystemMenu,
@@ -749,6 +800,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     onNavigateProfile = { },
                     onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
+                    onNavigateHub = navigateHub,
                     onNavigateProjects = navigateProjects,
                     onBackClick = navigateHome,
                     onLaunchSystemMenu = launchSystemMenu,
@@ -800,6 +852,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     onNavigateProfile = navigateProfile,
                     onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
+                    onNavigateHub = navigateHub,
                     onNavigateProjects = navigateProjects,
                     onBackClick = navigateHome,
                     onLaunchSystemMenu = launchSystemMenu,
@@ -840,6 +893,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     onNavigateProfile = navigateProfile,
                     onNavigateDiscord = { },
                     onNavigateFeedback = navigateFeedback,
+                    onNavigateHub = navigateHub,
                     onNavigateProjects = navigateProjects,
                     onBackClick = { navController.popBackStack() },
                     onLaunchSystemMenu = null,
@@ -874,6 +928,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     onNavigateProfile = navigateProfile,
                     onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = {},
+                    onNavigateHub = navigateHub,
                     onNavigateProjects = navigateProjects,
                     onBackClick = { navController.popBackStack() },
                     onLaunchSystemMenu = launchSystemMenu,
@@ -881,6 +936,121 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                 ) {
                     FeedbackScreen(onBackClick = { navController.popBackStack() })
                 }
+            }
+            composable(
+                ROUTE_HUB_PATTERN,
+                arguments = listOf(
+                    navArgument("tab") { type = NavType.StringType; nullable = true; defaultValue = null },
+                    navArgument("storeTab") { type = NavType.StringType; nullable = true; defaultValue = null }
+                )
+            ) { hubBackStackEntry ->
+                val hubTab = hubBackStackEntry.arguments?.getString("tab")
+                val hubStoreTab = hubBackStackEntry.arguments?.getString("storeTab")
+                val detailBackStack = rememberSaveable(
+                    saver = listSaver(
+                        save = { it.toList() },
+                        restore = { it.toMutableStateList() }
+                    )
+                ) {
+                    mutableStateListOf<String>()
+                }
+                val closeDetail = {
+                    if (detailBackStack.isNotEmpty()) detailBackStack.removeAt(detailBackStack.lastIndex)
+                }
+                val openDetail: (String) -> Unit = { contentId ->
+                    if (detailBackStack.lastOrNull() != contentId) detailBackStack.add(contentId)
+                }
+
+                BackHandler(enabled = detailBackStack.isNotEmpty(), onBack = closeDetail)
+
+                Box(modifier = Modifier.fillMaxSize()) {
+                    AdaptiveShell(
+                        selected = PrimaryDestination.Hub,
+                        onNavigateSetup = {
+                            navController.navigate(ROUTE_SETUP) { launchSingleTop = true }
+                        },
+                        onNavigateLibrary = {
+                            navController.navigate(ROUTE_LIBRARY) { launchSingleTop = true }
+                        },
+                        onNavigateGameManager = { navigateGameManager(null) },
+                        onNavigatePatches = { navigatePatches(null) },
+                        onNavigatePlayTime = { navigatePlayTime(null) },
+                        onNavigateAchievements = navigateAchievementsRoot,
+                        onNavigateSaveStates = navigateSaveStates,
+                        onNavigateSaveData = {
+                            navController.navigate(saveManagerRoute()) { launchSingleTop = true }
+                        },
+                        onNavigateSearch = {
+                            navController.navigate(ROUTE_CATALOG) { launchSingleTop = true }
+                        },
+                        onNavigateSettings = {
+                            navController.navigate(settingsRoute()) { launchSingleTop = true }
+                        },
+                        onNavigateProfile = navigateProfile,
+                        onNavigateDiscord = navigateDiscord,
+                        onNavigateFeedback = navigateFeedback,
+                        onNavigateHub = { },
+                        onNavigateProjects = navigateProjects,
+                        onBackClick = {
+                            if (!navController.popBackStack()) {
+                                navController.navigate(ROUTE_LIBRARY) { launchSingleTop = true }
+                            }
+                        },
+                        onLaunchSystemMenu = launchSystemMenu,
+                        onInstallContent = null
+                    ) {
+                        HubScreen(
+                            onBackClick = { navController.popBackStack() },
+                            onOpenArticle = openDetail,
+                            onOpenStoreItem = { id ->
+                                navController.navigate(storeItemRoute(id)) { launchSingleTop = true }
+                            },
+                            onOpenInstalled = {
+                                navController.navigate(ROUTE_STORE_INSTALLED) { launchSingleTop = true }
+                            },
+                            initialTab = hubTab,
+                            initialStoreTab = hubStoreTab,
+                            backEnabled = detailBackStack.isEmpty()
+                        )
+                    }
+
+                    AnimatedVisibility(
+                        visible = detailBackStack.isNotEmpty(),
+                        enter = slideInHorizontally(
+                            animationSpec = tween(durationMillis = 260, easing = EaseOut),
+                            initialOffsetX = { it / 5 }
+                        ) + fadeIn(animationSpec = tween(durationMillis = 180)),
+                        exit = slideOutHorizontally(
+                            animationSpec = tween(durationMillis = 220, easing = EaseIn),
+                            targetOffsetX = { it / 5 }
+                        ) + fadeOut(animationSpec = tween(durationMillis = 180))
+                    ) {
+                        detailBackStack.lastOrNull()?.let { contentId ->
+                            HubDetailScreen(
+                                contentId = contentId,
+                                onBackClick = closeDetail,
+                                onOpenArticle = openDetail
+                            )
+                        }
+                    }
+                }
+            }
+            composable(ROUTE_STORE_INSTALLED) {
+                StoreInstalledScreen(
+                    onBackClick = { navController.popBackStack() },
+                    onOpenItem = { id ->
+                        navController.navigate(storeItemRoute(id)) { launchSingleTop = true }
+                    }
+                )
+            }
+            composable(
+                ROUTE_STORE_ITEM,
+                arguments = listOf(navArgument("id") { type = NavType.StringType })
+            ) { backStackEntry ->
+                StoreItemScreen(
+                    itemId = backStackEntry.arguments?.getString("id").orEmpty(),
+                    onBackClick = { navController.popBackStack() }
+                )
             }
             composable(ROUTE_PROJECTS) {
                 AdaptiveShell(
@@ -908,6 +1078,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     onNavigateProfile = navigateProfile,
                     onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
+                    onNavigateHub = navigateHub,
                     onNavigateProjects = {},
                     onBackClick = { navController.popBackStack() },
                     onLaunchSystemMenu = launchSystemMenu,
@@ -948,6 +1119,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     onNavigateProfile = navigateProfile,
                     onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
+                    onNavigateHub = navigateHub,
                     onNavigateProjects = navigateProjects,
                     onBackClick = navigateHome,
                     onLaunchSystemMenu = launchSystemMenu,
@@ -1016,6 +1188,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     onNavigateProfile = navigateProfile,
                     onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
+                    onNavigateHub = navigateHub,
                     onNavigateProjects = navigateProjects,
                     onBackClick = navigateHome,
                     onLaunchSystemMenu = launchSystemMenu,

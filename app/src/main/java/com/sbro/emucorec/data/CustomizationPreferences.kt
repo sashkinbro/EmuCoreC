@@ -62,6 +62,8 @@ data class CustomizationSettings(
     val coverSizePercent: Int = DEFAULT_COVER_SIZE_PERCENT,
     val appFont: AppFont = AppFont.SYSTEM,
     val customFontPath: String? = null,
+    /** Id of the Store font sitting in the custom-font slot; null for a manually imported font. */
+    val storeFontId: String? = null,
     val textSizePercent: Int = DEFAULT_TEXT_SIZE_PERCENT,
     val touchControlVisualStyle: TouchControlVisualStyle = TouchControlVisualStyle.CLASSIC,
     val touchControlPressEffect: TouchControlPressEffect = TouchControlPressEffect.GROW,
@@ -132,11 +134,16 @@ class CustomizationPreferences(context: Context) : Closeable {
         }
     }
 
-    fun setAppFont(font: AppFont, customFontPath: String? = current.customFontPath) {
+    fun setAppFont(
+        font: AppFont,
+        customFontPath: String? = current.customFontPath,
+        storeFontId: String? = if (font == AppFont.CUSTOM) current.storeFontId else null
+    ) {
         prefs.edit {
             putString(KEY_APP_FONT, font.name)
             if (customFontPath.isNullOrBlank()) remove(KEY_CUSTOM_FONT_PATH)
             else putString(KEY_CUSTOM_FONT_PATH, customFontPath)
+            if (storeFontId.isNullOrBlank()) remove(KEY_STORE_FONT_ID) else putString(KEY_STORE_FONT_ID, storeFontId)
         }
     }
 
@@ -201,6 +208,7 @@ class CustomizationPreferences(context: Context) : Closeable {
                 requestedFont
             },
             customFontPath = customFontPath,
+            storeFontId = prefs.getString(KEY_STORE_FONT_ID, null)?.takeIf { it.isNotBlank() },
             textSizePercent = prefs.getInt(
                 KEY_TEXT_SIZE_PERCENT,
                 CustomizationSettings.DEFAULT_TEXT_SIZE_PERCENT
@@ -241,6 +249,7 @@ class CustomizationPreferences(context: Context) : Closeable {
         const val KEY_COVER_SIZE_PERCENT = "cover_size_percent"
         const val KEY_APP_FONT = "app_font"
         const val KEY_CUSTOM_FONT_PATH = "custom_font_path"
+        const val KEY_STORE_FONT_ID = "store_font_id"
         const val KEY_TEXT_SIZE_PERCENT = "text_size_percent"
         const val KEY_TOUCH_CONTROL_VISUAL_STYLE = "touch_control_visual_style"
         const val KEY_TOUCH_CONTROL_PRESS_EFFECT = "touch_control_press_effect"
@@ -252,6 +261,7 @@ class CustomizationPreferences(context: Context) : Closeable {
             KEY_COVER_SIZE_PERCENT,
             KEY_APP_FONT,
             KEY_CUSTOM_FONT_PATH,
+            KEY_STORE_FONT_ID,
             KEY_TEXT_SIZE_PERCENT,
             KEY_TOUCH_CONTROL_VISUAL_STYLE,
             KEY_TOUCH_CONTROL_PRESS_EFFECT,

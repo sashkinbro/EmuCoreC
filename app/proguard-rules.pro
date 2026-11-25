@@ -82,3 +82,15 @@
 -dontwarn net.lingala.zip4j.**
 -dontwarn com.github.junrar.**
 
+# Hub/Store catalogs and theme packages are decoded with kotlinx.serialization. Keep the generated
+# companions/serializers so R8 cannot remove singletons reached through generated lookup paths.
+-keepclassmembers class ** {
+    *** Companion;
+}
+-keepclassmembers class **$Companion {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+-keep,includedescriptorclasses class **$$serializer { *; }
+-keepclassmembers class **$$serializer {
+    public static ** INSTANCE;
+}

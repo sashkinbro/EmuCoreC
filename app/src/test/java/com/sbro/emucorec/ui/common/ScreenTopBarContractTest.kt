@@ -18,7 +18,7 @@ class ScreenTopBarContractTest {
         assertTrue("Top bar must not cast a floating shadow", "shadowElevation = 0.dp" in source)
         assertTrue("Top bar border must remain subtle", "copy(alpha = 0.62f)" in source)
         assertTrue("Neon top bar must use the tricolor divider", "NeonTricolorDivider" in source)
-        assertTrue("Neon top bar must use the yellow accent border", "NeonYellow.copy(alpha = 0.35f)" in source)
+        assertTrue("Neon top bar must use the yellow accent border", "LocalThemeExtras.current.accent1.copy(alpha = 0.35f)" in source)
         assertTrue(
             "Top bar must keep the compact internal padding",
             "start = 10.dp + if (LocalNeonTheme.current && !neonDecorated) 8.dp else 0.dp" in source &&

@@ -33,6 +33,7 @@ import androidx.compose.material.icons.rounded.Forum
 import androidx.compose.material.icons.rounded.Build
 import androidx.compose.material.icons.rounded.Games
 import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Newspaper
 import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material.icons.rounded.QueryStats
 import androidx.compose.material.icons.rounded.Refresh
@@ -79,7 +80,7 @@ import com.sbro.emucorec.ui.theme.neon.neonShape
 import com.sbro.emucorec.ui.theme.neon.neonShapeCorners
 
 enum class PrimaryDestination {
-    Library, Setup, GameManager, Patches, PlayTime, Achievements, SaveData, SaveStates, Search, Settings, Profile, Discord, Projects, Feedback
+    Library, Setup, GameManager, Patches, PlayTime, Achievements, SaveData, SaveStates, Search, Hub, Settings, Profile, Discord, Projects, Feedback
 }
 
 private enum class MobileLeadingAction {
@@ -107,6 +108,7 @@ fun AdaptiveShell(
     onNavigateProfile: () -> Unit = {},
     onNavigateDiscord: () -> Unit = {},
     onNavigateFeedback: () -> Unit = {},
+    onNavigateHub: () -> Unit = {},
     onNavigateProjects: () -> Unit = {},
     onBackClick: (() -> Unit)? = null,
     onLaunchSystemMenu: (() -> Unit)? = null,
@@ -131,6 +133,7 @@ fun AdaptiveShell(
             onNavigateProfile = onNavigateProfile,
             onNavigateDiscord = onNavigateDiscord,
             onNavigateFeedback = onNavigateFeedback,
+            onNavigateHub = onNavigateHub,
             onNavigateProjects = onNavigateProjects,
             onLaunchSystemMenu = onLaunchSystemMenu,
             onInstallContent = onInstallContent,
@@ -186,6 +189,7 @@ fun AdaptiveShell(
             onNavigateProfile = onNavigateProfile,
             onNavigateDiscord = onNavigateDiscord,
             onNavigateFeedback = onNavigateFeedback,
+            onNavigateHub = onNavigateHub,
             onNavigateProjects = onNavigateProjects,
             onBackClick = onBackClick,
             onLaunchSystemMenu = onLaunchSystemMenu,
@@ -215,6 +219,7 @@ private fun CompactAdaptiveShell(
     onNavigateProfile: () -> Unit,
     onNavigateDiscord: () -> Unit,
     onNavigateFeedback: () -> Unit,
+    onNavigateHub: () -> Unit,
     onNavigateProjects: () -> Unit,
     onBackClick: (() -> Unit)?,
     onLaunchSystemMenu: (() -> Unit)?,
@@ -302,6 +307,7 @@ private fun CompactAdaptiveShell(
                     onNavigateProfile = onNavigateProfile,
                     onNavigateDiscord = onNavigateDiscord,
                     onNavigateFeedback = onNavigateFeedback,
+                    onNavigateHub = onNavigateHub,
                     onNavigateProjects = onNavigateProjects,
                     onLaunchSystemMenu = onLaunchSystemMenu,
                     onInstallContent = onInstallContent,
@@ -339,6 +345,7 @@ private fun SideNavigation(
     onNavigateProfile: () -> Unit,
     onNavigateDiscord: () -> Unit,
     onNavigateFeedback: () -> Unit,
+    onNavigateHub: () -> Unit,
     onNavigateProjects: () -> Unit,
     onLaunchSystemMenu: (() -> Unit)?,
     onInstallContent: (() -> Unit)?,
@@ -412,6 +419,10 @@ private fun SideNavigation(
     val navigateFeedback = rememberDebouncedClick {
         onCloseDrawer()
         onNavigateFeedback()
+    }
+    val navigateHub = rememberDebouncedClick {
+        onCloseDrawer()
+        onNavigateHub()
     }
     val navigateProjects = rememberDebouncedClick {
         onCloseDrawer()
@@ -495,6 +506,12 @@ private fun SideNavigation(
                 label = stringResource(R.string.nav_catalog),
                 selected = selected == PrimaryDestination.Search,
                 onClick = navigateSearch
+            )
+            ShellItem(
+                icon = Icons.Rounded.Newspaper,
+                label = stringResource(R.string.hub_title),
+                selected = selected == PrimaryDestination.Hub,
+                onClick = navigateHub
             )
             ShellItem(
                 icon = Icons.Rounded.EmojiEvents,

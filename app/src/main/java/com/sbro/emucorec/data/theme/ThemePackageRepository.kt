@@ -4,7 +4,7 @@ import android.content.Context
 import android.graphics.BitmapFactory
 import android.graphics.Typeface
 import android.net.Uri
-import com.sbro.emucorec.BuildConfig
+import com.sbro.emucorec.data.store.StoreClient
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
@@ -24,7 +24,7 @@ data class InstalledThemePackage(
     val id: String get() = spec.id
     val isSupported: Boolean
         get() = spec.formatVersion <= ThemePackageSpec.SUPPORTED_FORMAT_VERSION &&
-            spec.minAppVersionCode <= BuildConfig.VERSION_CODE
+            spec.minAppVersionCode <= StoreClient.ENGINE_VERSION_CODE
 }
 
 class ThemePackageException(message: String) : IllegalArgumentException(message)

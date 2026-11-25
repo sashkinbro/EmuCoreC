@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -57,3 +58,21 @@ internal fun rememberStickyTabHeaderPinned(state: LazyListState, key: Any): Bool
     }
     return pinned
 }
+
+/** [rememberStickyTabHeaderPinned] for vertical grids such as the EmuCore hub. */
+@Composable
+internal fun rememberStickyTabHeaderPinned(
+    gridState: LazyGridState,
+    headerKey: Any
+): Boolean {
+    val pinned by remember(gridState, headerKey) {
+        derivedStateOf {
+            val layoutInfo = gridState.layoutInfo
+            layoutInfo.visibleItemsInfo
+                .firstOrNull { it.key == headerKey }
+                ?.let { it.offset.y <= layoutInfo.viewportStartOffset } == true
+        }
+    }
+    return pinned
+}
+
