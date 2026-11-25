@@ -39,7 +39,8 @@ class CoreLocaleContractTest {
             )
             assertFalse(
                 "Vita branding leaked into ${directory.fileName}",
-                localized.values.any(legacyBranding::containsMatchIn)
+                // "Our other projects" and the Hub product filters name the sibling apps (EmuCoreV, PS Vita) on purpose.
+                localized.filterKeys { !it.startsWith("projects_") && !it.startsWith("hub_filter_") }.values.any(legacyBranding::containsMatchIn)
             )
         }
     }

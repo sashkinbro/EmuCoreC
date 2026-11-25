@@ -45,7 +45,7 @@ class FeedbackContractTest {
         assertTrue("Discord drawer navigation is missing", "onNavigateDiscord = navigateDiscord" in navigation)
         assertTrue("Feedback route is missing", "composable(ROUTE_FEEDBACK)" in navigation)
         assertTrue("Feedback screen is not wired", "FeedbackScreen(" in navigation)
-        assertTrue("Discord destination is missing", "Discord, Feedback" in shell)
+        assertTrue("Discord destination is missing", "Discord, Feedback" in shell || "Discord, Projects, Feedback" in shell)
         assertTrue("Discord selection is missing", "PrimaryDestination.Discord" in navigation)
         assertTrue("Discord route is missing", "composable(ROUTE_DISCORD)" in navigation)
         assertTrue("Discord screen is not wired", "DiscordScreen(" in navigation)
