@@ -14,12 +14,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.sp
 import com.sbro.emucorec.ui.theme.neon.LocalNeonTheme
-import com.sbro.emucorec.ui.theme.neon.NeonRed
-import com.sbro.emucorec.ui.theme.neon.NeonYellow
+import com.sbro.emucorec.ui.theme.LocalThemeExtras
 import com.sbro.emucorec.ui.theme.neon.neonShape
 
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
+import com.sbro.emucorec.ui.theme.style.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -46,7 +45,7 @@ fun SectionCard(
                 fontWeight = FontWeight.SemiBold,
                 letterSpacing = if (neon) 1.2.sp else MaterialTheme.typography.titleLarge.letterSpacing
             ),
-            color = if (neon) NeonYellow else MaterialTheme.colorScheme.onBackground,
+            color = if (neon) LocalThemeExtras.current.accent1 else MaterialTheme.colorScheme.onBackground,
             modifier = Modifier.padding(horizontal = ScreenHorizontalPadding)
         )
         if (neon) {
@@ -57,7 +56,7 @@ fun SectionCard(
                     .height(1.dp)
                     .background(
                         Brush.horizontalGradient(
-                            listOf(NeonRed, NeonYellow, Color.Transparent)
+                            listOf(LocalThemeExtras.current.accent3, LocalThemeExtras.current.accent1, Color.Transparent)
                         )
                     )
             ) {
@@ -71,7 +70,7 @@ fun SectionCard(
             shape = neonShape(24.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 2.dp,
-            border = if (neon) BorderStroke(1.dp, NeonYellow.copy(alpha = 0.14f)) else null
+            border = if (neon) BorderStroke(1.dp, LocalThemeExtras.current.accent1.copy(alpha = 0.14f)) else null
         ) {
             Column(
                 modifier = Modifier.padding(contentPadding),

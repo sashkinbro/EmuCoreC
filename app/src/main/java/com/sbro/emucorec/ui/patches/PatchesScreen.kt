@@ -38,8 +38,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
+import com.sbro.emucorec.ui.theme.style.Surface
+import com.sbro.emucorec.ui.theme.style.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -234,7 +234,7 @@ private fun NoPatchesHint(hasDownloaded: Boolean, onDownload: () -> Unit) {
         modifier = Modifier.padding(horizontal = ScreenHorizontalPadding),
         action = if (hasDownloaded) null else {
             {
-                androidx.compose.material3.Button(shape = neonShape(12.dp), onClick = onDownload) {
+                com.sbro.emucorec.ui.theme.style.Button(shape = neonShape(12.dp), onClick = onDownload) {
                     Icon(Icons.Rounded.CloudDownload, contentDescription = null)
                     Text(stringResource(R.string.patches_update), modifier = Modifier.padding(start = 8.dp))
                 }

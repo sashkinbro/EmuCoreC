@@ -36,13 +36,13 @@ import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Visibility
-import androidx.compose.material3.Button
+import com.sbro.emucorec.ui.theme.style.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
+import com.sbro.emucorec.ui.theme.style.OutlinedButton
+import com.sbro.emucorec.ui.theme.style.Surface
+import com.sbro.emucorec.ui.theme.style.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState

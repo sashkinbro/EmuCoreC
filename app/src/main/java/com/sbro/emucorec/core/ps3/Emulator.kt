@@ -387,7 +387,22 @@ class Emulator : AppCompatActivity(), InputManager.InputDeviceListener {
                 onDispose { customizationPreferences.close() }
             }
             val themeMode by preferences.themeModeFlow.collectAsState(initial = preferences.themeMode)
-            EmuCoreCTheme(themeMode = themeMode, customization = customization, enableCrtOverlay = false) {
+            val themePackageRepository = remember {
+                com.sbro.emucorec.data.theme.ThemePackageRepository.getInstance(applicationContext)
+            }
+            val themePackageId by preferences.themePackageIdFlow.collectAsState(initial = preferences.themePackageId)
+            val installedThemePackages by themePackageRepository.installed.collectAsState(
+                initial = themePackageRepository.installedSync()
+            )
+            val themePackage = remember(themePackageId, installedThemePackages) {
+                installedThemePackages.firstOrNull { it.id == themePackageId }
+            }
+            EmuCoreCTheme(
+                themeMode = themeMode,
+                customization = customization,
+                themePackage = themePackage,
+                enableCrtOverlay = false
+            ) {
                 EmulationOverlayHost(activity = this@Emulator)
             }
         }

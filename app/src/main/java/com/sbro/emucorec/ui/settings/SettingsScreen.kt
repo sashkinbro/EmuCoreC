@@ -56,17 +56,17 @@ import androidx.compose.material.icons.rounded.Vibration
 import com.sbro.emucorec.core.InstallStateBus
 import com.sbro.emucorec.data.AppPreferences
 import com.sbro.emucorec.ui.common.AppAlertDialog as AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
+import com.sbro.emucorec.ui.theme.style.Button
+import com.sbro.emucorec.ui.theme.style.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilterChip
+import com.sbro.emucorec.ui.theme.style.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
+import com.sbro.emucorec.ui.theme.style.Surface
+import com.sbro.emucorec.ui.theme.style.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import com.sbro.emucorec.ui.theme.style.TextButton
 import com.sbro.emucorec.ui.common.appFilterChipColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect

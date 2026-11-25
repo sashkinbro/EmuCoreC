@@ -55,9 +55,9 @@ import com.sbro.emucorec.ui.common.AppAlertDialog as AlertDialog
 import com.sbro.emucorec.ui.common.ImmersiveDialogWindow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
+import com.sbro.emucorec.ui.theme.style.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import com.sbro.emucorec.ui.theme.style.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect

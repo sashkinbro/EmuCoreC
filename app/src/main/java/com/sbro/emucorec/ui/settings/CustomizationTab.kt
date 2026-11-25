@@ -28,13 +28,13 @@ import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Restore
 import androidx.compose.material.icons.rounded.TextFields
 import com.sbro.emucorec.ui.common.AppAlertDialog as AlertDialog
-import androidx.compose.material3.FilterChip
+import com.sbro.emucorec.ui.theme.style.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
+import com.sbro.emucorec.ui.theme.style.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import com.sbro.emucorec.ui.theme.style.TextButton
 import com.sbro.emucorec.ui.common.appFilterChipColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -75,6 +75,11 @@ fun CustomizationTab(
     val context = LocalContext.current
     val preferences = remember(context) { AppPreferences(context) }
     val themeMode by preferences.themeModeFlow.collectAsState(initial = preferences.themeMode)
+    val themePackageId by preferences.themePackageIdFlow.collectAsState(initial = preferences.themePackageId)
+    val installedThemePackages by remember(context) {
+        com.sbro.emucorec.data.theme.ThemePackageRepository.getInstance(context)
+    }.installed.collectAsState()
+    val themeLocale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]?.language ?: "en"
     val backgroundImported = stringResource(R.string.customization_background_imported)
     val backgroundFailed = stringResource(R.string.customization_background_failed)
     val fontImported = stringResource(R.string.customization_font_imported)
@@ -134,6 +139,13 @@ fun CustomizationTab(
                     label = stringResource(R.string.settings_theme_neon),
                     onClick = { preferences.themeMode = ThemeMode.NEON }
                 )
+                installedThemePackages.filter { it.isSupported }.forEach { pkg ->
+                    ThemeChip(
+                        selected = themeMode == ThemeMode.PACKAGE && themePackageId == pkg.id,
+                        label = pkg.spec.displayName(themeLocale),
+                        onClick = { preferences.applyThemePackage(pkg.id) }
+                    )
+                }
             }
         }
 

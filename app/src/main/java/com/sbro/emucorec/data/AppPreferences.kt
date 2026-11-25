@@ -74,6 +74,7 @@ class AppPreferences(context: Context) {
             1 -> ThemeMode.LIGHT
             2 -> ThemeMode.DARK
             3 -> ThemeMode.NEON
+            4 -> if (prefs.getString(KEY_THEME_PACKAGE_ID, null).isNullOrBlank()) ThemeMode.SYSTEM else ThemeMode.PACKAGE
             else -> ThemeMode.SYSTEM
         }
         set(value) {
@@ -85,6 +86,8 @@ class AppPreferences(context: Context) {
                         ThemeMode.LIGHT -> 1
                         ThemeMode.DARK -> 2
                         ThemeMode.NEON -> 3
+                        // Packages are applied through applyThemePackage(); keep the stored id.
+                        ThemeMode.PACKAGE -> if (prefs.getString(KEY_THEME_PACKAGE_ID, null).isNullOrBlank()) 0 else 4
                     }
                 )
             }
@@ -94,13 +97,46 @@ class AppPreferences(context: Context) {
         get() = callbackFlow {
             trySend(themeMode)
             val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-                if (key == KEY_THEME_MODE) {
+                if (key == KEY_THEME_MODE || key == KEY_THEME_PACKAGE_ID) {
                     trySend(themeMode)
                 }
             }
             prefs.registerOnSharedPreferenceChangeListener(listener)
             awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
         }.distinctUntilChanged()
+
+    /** Id of the applied theme package; meaningful only while [themeMode] is PACKAGE. */
+    val themePackageId: String?
+        get() = prefs.getString(KEY_THEME_PACKAGE_ID, null)?.takeIf(String::isNotBlank)
+
+    val themePackageIdFlow: Flow<String?>
+        get() = callbackFlow {
+            trySend(themePackageId)
+            val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+                if (key == KEY_THEME_PACKAGE_ID) {
+                    trySend(themePackageId)
+                }
+            }
+            prefs.registerOnSharedPreferenceChangeListener(listener)
+            awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+        }.distinctUntilChanged()
+
+    /** Applies an installed theme package (the id is validated by the caller against the repository). */
+    fun applyThemePackage(id: String) {
+        prefs.edit {
+            putString(KEY_THEME_PACKAGE_ID, id)
+            putInt(KEY_THEME_MODE, 4)
+        }
+    }
+
+    /** Called when an installed package is deleted: falls back to SYSTEM if it was applied. */
+    fun clearThemePackage(id: String) {
+        if (themePackageId != id) return
+        prefs.edit {
+            remove(KEY_THEME_PACKAGE_ID)
+            if (prefs.getInt(KEY_THEME_MODE, 0) == 4) putInt(KEY_THEME_MODE, 0)
+        }
+    }
 
     var appLanguage: AppLanguage
         get() = AppLanguage.fromStorageValue(prefs.getInt(KEY_APP_LANGUAGE, AppLanguage.SYSTEM.storageValue))
@@ -417,6 +453,7 @@ class AppPreferences(context: Context) {
         private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
         private const val KEY_LAST_CORE_BINARY_FINGERPRINT = "last_core_binary_fingerprint"
         private const val KEY_THEME_MODE = "theme_mode"
+        private const val KEY_THEME_PACKAGE_ID = "theme_package_id"
         private const val KEY_APP_LANGUAGE = "app_language"
         private const val KEY_SKIPPED_UPDATE_TAG = "skipped_update_tag"
         private const val KEY_KEEP_SCREEN_ON = "keep_screen_on"

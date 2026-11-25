@@ -1,6 +1,5 @@
 package com.sbro.emucorec.ui.theme
 
-import android.graphics.Typeface
 import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -37,7 +36,7 @@ internal fun rememberCustomizedTypography(settings: CustomizationSettings): Typo
         AppFont.EXO2 -> Exo2FontFamily
         AppFont.CUSTOM -> remember(settings.customFontPath) {
             settings.customFontPath?.let { path ->
-                runCatching { FontFamily(Typeface.createFromFile(path)) }.getOrNull()
+                runCatching { fileFontFamily(java.io.File(path)) }.getOrNull()
             }
         }
     }

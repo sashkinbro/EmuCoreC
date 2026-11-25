@@ -34,18 +34,18 @@ import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.StayCurrentPortrait
-import androidx.compose.material3.Button
+import com.sbro.emucorec.ui.theme.style.Button
 import com.sbro.emucorec.ui.common.AppAlertDialog as AlertDialog
-import androidx.compose.material3.FilterChip
+import com.sbro.emucorec.ui.theme.style.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
+import com.sbro.emucorec.ui.theme.style.Surface
+import com.sbro.emucorec.ui.theme.style.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import com.sbro.emucorec.ui.theme.style.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect

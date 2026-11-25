@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -39,7 +38,8 @@ internal fun StickyTabHeader(
         animationSpec = tween(180),
         label = "stickyTabDivider"
     )
-    Surface(modifier = modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.background) {
+    // Plain Material surface: a full-width strip must not pick up style frames (Classic bevels rectangles).
+    androidx.compose.material3.Surface(modifier = modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.background) {
         Column {
             content()
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = dividerAlpha))

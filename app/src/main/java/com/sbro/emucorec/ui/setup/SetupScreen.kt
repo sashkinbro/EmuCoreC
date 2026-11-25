@@ -20,11 +20,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material.icons.rounded.VpnKey
-import androidx.compose.material3.Button
-import androidx.compose.material3.FilledTonalButton
+import com.sbro.emucorec.ui.theme.style.Button
+import com.sbro.emucorec.ui.theme.style.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
+import com.sbro.emucorec.ui.theme.style.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment

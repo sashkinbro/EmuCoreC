@@ -9,9 +9,10 @@ import android.view.MotionEvent
 import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Surface
+import com.sbro.emucorec.ui.theme.style.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.Lifecycle
@@ -28,6 +29,8 @@ import com.sbro.emucorec.navigation.AppNavigation
 import com.sbro.emucorec.ui.common.ImmersiveMode
 import com.sbro.emucorec.ui.theme.EmuCoreCTheme
 import com.sbro.emucorec.ui.theme.ThemeMode
+import com.sbro.emucorec.ui.theme.isDark
+import com.sbro.emucorec.data.theme.ThemePackageRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -53,7 +56,7 @@ class MainActivity : AppCompatActivity() {
             client = GooglePlayInAppReviewClient(this)
         )
         enterImmersiveMode()
-        window.setBackgroundDrawable(ColorDrawable(resolveWindowBackground(preferences.themeMode)))
+        window.setBackgroundDrawable(ColorDrawable(resolveWindowBackground(preferences)))
         lifecycleScope.launch {
             preferences.keepScreenOnFlow.collect { keepOn ->
                 if (keepOn) {
@@ -66,9 +69,18 @@ class MainActivity : AppCompatActivity() {
         setContent {
             val customization by customizationPreferences.settings.collectAsState()
             val themeMode by preferences.themeModeFlow.collectAsState(initial = preferences.themeMode)
+            val themePackageRepository = remember { ThemePackageRepository.getInstance(applicationContext) }
+            val themePackageId by preferences.themePackageIdFlow.collectAsState(initial = preferences.themePackageId)
+            val installedThemePackages by themePackageRepository.installed.collectAsState(
+                initial = themePackageRepository.installedSync()
+            )
+            val themePackage = remember(themePackageId, installedThemePackages) {
+                installedThemePackages.firstOrNull { it.id == themePackageId }
+            }
             EmuCoreCTheme(
                 themeMode = themeMode,
-                customization = customization
+                customization = customization,
+                themePackage = themePackage
             ) {
                 Surface(
                     modifier = Modifier.fillMaxSize()
@@ -133,16 +145,10 @@ class MainActivity : AppCompatActivity() {
         ImmersiveMode.apply(window)
     }
 
-    private fun resolveWindowBackground(themeMode: ThemeMode): Int {
-        val darkTheme = when (themeMode) {
-            ThemeMode.SYSTEM -> {
-                val nightModeMask = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
-                nightModeMask == Configuration.UI_MODE_NIGHT_YES
-            }
-            ThemeMode.LIGHT -> false
-            ThemeMode.DARK -> true
-            ThemeMode.NEON -> true
-        }
+    private fun resolveWindowBackground(preferences: AppPreferences): Int {
+        val nightModeMask = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+        val themePackage = ThemePackageRepository.getInstance(applicationContext).find(preferences.themePackageId)
+        val darkTheme = preferences.themeMode.isDark(nightModeMask == Configuration.UI_MODE_NIGHT_YES, themePackage)
         return if (darkTheme) 0xFF000000.toInt() else 0xFFF4F7FB.toInt()
     }
 

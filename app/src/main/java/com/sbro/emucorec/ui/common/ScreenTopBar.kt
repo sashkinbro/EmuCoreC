@@ -12,10 +12,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import com.sbro.emucorec.ui.theme.neon.LocalNeonTheme
 import com.sbro.emucorec.ui.theme.neon.NeonTricolorDivider
-import com.sbro.emucorec.ui.theme.neon.NeonYellow
+import com.sbro.emucorec.ui.theme.LocalThemeExtras
+import com.sbro.emucorec.data.theme.UiStyle
 import com.sbro.emucorec.ui.theme.neon.neonShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
+import com.sbro.emucorec.ui.theme.style.HeaderSurface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -34,7 +35,7 @@ fun ScreenTopBarSurface(
     content: @Composable RowScope.() -> Unit
 ) {
     val barSurface: @Composable (Modifier) -> Unit = { surfaceModifier ->
-        Surface(
+        HeaderSurface(
             modifier = surfaceModifier.fillMaxWidth(),
             shape = neonShape(24.dp),
             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.78f),
@@ -44,7 +45,7 @@ fun ScreenTopBarSurface(
                 1.dp,
                 if (LocalNeonTheme.current) {
                     if (neonDecorated) {
-                        NeonYellow.copy(alpha = 0.35f)
+                        LocalThemeExtras.current.accent1.copy(alpha = 0.35f)
                     } else {
                         MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.62f)
                     }
@@ -80,7 +81,7 @@ fun ScreenTopBarSurface(
 
 @Composable
 private fun defaultTopBarTitle(): Color =
-    if (LocalNeonTheme.current) NeonYellow else MaterialTheme.colorScheme.onSurface
+    if (LocalNeonTheme.current) LocalThemeExtras.current.accent1 else MaterialTheme.colorScheme.onSurface
 
 @Composable
 fun ScreenTopBar(
@@ -96,13 +97,20 @@ fun ScreenTopBar(
     showNeonDivider: Boolean = false,
     actions: @Composable RowScope.() -> Unit = {}
 ) {
+    val titleBarHeader = com.sbro.emucorec.ui.theme.style.styledHeaderBrush() != null
     ScreenTopBarSurface(
         modifier = modifier,
         neonDecorated = true,
         showNeonDivider = showNeonDivider
     ) {
+        // Title-bar styles paint the header in the theme's primary: the caller's colors were
+        // resolved for a regular surface header, so use the header's own content color here.
+        val onHeader = androidx.compose.material3.LocalContentColor.current
         when {
-            onBackClick != null -> NavigationBackButton(onClick = onBackClick)
+            onBackClick != null -> NavigationBackButton(
+                onClick = onBackClick,
+                contentColor = if (titleBarHeader) onHeader else defaultBackContent()
+            )
             onMenuClick != null -> NavigationMenuButton(onClick = onMenuClick)
         }
         if (onBackClick != null || onMenuClick != null) {
@@ -113,21 +121,21 @@ fun ScreenTopBar(
                 .weight(1f)
                 .padding(end = 8.dp)
         ) {
-            val neonGlowTitle = LocalNeonTheme.current && titleColor == NeonYellow
+            val neonGlowTitle = LocalNeonTheme.current && titleColor == LocalThemeExtras.current.accent1
             Text(
-                text = title,
+                text = styledTitle(title),
                 style = if (neonGlowTitle) {
                     MaterialTheme.typography.titleLarge.copy(
                         fontWeight = FontWeight.Bold,
                         shadow = Shadow(
-                            color = NeonYellow.copy(alpha = 0.85f),
+                            color = LocalThemeExtras.current.accent1.copy(alpha = 0.85f),
                             blurRadius = 18f
                         )
                     )
                 } else {
                     MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                 },
-                color = titleColor,
+                color = if (titleBarHeader) onHeader else titleColor,
                 maxLines = titleMaxLines,
                 overflow = TextOverflow.Ellipsis
             )
@@ -135,7 +143,7 @@ fun ScreenTopBar(
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = subtitleColor,
+                    color = if (titleBarHeader) onHeader.copy(alpha = 0.82f) else subtitleColor,
                     maxLines = subtitleMaxLines,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -148,3 +156,10 @@ fun ScreenTopBar(
         )
     }
 }
+
+/** Terminal style shows headers as a prompt line. */
+@Composable
+private fun styledTitle(title: String): String =
+    com.sbro.emucorec.ui.theme.style.themedTitleCase(title).let {
+        if (LocalThemeExtras.current.uiStyle == UiStyle.TERMINAL) "> ${it}_" else it
+    }

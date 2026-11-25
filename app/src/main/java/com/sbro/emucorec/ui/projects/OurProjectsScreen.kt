@@ -55,11 +55,11 @@ import com.sbro.emucorec.ui.common.ScreenTopBar
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import com.sbro.emucorec.ui.theme.neon.neonShape
 import com.sbro.emucorec.ui.theme.neon.neonButtonShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
-import androidx.compose.material3.TextButton
+import com.sbro.emucorec.ui.theme.style.Button
+import com.sbro.emucorec.ui.theme.style.FilledTonalButton
+import com.sbro.emucorec.ui.theme.style.OutlinedButton
+import com.sbro.emucorec.ui.theme.style.Surface
+import com.sbro.emucorec.ui.theme.style.TextButton
 
 private fun openLink(context: Context, url: String, failedMessage: String) {
     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
