@@ -2113,4 +2113,22 @@ Esta configuración solo se aplica cuando SPU Decoder está configurado en Diná
     <string name="home_empty_search_subtitle">Prueba con un nombre diferente o cambia la clasificación.</string>
     <string name="save_manager_no_results_body">Prueba otro título de juego o nombre de carpeta de guardado.</string>
     <string name="profile_no_recent_events">Todavía no hay eventos recientes.</string>
+    <string name="projects_title">Nuestros otros proyectos</string>
+    <string name="projects_badge_on_play">En Google Play</string>
+    <string name="projects_badge_coming_to_play">Próximamente en Google Play</string>
+    <string name="projects_badge_open_source">Código abierto</string>
+    <string name="projects_google_play">Google Play</string>
+    <string name="projects_github">GitHub</string>
+    <string name="projects_website">Sitio web</string>
+    <string name="projects_patreon">Apoyar en Patreon</string>
+    <string name="projects_github_profile">Desarrollador en GitHub</string>
+    <string name="projects_footer">Creado por un solo desarrollador. Tu apoyo mantiene vivos estos proyectos.</string>
+    <string name="projects_open_failed">No se pudo abrir el enlace</string>
+    <string name="projects_desc_x">Biblioteca, lanzador y emulador de PlayStation 2 con un núcleo basado en PCSX2 adaptado a Android.</string>
+    <string name="projects_desc_a">Biblioteca, lanzador y emulador de PSP con núcleo PPSSPP integrado y renderizado Vulkan u OpenGL ES.</string>
+    <string name="projects_desc_c">Emulador experimental de PlayStation 3 con núcleo basado en RPCS3, biblioteca de juegos, instaladores y trofeos.</string>
+    <string name="projects_desc_d">Interfaz para diez familias de consolas Nintendo: 3DS, DS, N64, GameCube, Wii, Game Boy, GBA, NES y SNES.</string>
+    <string name="projects_desc_h">Interfaz de Sega con núcleos integrados para Dreamcast, arcade, Mega Drive, Master System, Saturn y Model 3.</string>
+    <string name="projects_desc_r">Emulador y biblioteca de PlayStation 1 con el núcleo ECR, JIT para ARM64 y shell de BIOS nativa.</string>
+    <string name="projects_desc_v">Emulador de PlayStation Vita con el núcleo ECV, biblioteca, catálogo e instalación de VPK/PKG.</string>
 </resources>

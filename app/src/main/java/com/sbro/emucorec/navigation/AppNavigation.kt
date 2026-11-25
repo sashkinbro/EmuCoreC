@@ -46,6 +46,7 @@ import com.sbro.emucorec.data.AppPreferences
 import com.sbro.emucorec.ui.catalog.CatalogScreen
 import com.sbro.emucorec.ui.detail.GameDetailScreen
 import com.sbro.emucorec.ui.feedback.FeedbackScreen
+import com.sbro.emucorec.ui.projects.OurProjectsScreen
 import com.sbro.emucorec.ui.gamemanager.GameManagerScreen
 import com.sbro.emucorec.ui.library.LibraryScreen
 import com.sbro.emucorec.ui.onboarding.OnboardingScreen
@@ -88,6 +89,7 @@ private const val ROUTE_PROFILE = "profile"
 private const val ROUTE_MY_LISTS = "my-lists"
 private const val ROUTE_DISCORD = "discord"
 private const val ROUTE_FEEDBACK = "feedback"
+private const val ROUTE_PROJECTS = "projects"
 private const val ROUTE_SETTINGS_WITH_TAB = "settings/{tab}"
 private const val ROUTE_APP_LANGUAGE = "app-language"
 private const val ROUTE_GPU_DRIVER = "gpu-driver"
@@ -225,6 +227,9 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
     val navigateFeedback = {
         navController.navigate(ROUTE_FEEDBACK) { launchSingleTop = true }
     }
+    val navigateProjects = {
+        navController.navigate(ROUTE_PROJECTS) { launchSingleTop = true }
+    }
 
     Box(
         modifier = Modifier
@@ -290,6 +295,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     onNavigateProfile = navigateProfile,
                     onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
+                    onNavigateProjects = navigateProjects,
                     onBackClick = navigateHome,
                     onLaunchSystemMenu = launchSystemMenu,
                     onInstallContent = openInstallChoiceDialog
@@ -328,6 +334,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     onNavigateProfile = navigateProfile,
                     onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
+                    onNavigateProjects = navigateProjects,
                     onLaunchSystemMenu = launchSystemMenu,
                     onInstallContent = openInstallChoiceDialog
                 ) { openDrawer ->
@@ -379,6 +386,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     onNavigateProfile = navigateProfile,
                     onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
+                    onNavigateProjects = navigateProjects,
                     onBackClick = navigateHome,
                     onLaunchSystemMenu = launchSystemMenu,
                     onInstallContent = openInstallChoiceDialog
@@ -419,6 +427,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     onNavigateProfile = navigateProfile,
                     onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
+                    onNavigateProjects = navigateProjects,
                     onBackClick = navigateHome,
                     onLaunchSystemMenu = launchSystemMenu,
                     onInstallContent = openInstallChoiceDialog
@@ -469,6 +478,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     onNavigateProfile = navigateProfile,
                     onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
+                    onNavigateProjects = navigateProjects,
                     onBackClick = navigateHome,
                     onLaunchSystemMenu = launchSystemMenu,
                     onInstallContent = openInstallChoiceDialog
@@ -549,6 +559,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     onNavigateProfile = navigateProfile,
                     onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
+                    onNavigateProjects = navigateProjects,
                     onBackClick = navigateHome,
                     onLaunchSystemMenu = launchSystemMenu,
                     onInstallContent = openInstallChoiceDialog
@@ -589,6 +600,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     onNavigateProfile = navigateProfile,
                     onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
+                    onNavigateProjects = navigateProjects,
                     onBackClick = navigateHome,
                     onLaunchSystemMenu = launchSystemMenu,
                     onInstallContent = openInstallChoiceDialog
@@ -637,6 +649,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     onNavigateProfile = navigateProfile,
                     onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
+                    onNavigateProjects = navigateProjects,
                     onBackClick = navigateHome,
                     onLaunchSystemMenu = launchSystemMenu,
                     onInstallContent = openInstallChoiceDialog
@@ -679,6 +692,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     onNavigateProfile = navigateProfile,
                     onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
+                    onNavigateProjects = navigateProjects,
                     onBackClick = navigateHome,
                     onLaunchSystemMenu = launchSystemMenu,
                     onInstallContent = openInstallChoiceDialog
@@ -735,6 +749,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     onNavigateProfile = { },
                     onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
+                    onNavigateProjects = navigateProjects,
                     onBackClick = navigateHome,
                     onLaunchSystemMenu = launchSystemMenu,
                     onInstallContent = openInstallChoiceDialog
@@ -785,6 +800,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     onNavigateProfile = navigateProfile,
                     onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
+                    onNavigateProjects = navigateProjects,
                     onBackClick = navigateHome,
                     onLaunchSystemMenu = launchSystemMenu,
                     onInstallContent = openInstallChoiceDialog
@@ -824,6 +840,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     onNavigateProfile = navigateProfile,
                     onNavigateDiscord = { },
                     onNavigateFeedback = navigateFeedback,
+                    onNavigateProjects = navigateProjects,
                     onBackClick = { navController.popBackStack() },
                     onLaunchSystemMenu = null,
                     onInstallContent = null
@@ -857,11 +874,46 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     onNavigateProfile = navigateProfile,
                     onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = {},
+                    onNavigateProjects = navigateProjects,
                     onBackClick = { navController.popBackStack() },
                     onLaunchSystemMenu = launchSystemMenu,
                     onInstallContent = null
                 ) {
                     FeedbackScreen(onBackClick = { navController.popBackStack() })
+                }
+            }
+            composable(ROUTE_PROJECTS) {
+                AdaptiveShell(
+                    selected = PrimaryDestination.Projects,
+                    onNavigateSetup = {
+                        navController.navigate(ROUTE_SETUP) { launchSingleTop = true }
+                    },
+                    onNavigateLibrary = {
+                        navController.navigate(ROUTE_LIBRARY) { launchSingleTop = true }
+                    },
+                    onNavigateGameManager = { navigateGameManager(null) },
+                    onNavigatePatches = { navigatePatches(null) },
+                    onNavigatePlayTime = { navigatePlayTime(null) },
+                    onNavigateAchievements = navigateAchievementsRoot,
+                    onNavigateSaveStates = navigateSaveStates,
+                    onNavigateSaveData = {
+                        navController.navigate(saveManagerRoute()) { launchSingleTop = true }
+                    },
+                    onNavigateSearch = {
+                        navController.navigate(ROUTE_CATALOG) { launchSingleTop = true }
+                    },
+                    onNavigateSettings = {
+                        navController.navigate(settingsRoute()) { launchSingleTop = true }
+                    },
+                    onNavigateProfile = navigateProfile,
+                    onNavigateDiscord = navigateDiscord,
+                    onNavigateFeedback = navigateFeedback,
+                    onNavigateProjects = {},
+                    onBackClick = { navController.popBackStack() },
+                    onLaunchSystemMenu = launchSystemMenu,
+                    onInstallContent = null
+                ) {
+                    OurProjectsScreen(onBackClick = { navController.popBackStack() })
                 }
             }
             composable(ROUTE_GAME_MANAGER) {
@@ -896,6 +948,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     onNavigateProfile = navigateProfile,
                     onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
+                    onNavigateProjects = navigateProjects,
                     onBackClick = navigateHome,
                     onLaunchSystemMenu = launchSystemMenu,
                     onInstallContent = openInstallChoiceDialog
@@ -963,6 +1016,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     onNavigateProfile = navigateProfile,
                     onNavigateDiscord = navigateDiscord,
                     onNavigateFeedback = navigateFeedback,
+                    onNavigateProjects = navigateProjects,
                     onBackClick = navigateHome,
                     onLaunchSystemMenu = launchSystemMenu,
                     onInstallContent = openInstallChoiceDialog

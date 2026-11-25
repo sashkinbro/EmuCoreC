@@ -27,6 +27,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.EmojiEvents
+import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.Feedback
 import androidx.compose.material.icons.rounded.Forum
 import androidx.compose.material.icons.rounded.Build
@@ -78,7 +79,7 @@ import com.sbro.emucorec.ui.theme.neon.neonShape
 import com.sbro.emucorec.ui.theme.neon.neonShapeCorners
 
 enum class PrimaryDestination {
-    Library, Setup, GameManager, Patches, PlayTime, Achievements, SaveData, SaveStates, Search, Settings, Profile, Discord, Feedback
+    Library, Setup, GameManager, Patches, PlayTime, Achievements, SaveData, SaveStates, Search, Settings, Profile, Discord, Projects, Feedback
 }
 
 private enum class MobileLeadingAction {
@@ -106,6 +107,7 @@ fun AdaptiveShell(
     onNavigateProfile: () -> Unit = {},
     onNavigateDiscord: () -> Unit = {},
     onNavigateFeedback: () -> Unit = {},
+    onNavigateProjects: () -> Unit = {},
     onBackClick: (() -> Unit)? = null,
     onLaunchSystemMenu: (() -> Unit)? = null,
     onInstallContent: (() -> Unit)? = null,
@@ -129,6 +131,7 @@ fun AdaptiveShell(
             onNavigateProfile = onNavigateProfile,
             onNavigateDiscord = onNavigateDiscord,
             onNavigateFeedback = onNavigateFeedback,
+            onNavigateProjects = onNavigateProjects,
             onLaunchSystemMenu = onLaunchSystemMenu,
             onInstallContent = onInstallContent,
             onRefreshLibrary = onRefreshLibrary,
@@ -183,6 +186,7 @@ fun AdaptiveShell(
             onNavigateProfile = onNavigateProfile,
             onNavigateDiscord = onNavigateDiscord,
             onNavigateFeedback = onNavigateFeedback,
+            onNavigateProjects = onNavigateProjects,
             onBackClick = onBackClick,
             onLaunchSystemMenu = onLaunchSystemMenu,
             onInstallContent = onInstallContent,
@@ -211,6 +215,7 @@ private fun CompactAdaptiveShell(
     onNavigateProfile: () -> Unit,
     onNavigateDiscord: () -> Unit,
     onNavigateFeedback: () -> Unit,
+    onNavigateProjects: () -> Unit,
     onBackClick: (() -> Unit)?,
     onLaunchSystemMenu: (() -> Unit)?,
     onInstallContent: (() -> Unit)?,
@@ -297,6 +302,7 @@ private fun CompactAdaptiveShell(
                     onNavigateProfile = onNavigateProfile,
                     onNavigateDiscord = onNavigateDiscord,
                     onNavigateFeedback = onNavigateFeedback,
+                    onNavigateProjects = onNavigateProjects,
                     onLaunchSystemMenu = onLaunchSystemMenu,
                     onInstallContent = onInstallContent,
                     onRefreshLibrary = onRefreshLibrary,
@@ -333,6 +339,7 @@ private fun SideNavigation(
     onNavigateProfile: () -> Unit,
     onNavigateDiscord: () -> Unit,
     onNavigateFeedback: () -> Unit,
+    onNavigateProjects: () -> Unit,
     onLaunchSystemMenu: (() -> Unit)?,
     onInstallContent: (() -> Unit)?,
     onRefreshLibrary: (() -> Unit)?,
@@ -405,6 +412,10 @@ private fun SideNavigation(
     val navigateFeedback = rememberDebouncedClick {
         onCloseDrawer()
         onNavigateFeedback()
+    }
+    val navigateProjects = rememberDebouncedClick {
+        onCloseDrawer()
+        onNavigateProjects()
     }
     val launchSystemMenu = onLaunchSystemMenu?.let {
         rememberDebouncedClick {
@@ -601,6 +612,12 @@ private fun SideNavigation(
                 label = stringResource(R.string.nav_settings),
                 selected = selected == PrimaryDestination.Settings,
                 onClick = navigateSettings
+            )
+            ShellItem(
+                icon = Icons.Rounded.Apps,
+                label = stringResource(R.string.projects_title),
+                selected = selected == PrimaryDestination.Projects,
+                onClick = navigateProjects
             )
             ShellItem(
                 icon = Icons.Rounded.Feedback,
