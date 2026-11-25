@@ -1,5 +1,6 @@
 package com.sbro.emucorec.ui.settings
 
+import com.sbro.emucorec.ui.common.SyncedSlider
 import com.sbro.emucorec.ui.common.appSliderColors
 
 import com.sbro.emucorec.ui.common.appSwitchColors
@@ -41,7 +42,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
 import com.sbro.emucorec.ui.theme.style.Surface
 import com.sbro.emucorec.ui.theme.style.Switch
 import androidx.compose.material3.Text
@@ -283,10 +283,10 @@ private fun ControlsTab(
         )
         Toggle(stringResource(R.string.settings_core_gamepad_overlay), stringResource(R.string.settings_help_gamepad_overlay), uiState.coreConfig.enableGamepadOverlay, { enabled -> viewModel.updateCoreSettings { it.copy(enableGamepadOverlay = enabled) } }, { viewModel.updateCoreSettings { it.copy(enableGamepadOverlay = defaults.enableGamepadOverlay) } })
         SliderRow(stringResource(R.string.settings_core_overlay_scale_label), stringResource(R.string.settings_help_overlay_scale), stringResource(R.string.settings_core_overlay_scale_value, uiState.coreConfig.overlayScale), { viewModel.updateCoreSettings { it.copy(overlayScale = defaults.overlayScale) } }) {
-            Slider(colors = appSliderColors(), value = uiState.coreConfig.overlayScale, onValueChange = { value -> viewModel.updateCoreSettings { it.copy(overlayScale = (value * 10).roundToInt() / 10f) } }, valueRange = 0.5f..2f, steps = 14)
+            SyncedSlider(colors = appSliderColors(), value = uiState.coreConfig.overlayScale, onValueChange = { value -> viewModel.updateCoreSettings { it.copy(overlayScale = (value * 10).roundToInt() / 10f) } }, valueRange = 0.5f..2f, steps = 14)
         }
         SliderRow(stringResource(R.string.settings_core_overlay_opacity_label), stringResource(R.string.settings_help_overlay_opacity), stringResource(R.string.settings_core_overlay_opacity_value, uiState.coreConfig.overlayOpacity), { viewModel.updateCoreSettings { it.copy(overlayOpacity = defaults.overlayOpacity) } }) {
-            Slider(colors = appSliderColors(), value = uiState.coreConfig.overlayOpacity.toFloat(), onValueChange = { value -> viewModel.updateCoreSettings { it.copy(overlayOpacity = value.roundToInt()) } }, valueRange = 10f..100f, steps = 8)
+            SyncedSlider(colors = appSliderColors(), value = uiState.coreConfig.overlayOpacity.toFloat(), onValueChange = { value -> viewModel.updateCoreSettings { it.copy(overlayOpacity = value.roundToInt()) } }, valueRange = 10f..100f, steps = 8)
         }
         Toggle(
             stringResource(R.string.settings_touch_haptics),
@@ -311,7 +311,7 @@ private fun ControlsTab(
             stringResource(R.string.settings_gamepad_percent_value, uiState.coreConfig.touchHapticsStrength),
             { viewModel.updateCoreSettings { it.copy(touchHapticsStrength = defaults.touchHapticsStrength) } }
         ) {
-            Slider(colors = appSliderColors(),
+            SyncedSlider(colors = appSliderColors(),
                 enabled = uiState.coreConfig.touchHaptics,
                 value = uiState.coreConfig.touchHapticsStrength.toFloat(),
                 onValueChange = { value -> viewModel.updateCoreSettings { it.copy(touchHapticsStrength = value.roundToInt().coerceIn(10, 100)) } },
@@ -338,13 +338,13 @@ private fun ControlsTab(
             modifier = Modifier.padding(horizontal = SettingsSectionRowPadding)
         )
         SliderRow(stringResource(R.string.settings_core_analog_multiplier_label), stringResource(R.string.settings_help_analog_multiplier), stringResource(R.string.settings_core_analog_multiplier_value, uiState.coreConfig.analogMultiplier), { viewModel.updateCoreSettings { it.copy(analogMultiplier = defaults.analogMultiplier) } }) {
-            Slider(colors = appSliderColors(), value = uiState.coreConfig.analogMultiplier, onValueChange = { value -> viewModel.updateCoreSettings { it.copy(analogMultiplier = (value * 10).roundToInt() / 10f) } }, valueRange = 0.5f..2f, steps = 14)
+            SyncedSlider(colors = appSliderColors(), value = uiState.coreConfig.analogMultiplier, onValueChange = { value -> viewModel.updateCoreSettings { it.copy(analogMultiplier = (value * 10).roundToInt() / 10f) } }, valueRange = 0.5f..2f, steps = 14)
         }
         SliderRow(stringResource(R.string.settings_gamepad_deadzone), stringResource(R.string.settings_help_gamepad_deadzone), stringResource(R.string.settings_gamepad_percent_value, (uiState.coreConfig.gamepadDeadzone * 100f).toInt()), { viewModel.updateCoreSettings { it.copy(gamepadDeadzone = defaults.gamepadDeadzone) } }) {
-            Slider(colors = appSliderColors(), enabled = gamepadConnected, value = uiState.coreConfig.gamepadDeadzone, onValueChange = { value -> viewModel.updateCoreSettings { it.copy(gamepadDeadzone = (value * 100).roundToInt() / 100f) } }, valueRange = 0f..0.45f, steps = 8)
+            SyncedSlider(colors = appSliderColors(), enabled = gamepadConnected, value = uiState.coreConfig.gamepadDeadzone, onValueChange = { value -> viewModel.updateCoreSettings { it.copy(gamepadDeadzone = (value * 100).roundToInt() / 100f) } }, valueRange = 0f..0.45f, steps = 8)
         }
         SliderRow(stringResource(R.string.settings_gamepad_trigger_threshold), stringResource(R.string.settings_help_gamepad_trigger_threshold), stringResource(R.string.settings_gamepad_percent_value, (uiState.coreConfig.gamepadTriggerThreshold * 100f).toInt()), { viewModel.updateCoreSettings { it.copy(gamepadTriggerThreshold = defaults.gamepadTriggerThreshold) } }) {
-            Slider(colors = appSliderColors(), enabled = gamepadConnected, value = uiState.coreConfig.gamepadTriggerThreshold, onValueChange = { value -> viewModel.updateCoreSettings { it.copy(gamepadTriggerThreshold = (value * 100).roundToInt() / 100f) } }, valueRange = 0f..0.9f, steps = 8)
+            SyncedSlider(colors = appSliderColors(), enabled = gamepadConnected, value = uiState.coreConfig.gamepadTriggerThreshold, onValueChange = { value -> viewModel.updateCoreSettings { it.copy(gamepadTriggerThreshold = (value * 100).roundToInt() / 100f) } }, valueRange = 0f..0.9f, steps = 8)
         }
         Chips(stringResource(R.string.settings_gamepad_button_profile), stringResource(R.string.settings_help_gamepad_button_profile), { viewModel.updateCoreSettings { it.copy(gamepadButtonProfile = defaults.gamepadButtonProfile) } }) {
             TextChip(Ps3CoreConfig.GAMEPAD_PROFILE_STANDARD, stringResource(R.string.settings_gamepad_profile_standard), uiState.coreConfig.gamepadButtonProfile, viewModel, enabled = gamepadConnected) { config, value -> config.copy(gamepadButtonProfile = value) }
@@ -369,7 +369,7 @@ private fun ControlsTab(
             stringResource(R.string.settings_gamepad_percent_value, uiState.coreConfig.gamepadVibrationStrength),
             { viewModel.updateCoreSettings { it.copy(gamepadVibrationStrength = defaults.gamepadVibrationStrength) } }
         ) {
-            Slider(colors = appSliderColors(),
+            SyncedSlider(colors = appSliderColors(),
                 enabled = uiState.coreConfig.gamepadVibration,
                 value = uiState.coreConfig.gamepadVibrationStrength.toFloat(),
                 onValueChange = { value -> viewModel.updateCoreSettings { it.copy(gamepadVibrationStrength = value.roundToInt().coerceIn(0, 100)) } },
@@ -420,7 +420,7 @@ private fun ControlsTab(
                 stringResource(R.string.settings_gamepad_percent_value, uiState.coreConfig.gyroSensitivity),
                 { viewModel.updateCoreSettings { it.copy(gyroSensitivity = defaults.gyroSensitivity) } }
             ) {
-                Slider(colors = appSliderColors(), value = uiState.coreConfig.gyroSensitivity.toFloat(), onValueChange = { value -> viewModel.updateCoreSettings { it.copy(gyroSensitivity = value.roundToInt()) } }, valueRange = 25f..300f, steps = 10)
+                SyncedSlider(colors = appSliderColors(), value = uiState.coreConfig.gyroSensitivity.toFloat(), onValueChange = { value -> viewModel.updateCoreSettings { it.copy(gyroSensitivity = value.roundToInt()) } }, valueRange = 25f..300f, steps = 10)
             }
             SliderRow(
                 stringResource(R.string.settings_gyro_smoothing),
@@ -428,7 +428,7 @@ private fun ControlsTab(
                 stringResource(R.string.settings_gamepad_percent_value, uiState.coreConfig.gyroSmoothing),
                 { viewModel.updateCoreSettings { it.copy(gyroSmoothing = defaults.gyroSmoothing) } }
             ) {
-                Slider(colors = appSliderColors(), value = uiState.coreConfig.gyroSmoothing.toFloat(), onValueChange = { value -> viewModel.updateCoreSettings { it.copy(gyroSmoothing = value.roundToInt()) } }, valueRange = 0f..90f, steps = 8)
+                SyncedSlider(colors = appSliderColors(), value = uiState.coreConfig.gyroSmoothing.toFloat(), onValueChange = { value -> viewModel.updateCoreSettings { it.copy(gyroSmoothing = value.roundToInt()) } }, valueRange = 0f..90f, steps = 8)
             }
             Toggle(stringResource(R.string.settings_gyro_invert_x), stringResource(R.string.settings_gyro_invert_x_desc), uiState.coreConfig.gyroInvertX, { enabled -> viewModel.updateCoreSettings { it.copy(gyroInvertX = enabled) } }, { viewModel.updateCoreSettings { it.copy(gyroInvertX = defaults.gyroInvertX) } })
             if (uiState.coreConfig.gyroMode == Ps3CoreConfig.GYRO_MODE_AIM) {

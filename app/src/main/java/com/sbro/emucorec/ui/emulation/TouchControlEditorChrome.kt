@@ -49,6 +49,7 @@ internal fun TouchControlEditorChrome(
 ) {
     var showAdjust by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    MaterialTheme(colorScheme = touchControlEditorColorScheme()) {
     Column(
         modifier.widthIn(max = 720.dp).fillMaxWidth().testTag("controls_editor_panel")
             .padding(horizontal = 12.dp, vertical = 4.dp),
@@ -146,7 +147,39 @@ internal fun TouchControlEditorChrome(
                 }
             }, dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.common_cancel)) } })
     }
+    }
 }
+
+/**
+ * The editor is a dark overlay drawn over gameplay with its own fixed palette, so it gets a fixed dark color scheme:
+ * theme-aware widgets inside it (chips, buttons, switches) would otherwise take a light theme's dark text and vanish
+ * on the dark panels. Shapes and UI style still follow the active theme.
+ */
+private fun touchControlEditorColorScheme() = darkColorScheme(
+    primary = Color(0xFF7C9BFF),
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFF3565FF),
+    onPrimaryContainer = Color.White,
+    secondary = Color(0xFF9DB3FF),
+    onSecondary = Color(0xFF0D1424),
+    secondaryContainer = Color(0xFF3565FF),
+    onSecondaryContainer = Color.White,
+    tertiary = Color(0xFF86D7FF),
+    onTertiary = Color(0xFF0D1424),
+    background = Color(0xFF0D1424),
+    onBackground = Color.White,
+    surface = Color(0xFF111827),
+    onSurface = Color.White,
+    surfaceVariant = Color(0xFF1E293B),
+    onSurfaceVariant = Color.White.copy(alpha = 0.74f),
+    surfaceContainerLowest = Color(0xFF0A101C),
+    surfaceContainerLow = Color(0xFF0F1626),
+    surfaceContainer = Color(0xFF141C2E),
+    surfaceContainerHigh = Color(0xFF1A2338),
+    surfaceContainerHighest = Color(0xFF212B42),
+    outline = Color.White.copy(alpha = 0.34f),
+    outlineVariant = Color.White.copy(alpha = 0.18f)
+)
 
 @Composable
 private fun editorButtonColors(active: Boolean = false) = ButtonDefaults.outlinedButtonColors(

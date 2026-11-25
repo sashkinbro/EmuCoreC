@@ -1,5 +1,6 @@
 package com.sbro.emucorec.ui.settings
 
+import com.sbro.emucorec.ui.common.SyncedSlider
 import com.sbro.emucorec.ui.common.appSwitchColors
 
 import android.view.KeyEvent
@@ -25,7 +26,6 @@ import androidx.compose.material.icons.rounded.SettingsSuggest
 import com.sbro.emucorec.ui.theme.style.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import com.sbro.emucorec.ui.theme.style.Surface
 import com.sbro.emucorec.ui.theme.style.Switch
@@ -787,7 +787,7 @@ private fun KeyboardMouseSliderItem(
                 color = MaterialTheme.colorScheme.primary
             )
         }
-        Slider(
+        SyncedSlider(
             value = sliderValue,
             onValueChange = { sliderValue = it },
             onValueChangeFinished = { onValueChange(sliderValue.toInt()) },

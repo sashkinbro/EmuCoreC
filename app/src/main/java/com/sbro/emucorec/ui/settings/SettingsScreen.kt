@@ -214,7 +214,6 @@ fun SettingsScreen(
                 Box(Modifier.testTag("settings-header")) {
                     SettingsCompactTopBar(
                         title = stringResource(R.string.settings_title),
-                        subtitle = stringResource(selectedTab.titleRes),
                         topInset = (topInset - stickyInset).coerceAtLeast(0.dp),
                         onBackClick = backClick,
                         onResetSettingsClick = { showResetDialog = true }
@@ -314,14 +313,13 @@ fun settingsTabFromRoute(value: String?): SettingsTab {
 @Composable
 private fun SettingsCompactTopBar(
     title: String,
-    subtitle: String,
     topInset: androidx.compose.ui.unit.Dp,
     onBackClick: () -> Unit,
     onResetSettingsClick: () -> Unit
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
 
-    Surface(
+    com.sbro.emucorec.ui.theme.style.HeaderSurface(
         modifier = Modifier
             .fillMaxWidth()
             .padding(
@@ -352,16 +350,9 @@ private fun SettingsCompactTopBar(
                     .padding(start = 14.dp, end = 8.dp)
             ) {
                 Text(
-                    text = title,
+                    text = com.sbro.emucorec.ui.theme.style.themedTitleCase(title),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )

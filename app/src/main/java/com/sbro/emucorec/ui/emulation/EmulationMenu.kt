@@ -2,6 +2,7 @@
 
 package com.sbro.emucorec.ui.emulation
 
+import com.sbro.emucorec.ui.common.SyncedSlider
 import com.sbro.emucorec.ui.common.appSliderColors
 
 import com.sbro.emucorec.ui.common.appSwitchColors
@@ -81,7 +82,6 @@ import com.sbro.emucorec.ui.theme.style.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
 import com.sbro.emucorec.ui.theme.style.Surface
 import com.sbro.emucorec.ui.theme.style.Switch
 import androidx.compose.material3.Text
@@ -1554,7 +1554,7 @@ private fun MenuSliderRow(
                 maxLines = 2
             )
         }
-        Slider(colors = appSliderColors(),
+        SyncedSlider(colors = appSliderColors(),
             value = pendingValue,
             onValueChange = { pendingValue = it },
             onValueChangeFinished = { onValueChange(pendingValue) },

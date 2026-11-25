@@ -473,12 +473,12 @@ private fun PatchCard(
 private fun PatchBadge(label: String) {
     Surface(
         shape = neonShape(8.dp),
-        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f)
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onTertiaryContainer,
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis

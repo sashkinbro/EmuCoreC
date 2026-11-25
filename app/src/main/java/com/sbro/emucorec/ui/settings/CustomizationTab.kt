@@ -1,5 +1,6 @@
 package com.sbro.emucorec.ui.settings
 
+import com.sbro.emucorec.ui.common.SyncedSlider
 import com.sbro.emucorec.ui.common.appSliderColors
 
 import android.net.Uri
@@ -31,7 +32,6 @@ import com.sbro.emucorec.ui.common.AppAlertDialog as AlertDialog
 import com.sbro.emucorec.ui.theme.style.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
 import com.sbro.emucorec.ui.theme.style.Surface
 import androidx.compose.material3.Text
 import com.sbro.emucorec.ui.theme.style.TextButton
@@ -449,7 +449,7 @@ private fun CustomizationSlider(
                 Text(valueLabel, color = MaterialTheme.colorScheme.primary)
             }
         }
-        Slider(colors = appSliderColors(),
+        SyncedSlider(colors = appSliderColors(),
             value = value.toFloat(),
             onValueChange = { raw ->
                 val stepped = ((raw.toInt() + 2) / 5) * 5

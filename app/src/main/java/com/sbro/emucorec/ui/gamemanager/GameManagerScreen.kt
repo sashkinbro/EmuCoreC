@@ -1,5 +1,6 @@
 package com.sbro.emucorec.ui.gamemanager
 
+import com.sbro.emucorec.ui.common.SyncedSlider
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -35,7 +36,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import com.sbro.emucorec.ui.theme.style.OutlinedButton
-import androidx.compose.material3.Slider
 import com.sbro.emucorec.ui.theme.style.Surface
 import com.sbro.emucorec.ui.theme.style.Switch
 import androidx.compose.material3.Text
@@ -811,7 +811,7 @@ private fun SliderRow(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Slider(colors = appSliderColors(),
+        SyncedSlider(colors = appSliderColors(),
             enabled = enabled,
             value = value,
             onValueChange = onChange,

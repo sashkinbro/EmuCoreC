@@ -1111,7 +1111,7 @@ private fun StatusPill(
 ) {
     Surface(
         modifier = modifier,
-        shape = CircleShape,
+        shape = neonShape(999.dp),
         color = statusColor.copy(alpha = 0.12f)
     ) {
         Row(

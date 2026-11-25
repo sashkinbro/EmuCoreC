@@ -1,5 +1,6 @@
 package com.sbro.emucorec.ui.settings
 
+import com.sbro.emucorec.ui.common.SyncedSlider
 import com.sbro.emucorec.ui.common.appSliderColors
 
 import android.Manifest
@@ -31,7 +32,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import com.sbro.emucorec.ui.theme.style.Surface
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import com.sbro.emucorec.ui.theme.style.TextButton
 import androidx.compose.runtime.Composable
@@ -634,7 +634,7 @@ private fun Ps3CoreSettingRow(
                     valueText = displayValue,
                     onResetDefault = onReset,
                 ) {
-                    Slider(colors = appSliderColors(),
+                    SyncedSlider(colors = appSliderColors(),
                         value = sliderValue,
                         onValueChange = { sliderValue = it },
                         onValueChangeFinished = { onWrite(formatCoreNumber(setting.type, sliderValue)) },

@@ -778,7 +778,7 @@ private fun TrophyGradePill(
         }
     }
     Surface(
-        shape = CircleShape,
+        shape = neonShape(999.dp),
         color = color.copy(alpha = if (unlocked) 0.18f else 0.10f),
         border = BorderStroke(1.dp, color.copy(alpha = 0.55f))
     ) {

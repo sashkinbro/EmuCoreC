@@ -85,7 +85,12 @@ class MainActivity : AppCompatActivity() {
                 Surface(
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    AppNavigation()
+                    // Text drawn straight on a screen background must read on it, not on the root surface.
+                    androidx.compose.runtime.CompositionLocalProvider(
+                        androidx.compose.material3.LocalContentColor provides androidx.compose.material3.MaterialTheme.colorScheme.onBackground
+                    ) {
+                        AppNavigation()
+                    }
                 }
             }
         }
